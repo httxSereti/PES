@@ -3,7 +3,7 @@ import { Button } from "@pes/ui/components/button"
 import { useAppSelector } from "@/store/hooks"
 import { unitsSelectors } from "@/store/slices/unitsSlice"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@pes/ui/components/dropdown-menu"
-import { MoreVertical, Trash2 } from "lucide-react"
+import { Link, MoreVertical, PowerOff } from "lucide-react"
 
 type UnitDropdownProps = {
     unitId: string;
@@ -25,8 +25,12 @@ export const UnitDropdown: FC<UnitDropdownProps> = ({ unitId }) => {
             <DropdownMenuContent align="end" className="w-48">
                 <DropdownMenuLabel>Actions</DropdownMenuLabel>
                 <DropdownMenuSeparator />
+                <DropdownMenuItem>
+                    <Link className="mr-2 h-4 w-4" />
+                    <span>Link Channel A & B</span>
+                </DropdownMenuItem>
                 <DropdownMenuItem className="text-red-600">
-                    <Trash2 className="mr-2 h-4 w-4" />
+                    <PowerOff className="mr-2 h-4 w-4" />
                     <span>Stop {unit.id}</span>
                 </DropdownMenuItem>
             </DropdownMenuContent>

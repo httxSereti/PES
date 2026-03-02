@@ -1,4 +1,4 @@
-import { type FC } from "react"
+import { useState, type FC } from "react"
 import { Button } from "@pes/ui/components/button"
 import {
     Card,
@@ -11,12 +11,15 @@ import { unitsSelectors } from "@/store/slices/unitsSlice"
 import { UnitDropdown } from "@/components/common/units/unit-dropdown"
 import { Computer } from "lucide-react"
 import { UnitGraph } from "@/components/common/units/unit-graph"
+import { UnitQuickLevel } from "@/components/common/units/unit-quick-level"
+import { UnitSelectChannel } from "@/components/common/units/unit-select-channel"
 
 type UnitProps = {
     unitId: string;
 };
 
 export const Unit: FC<UnitProps> = ({ unitId }) => {
+    const [currentChannel, setCurrentChannel] = useState<"channelA" | "channelB">("channelA");
     const unit = useAppSelector(state => unitsSelectors.selectById(state, unitId));
 
     const dotColor =
@@ -51,11 +54,19 @@ export const Unit: FC<UnitProps> = ({ unitId }) => {
             </CardHeader>
 
             <CardContent>
-                <div className="flex flex-col gap-5 justify-center">
+                <div className="flex flex-col gap-4 justify-center">
                     <UnitGraph unitId={unitId} />
-                    <div className="flex flex-col w-full gap-3.5 px-3 py-3 rounded-lg border border-border/25 bg-muted/10">
-                        <p className="font-mono text-[10px] tracking-widest uppercase text-primary/50">Position</p>
-                    </div>
+
+                    <UnitSelectChannel
+                        unitId={unitId}
+                        currentChannel={currentChannel}
+                        setCurrentChannel={setCurrentChannel}
+                    />
+
+                    <UnitQuickLevel
+                        unitId={unitId}
+                        selectedChannel={currentChannel}
+                    />
                 </div>
             </CardContent>
         </Card>
