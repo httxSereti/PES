@@ -606,7 +606,7 @@ class UnitConnect:
         else:
             ws_notifier.notify(
                 "units:update",
-                {self.name: updated_fields},
+                {"id": self.name, "changes": updated_fields},
             )
 
         return no_updated
@@ -3393,7 +3393,7 @@ if __name__ == "__main__":
     threads["api"] = Thread(target=start_api)
 
     # testing
-    threads["testing"] = Thread(target=start_mock_units)
+    # threads["testing"] = Thread(target=start_mock_units)
 
     # start all thread
     for tr in threads.keys():
