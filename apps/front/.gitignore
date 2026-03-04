@@ -25,3 +25,4 @@ dist-ssr
 
 tsconfig.tsbuildinfo
 .react-router/
+vite.config.ts.timestamp*
