@@ -51,7 +51,7 @@ from typings import *
 from typings import Permission
 from services.chaster import *
 from services.notifier import *
-from utils import Logger
+from utils import Logger, calculate_magic_number
 from utils import *
 
 from store import Store
@@ -3111,18 +3111,6 @@ async def sensors():
 @app.get("/units")
 async def units():
     return threads_settings
-    # return threads_settings
-
-
-@app.get("/update")
-async def upd():
-    # await bot.add_event_action(
-    #     'chaster_pillory_vote',
-    #     'pillory_chaster' + '_' + "lucie",
-    #     time.localtime()
-    # )
-
-    return {"success": "OK"}
 
 
 # WebSocket API
@@ -3133,7 +3121,6 @@ async def websocket_endpoint(websocket: WebSocket, token: str):
     try:
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
         user_id = payload.get("sub")
-        # role = payload.get("role")
 
         # connect User to WebSocket
         await store.websocket.connect(user_id, websocket)
@@ -3233,8 +3220,48 @@ async def websocket_endpoint(websocket: WebSocket, token: str):
                                 "id": msg_id,
                             }
                         )
-                # Handle client messages (e.g., commands)
+                elif msg_type == "units:level_update":
+                    if store.check_permission(user_id, Permission.WRITE_UNITS):
+                        # loop over units, then changes
+                        for unit_id, unit_changes in msg_payload.items():
+                            for field, field_value in unit_changes.items():
+                                if field == "ch_A" or field == "ch_B":
+                                    # calc new value using lexer for operators
+                                    new_value: int = calculate_magic_number(
+                                        threads_settings[unit_id][field + "_max"],
+                                        str(field_value),  # force cast to str
+                                    )
+
+                                    Logger.info(
+                                        f"[WS:units] adjust {unit_id}@'{field}' from '{threads_settings[unit_id][field]}' to '{new_value}' with '{field_value}'"
+                                    )
+
+                                    # update local object of unit to update target
+                                    threads_settings[unit_id]["updated"] = True
+                                    threads_settings[unit_id][field + "_max"] = (
+                                        new_value
+                                    )
+                        # resolve command
+                        await websocket.send_json(
+                            {
+                                "type": "command",
+                                "payload": {"status": "ok"},
+                                "id": msg_id,
+                            }
+                        )
+                    else:
+                        await websocket.send_json(
+                            {
+                                "type": "command",
+                                "payload": {
+                                    "status": "error",
+                                    "message": "Missing permission: WRITE_UNITS",
+                                },
+                                "id": msg_id,
+                            }
+                        )
                 elif msg_type == "get:notifications":
+                    # Handle client messages (e.g., commands)
                     print(f"🔔 Get notifications - ID: {msg_id}")
 
                     # Récupérer les notifications
@@ -3257,10 +3284,6 @@ async def websocket_endpoint(websocket: WebSocket, token: str):
                         Message not supported
                     """
                     print(f"⚠️ Unknown message type: {msg_type}")
-                    # if data.get("type") == "command":
-                    #     pprint(data)
-                    #     # command = DeviceCommand(**data.get("data"))
-                    #     # await device_store.websocket.send_command(command)
 
             except asyncio.TimeoutError:
                 print("💓 Sending heartbeat ping")
@@ -3287,25 +3310,58 @@ async def websocket_endpoint(websocket: WebSocket, token: str):
 
 # Testings
 def start_mock_units():
+    cached_units: dict = {
+        "UNIT1": {
+            "ch_A": 0,
+            "ch_B": 0,
+        },
+        "UNIT2": {
+            "ch_A": 0,
+            "ch_B": 0,
+        },
+        "UNIT3": {
+            "ch_A": 0,
+            "ch_B": 0,
+        },
+    }
+
     while True:
         tick = random.randint(1, 3)
 
         for unit_id in threads_settings.keys():
-            ch_A = 20 + random.randint(0, 30)
-            ch_B = 20 + random.randint(0, 30)
+            # ch_A = 20 + random.randint(0, 30)
+            # ch_B = 20 + random.randint(0, 30)
 
-            ws_notifier.notify(
-                payload_type="units:update",
-                payload={
-                    "id": unit_id,
-                    "changes": {
-                        "ch_A": ch_A,
-                        "ch_B": ch_B,
+            if (
+                cached_units[unit_id]["ch_A"] != threads_settings[unit_id]["ch_A"]
+                or cached_units[unit_id]["ch_B"] != threads_settings[unit_id]["ch_B"]
+            ):
+                cached_units[unit_id]["ch_A"] = threads_settings[unit_id]["ch_A"]
+                cached_units[unit_id]["ch_B"] = threads_settings[unit_id]["ch_B"]
+
+                ws_notifier.notify(
+                    payload_type="units:update",
+                    payload={
+                        "id": unit_id,
+                        "changes": {
+                            "ch_A": threads_settings[unit_id]["ch_A"],
+                            "ch_B": threads_settings[unit_id]["ch_B"],
+                        },
                     },
-                },
-            )
+                )
+            # Mock channel_A & B
+            # ws_notifier.notify(
+            #     payload_type="units:update",
+            #     payload={
+            #         "id": unit_id,
+            #         "changes": {
+            #             "ch_A": ch_A,
+            #             "ch_B": ch_B,
+            #         },
+            #     },
+            # )
 
-        time.sleep(1)
+        # time.sleep(15)
 
 
 if __name__ == "__main__":
