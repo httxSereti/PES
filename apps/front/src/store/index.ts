@@ -7,7 +7,7 @@ import unitsHistorySlice from '@/store/slices/unitsHistorySlice';
 
 import { createWebSocketMiddleware } from '@/store/middleware/websocketMiddleware';
 
-const WS_URL = import.meta.env.VITE_WS_URL
+const WS_URL = `${import.meta.env.VITE_WS_URL}/ws`
 
 const wsMiddleware = createWebSocketMiddleware({
     url: WS_URL,
