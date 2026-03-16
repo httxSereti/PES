@@ -277,6 +277,7 @@ app.add_middleware(
 )
 
 # init multi threading
+# global threads_settings
 threads_settings = {}
 
 # Slash_Command constantes
@@ -3241,6 +3242,71 @@ async def websocket_endpoint(websocket: WebSocket, token: str):
                                     threads_settings[unit_id][field + "_max"] = (
                                         new_value
                                     )
+                        # resolve command
+                        await websocket.send_json(
+                            {
+                                "type": "command",
+                                "payload": {"status": "ok"},
+                                "id": msg_id,
+                            }
+                        )
+                    else:
+                        await websocket.send_json(
+                            {
+                                "type": "command",
+                                "payload": {
+                                    "status": "error",
+                                    "message": "Missing permission: WRITE_UNITS",
+                                },
+                                "id": msg_id,
+                            }
+                        )
+                elif msg_type == "units:update_mode":
+                    if store.check_permission(user_id, Permission.WRITE_UNITS):
+                        # loop over units
+                        for unit_id, unit_changes in msg_payload.items():
+                            # if we're changing mode and is a 2B mode (0-16)
+                            if (
+                                unit_changes["mode"] is not None
+                                and unit_changes["mode"] < len(MODE_2B)
+                                and unit_changes["mode"] > -1
+                            ):
+                                new_mode: int = unit_changes["mode"]
+
+                                Logger.info(
+                                    f"[WS:units] Updated mode for {unit_id} from '{threads_settings[unit_id]['mode']}' to '{new_mode}'"
+                                )
+
+                                # update local object of unit to update target
+                                threads_settings[unit_id]["updated"] = True
+                                threads_settings[unit_id]["mode"] = new_mode
+
+                                # reset to adj_1 for modes without adj_2
+                                if MODE_2B[new_mode]["adj_2"] == "":
+                                    threads_settings[unit]["adj_2"] = threads_settings[
+                                        unit
+                                    ]["adj_1"]
+
+                                # set channels to zero
+                                for ch in ("ch_A", "ch_B"):
+                                    threads_settings[unit_id][ch] = 0
+                                    threads_settings[unit_id][ch + "_max"] = 0
+
+                                # broadcast update
+                                ws_notifier.notify(
+                                    "units:update",
+                                    {
+                                        "id": unit_id,
+                                        "changes": {
+                                            "mode": new_mode,
+                                            "ch_A": 0,
+                                            "ch_A_max": 0,
+                                            "ch_B": 0,
+                                            "ch_B_max": 0,
+                                        },
+                                    },
+                                )
+
                         # resolve command
                         await websocket.send_json(
                             {

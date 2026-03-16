@@ -44,5 +44,5 @@ export type {
 
 export type {
     UnitsState,
-    UnitSettings
+    UnitSettings,
 } from './units.types';

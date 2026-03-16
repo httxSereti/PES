@@ -13,6 +13,7 @@ import { Computer } from "lucide-react"
 import { UnitGraph } from "@/components/common/units/unit-graph"
 import { UnitQuickLevel } from "@/components/common/units/unit-quick-level"
 import { UnitSelectChannel } from "@/components/common/units/unit-select-channel"
+import { UnitSelectMode } from "@/components/common/units/unit-select-mode"
 
 type UnitProps = {
     unitId: string;
@@ -67,6 +68,12 @@ export const Unit: FC<UnitProps> = ({ unitId }) => {
                         unitId={unitId}
                         selectedChannel={currentChannel}
                     />
+
+                    <div className="flex flex-col gap-3.5 px-3 py-3 rounded-lg border border-border/35 bg-muted/20">
+                        <p className="font-mono text-[10px] tracking-widest uppercase text-primary/40">Unit Settings</p>
+
+                        <UnitSelectMode unitId={unitId} />
+                    </div>
                 </div>
             </CardContent>
         </Card>
