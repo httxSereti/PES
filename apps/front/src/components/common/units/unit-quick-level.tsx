@@ -2,7 +2,6 @@ import { type FC } from "react"
 import { Button } from "@pes/ui/components/button"
 import { useAppDispatch, useAppSelector } from "@/store/hooks"
 import { unitsSelectors, unitUpdated } from "@/store/slices/unitsSlice"
-import { PauseIcon, StopCircleIcon } from "lucide-react"
 import { useWebSocket } from "@/hooks/useWebSocket"
 import calculateMagicNumber from "@/utilities/calculate_magic_number"
 
@@ -73,15 +72,6 @@ export const UnitQuickLevel: FC<UnitQuickLevelProps> = ({ unitId, selectedChanne
                     </Button>
                 </div>
 
-                <div className="flex">
-                    <Button
-                        variant="outline"
-                        className={`uppercase ${channelColor} cursor-pointer`}
-                    >
-                        <PauseIcon />
-                    </Button>
-                </div>
-
                 <div className="flex gap-2">
                     <Button
                         variant="outline"
@@ -115,15 +105,6 @@ export const UnitQuickLevel: FC<UnitQuickLevelProps> = ({ unitId, selectedChanne
 
                     >
                         <span className={`uppercase ${channelColor}`}>- 5%</span>
-                    </Button>
-                </div>
-
-                <div className="flex">
-                    <Button
-                        variant="outline"
-                        className={`uppercase ${channelColor} cursor-pointer`}
-                    >
-                        <StopCircleIcon />
                     </Button>
                 </div>
 
