@@ -3283,9 +3283,9 @@ async def websocket_endpoint(websocket: WebSocket, token: str):
 
                                 # reset to adj_1 for modes without adj_2
                                 if MODE_2B[new_mode]["adj_2"] == "":
-                                    threads_settings[unit]["adj_2"] = threads_settings[
-                                        unit
-                                    ]["adj_1"]
+                                    threads_settings[unit_id]["adj_2"] = (
+                                        threads_settings[unit]["adj_1"]
+                                    )
 
                                 # set channels to zero
                                 for ch in ("ch_A", "ch_B"):
