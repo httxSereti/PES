@@ -2102,29 +2102,33 @@ class Bot2b3(NextcordBot):
             # Multi change
             elif EVENT_ACTION[type_action]["type"] == "multi":
                 Logger.warning("New multiplier event")
-                for unit in BT_UNITS:
-                    for ch in ["A", "B"]:
-                        # find channel with this usage
+                action = EVENT_ACTION[type_action]
+
+                for unit_str in BT_UNITS:
+                    unit = UnitDict(unit_str)
+                    snapshot = store.get_unit_dict(unit)
+                    changes = {}
+
+                    for ch in ("A", "B"):
                         if (
-                            threads_settings[unit][f"ch_{ch}_use"]
-                            == EVENT_ACTION[type_action]["target"].lower()
-                            or EVENT_ACTION[type_action]["target"].lower() == "all"
+                            snapshot[f"ch_{ch}_use"] == action["target"].lower()
+                            or action["target"].lower() == "all"
                         ):
                             ch_name = f"ch_{ch}_multiplier"
-                            add_vall = 0
-                            if EVENT_ACTION[type_action]["rnd"]:
-                                if EVENT_ACTION[type_action]["prct"] > 0:
-                                    add_vall = random.randint(
-                                        0, EVENT_ACTION[type_action]["prct"]
-                                    )
-                                else:
-                                    add_vall = random.randint(
-                                        EVENT_ACTION[type_action]["prct"], 0
-                                    )
+
+                            if action["rnd"]:
+                                add_val = random.randint(
+                                    min(0, action["prct"]),
+                                    max(0, action["prct"]),
+                                )
                             else:
-                                add_vall = EVENT_ACTION[type_action]["prct"]
-                            threads_settings[unit][ch_name] += add_vall
-                            threads_settings[unit]["updated"] = True
+                                add_val = action["prct"]
+
+                            changes[ch_name] = snapshot[ch_name] + add_val
+
+                    if changes:
+                        changes["updated"] = True
+                        store.update_unit_dict(unit, changes)
             # Add max time / Add time
             elif EVENT_ACTION[type_action]["type"] == "add":
                 Logger.warning("New duration event")
