@@ -60,8 +60,9 @@ from utils.users.generate_root_access import generate_root_access
 
 from contextlib import asynccontextmanager
 from api.ws.websocket_notifier import ws_notifier
-from api.ws.commands import handle_stop
 from api.rest import users, auth, admin
+
+from api.ws.commands import handle_stop, handle_sensors_update
 
 # load env
 dotenv.load_dotenv("config.env")
@@ -3198,9 +3199,9 @@ async def units():
 
 HANDLERS = {
     "core:stop": (handle_stop, Permission.WRITE_UNITS),
+    "sensors:update": (handle_sensors_update, Permission.WRITE_SENSORS),
     # "units:level_update": (handle_level_update, Permission.WRITE_UNITS),
     # "units:update_mode":  (handle_mode_update,  Permission.WRITE_UNITS),
-    # "sensors:update":     (handle_sensors_update, Permission.WRITE_SENSORS),
 }
 
 
@@ -3290,35 +3291,9 @@ async def websocket_endpoint(websocket: WebSocket, token: str):
                                 },
                             }
                         )
-                if msg_type == "sensors:update":
-                    """
-                        Update one or more Sensors
-                    """
-                    if store.check_permission(user_id, Permission.WRITE_SENSORS):
-                        # loop over sensors then fields
-                        for sensorName, value in msg_payload.items():
-                            store.update_sensor_fields(sensorName, value)
 
-                        # reply with ok
-                        await websocket.send_json(
-                            {
-                                "type": "command",
-                                "payload": {"status": "ok"},
-                                "id": msg_id,
-                            }
-                        )
-                    else:
-                        await websocket.send_json(
-                            {
-                                "type": "command",
-                                "payload": {
-                                    "status": "error",
-                                    "message": "Missing permission: WRITE_SENSORS",
-                                },
-                                "id": msg_id,
-                            }
-                        )
-                elif msg_type == "units:level_update":
+                # old system
+                if msg_type == "units:level_update":
                     if store.check_permission(user_id, Permission.WRITE_UNITS):
                         # loop over units, then changes
                         for unit_id, unit_changes in msg_payload.items():
