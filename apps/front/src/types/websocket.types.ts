@@ -105,6 +105,10 @@ export interface UnitsUpdateMessage {
     };
 }
 
+export interface CoreStopMessage {
+    status: string;
+    message: string;
+}
 
 export type WebSocketIncomingMessage =
     | ChatMessage
@@ -118,6 +122,7 @@ export type WebSocketIncomingMessage =
     | SensorsUpdateMessage
     | UnitsInitialMessage
     | UnitsUpdateMessage
+    | CoreStopMessage
     ;
 
 export interface WebSocketConfig {
@@ -135,8 +140,4 @@ export interface WebSocketState {
     error: string | null;
     reconnectAttempts: number;
     lastConnected: number | null;
-}
-
-export interface WebSocketCommandResponse {
-    status: string;
 }

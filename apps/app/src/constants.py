@@ -12,3 +12,6 @@ DIR_USERDATA = "L:\\Code\\Moon\\PluneES\\apps\\app\\userdata"
 
 # DEBUG mode
 DEBUG = False
+
+# Mk2BT units
+BT_UNITS = ("UNIT1", "UNIT2", "UNIT3")

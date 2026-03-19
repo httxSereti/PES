@@ -1,5 +1,5 @@
 import { useWebSocket } from "@/hooks/useWebSocket"
-import type { WebSocketCommandResponse } from "@/types"
+import type { CoreStopMessage } from "@/types"
 import { Button } from "@pes/ui/components/button"
 import { CirclePower } from "lucide-react"
 import { toast } from "sonner"
@@ -9,7 +9,7 @@ export function EmergencyStop() {
 
     const stopApplication = async () => {
         try {
-            const data = await sendCommand('core:stop') as WebSocketCommandResponse;
+            const data: CoreStopMessage = await sendCommand('core:stop');
 
             if (data.status === "ok") {
                 toast.success("Emergency stop", {

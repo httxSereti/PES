@@ -43,9 +43,10 @@ from nextcord.ext import tasks
 
 from pprint import pprint
 
-from constants import DISCORD_GUILD_IDS
+from constants import DISCORD_GUILD_IDS, BT_UNITS
 
 from profiles import ProfileModule
+
 
 from typings import *
 from typings import Permission, UnitDict
@@ -59,6 +60,7 @@ from utils.users.generate_root_access import generate_root_access
 
 from contextlib import asynccontextmanager
 from api.ws.websocket_notifier import ws_notifier
+from api.ws.commands import handle_stop
 from api.rest import users, auth, admin
 
 # load env
@@ -92,7 +94,6 @@ SERIAL_BAUDRATE = 9600
 SERIAL_RETRY = 5
 SERIAL_TIMEOUT = 2
 SERIAL_KEEPALIVE = 20  # check every x second the connexion (100 ms steps)
-BT_UNITS = ("UNIT1", "UNIT2", "UNIT3")
 
 # Bot config
 DISCORD_TOKEN = os.getenv("DISCORD_TOKEN")
@@ -3195,6 +3196,14 @@ async def units():
     return store.get_all_units_settings()
 
 
+HANDLERS = {
+    "core:stop": (handle_stop, Permission.WRITE_UNITS),
+    # "units:level_update": (handle_level_update, Permission.WRITE_UNITS),
+    # "units:update_mode":  (handle_mode_update,  Permission.WRITE_UNITS),
+    # "sensors:update":     (handle_sensors_update, Permission.WRITE_SENSORS),
+}
+
+
 # WebSocket API
 @app.websocket("/ws")
 async def websocket_endpoint(websocket: WebSocket, token: str):
@@ -3240,50 +3249,48 @@ async def websocket_endpoint(websocket: WebSocket, token: str):
                 msg_type = message.get("type")
                 msg_payload = message.get("payload")
 
+                """
+                    Reply to ping for keepalive
+                """
                 if msg_type == "ping":
-                    """
-                        reply to ping for keepalive
-                    """
                     await websocket.send_json({"type": "pong"})
                     continue
-                elif msg_type == "core:stop":
-                    """
-                        Emergency shutdown all units and queue
-                    """
-                    if store.check_permission(user_id, Permission.WRITE_UNITS):
-                        bot.queueRunning = False
-                        # loop over units and stop it
-                        for unit_str in BT_UNITS:
-                            unit = UnitDict(unit_str)
-                            store.update_unit_dict(
-                                unit,
-                                {
-                                    "updated": True,
-                                    "ch_A": 0,
-                                    "ch_A_max": 0,
-                                    "ch_B": 0,
-                                    "ch_B_max": 0,
-                                },
-                            )
+
+                # TODO: remove, action queue is in bot atm so..
+                if msg_type == "core:stop":
+                    bot.queueRunning = False
+
+                # fetch command to use
+                handler_tuple = HANDLERS.get(msg_type)
+
+                # has registered command
+                if handler_tuple:
+                    handler_fn, required_permission = handler_tuple
+
+                    # user has permission to execute command
+                    if store.check_permission(user_id, required_permission):
+                        result = await handler_fn(msg_payload, ws_notifier)
+
+                        # answer command ok/error
                         await websocket.send_json(
                             {
-                                "type": "command",
-                                "payload": {"status": "ok"},
                                 "id": msg_id,
+                                "type": "command",
+                                "payload": result,
                             }
                         )
                     else:
                         await websocket.send_json(
                             {
+                                "id": msg_id,
                                 "type": "command",
                                 "payload": {
                                     "status": "error",
-                                    "message": "Missing permission: WRITE_UNITS",
+                                    "message": f"Missing permission: {required_permission.name}",
                                 },
-                                "id": msg_id,
                             }
                         )
-                elif msg_type == "sensors:update":
+                if msg_type == "sensors:update":
                     """
                         Update one or more Sensors
                     """
