@@ -23,7 +23,7 @@ export const UnitSelectChannel: FC<UnitSelectChannelProps> = ({ unitId, currentC
                 onClick={() => { setCurrentChannel("channelA") }}
             >
                 <span className="text-zinc-400">A |</span>
-                <span className="text-violet-400 uppercase">{unit?.id}</span>
+                <span className="text-violet-400 uppercase">{unit?.ch_A_use}</span>
             </Button>
             <Button
                 variant="ghost"
@@ -31,7 +31,7 @@ export const UnitSelectChannel: FC<UnitSelectChannelProps> = ({ unitId, currentC
                 onClick={() => { setCurrentChannel("channelB") }}
             >
                 <span className="text-zinc-400">B |</span>
-                <span className="text-blue-400 uppercase">{unit?.id}</span>
+                <span className="text-blue-400 uppercase">{unit?.ch_B_use}</span>
             </Button>
         </div>
     )
