@@ -64,6 +64,7 @@ from api.ws.commands import (
     handle_sensors_update,
     handle_update_level,
     handle_update_mode,
+    handle_update_adj,
 )
 
 # load env
@@ -3183,6 +3184,7 @@ HANDLERS = {
     "sensors:update": (handle_sensors_update, Permission.WRITE_SENSORS),
     "units:update_level": (handle_update_level, Permission.WRITE_UNITS),
     "units:update_mode": (handle_update_mode, Permission.WRITE_UNITS),
+    "units:update_adj": (handle_update_adj, Permission.WRITE_UNITS),
 }
 
 
