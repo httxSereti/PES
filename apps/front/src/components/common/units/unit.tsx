@@ -14,6 +14,7 @@ import { UnitGraph } from "@/components/common/units/unit-graph"
 import { UnitQuickLevel } from "@/components/common/units/unit-quick-level"
 import { UnitSelectChannel } from "@/components/common/units/unit-select-channel"
 import { UnitSelectMode } from "@/components/common/units/unit-select-mode"
+import { UnitPowerMode } from "@/components/common/units/unit-power-mode"
 import { UnitAdj } from "./unit-adj"
 
 type UnitProps = {
@@ -86,6 +87,7 @@ export const Unit: FC<UnitProps> = ({ unitId }) => {
                             })}
                         </div>
 
+                        <UnitPowerMode unitId={unitId} />
                         <UnitSelectMode unitId={unitId} />
 
                     </div>

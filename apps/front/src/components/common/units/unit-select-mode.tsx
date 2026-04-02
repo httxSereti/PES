@@ -52,12 +52,12 @@ export const UnitSelectMode: FC<UnitSelectModeProps> = ({ unitId }) => {
         <div className={`flex items-center justify-between`}>
             <div className="flex items-center gap-2">
                 <span className={`text-[14px]`}>
-                    Mode:
+                    Mode
                 </span>
             </div>
             <Select value={String(unit.mode)} onValueChange={updateMode}>
                 <SelectTrigger>
-                    <SelectValue placeholder="Choisir un mode" />
+                    <SelectValue placeholder="Choose a mode" />
                 </SelectTrigger>
                 <SelectContent>
                     {MODE_2B.map((mode: Mode2BEntry, index: number) => (
