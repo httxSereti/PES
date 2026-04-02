@@ -9,35 +9,16 @@ import {
 import { useAppSelector } from "@/store/hooks"
 import { unitsSelectors } from "@/store/slices/unitsSlice"
 import { UnitDropdown } from "@/components/common/units/unit-dropdown"
-import { Computer, EditIcon } from "lucide-react"
+import { Computer } from "lucide-react"
 import { UnitGraph } from "@/components/common/units/unit-graph"
 import { UnitQuickLevel } from "@/components/common/units/unit-quick-level"
 import { UnitSelectChannel } from "@/components/common/units/unit-select-channel"
 import { UnitSelectMode } from "@/components/common/units/unit-select-mode"
-import { Field } from "@pes/ui/components/field"
-import { Input } from "@pes/ui/components/input"
 import { UnitAdj } from "./unit-adj"
 
 type UnitProps = {
     unitId: string;
 };
-
-const CHANNELS = [
-    {
-        key: 'ch_A' as const,
-        label: 'CH · A',
-        color: '#5F939D', // violet-400
-        wave: 'rgba(167,139,250,0.85)',
-        glow: '#a78bfa',
-    },
-    {
-        key: 'ch_B' as const,
-        label: 'CH · B',
-        color: '#5F939D', // blue-400
-        wave: 'rgba(96,165,250,0.85)',
-        glow: '#60a5fa',
-    },
-] as const;
 
 export const Unit: FC<UnitProps> = ({ unitId }) => {
     const [currentChannel, setCurrentChannel] = useState<"channelA" | "channelB">("channelA");
