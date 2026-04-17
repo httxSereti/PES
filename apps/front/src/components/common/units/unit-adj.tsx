@@ -21,7 +21,7 @@ import {
     DrawerTitle,
     DrawerTrigger,
 } from "@pes/ui/components/drawer"
-import { EditIcon, MinusIcon, PlusIcon } from "lucide-react"
+import { MinusIcon, PlusIcon } from "lucide-react"
 import { useAppDispatch, useAppSelector } from "@/store/hooks"
 import { unitsSelectors, unitUpdated } from "@/store/slices/unitsSlice"
 import { useWebSocket } from "@/hooks/useWebSocket"
@@ -48,7 +48,6 @@ export function UnitAdj({ unitId, adjId, val }: { unitId: string, adjId: "adj_1"
             <Dialog open={open} onOpenChange={setOpen}>
                 <DialogTrigger asChild>
                     <Button variant="outline" className="cursor-pointer">
-                        {/* <EditIcon /> */}
                         {val}
                         <p className="text-xs text-primary/40">({adjLabel})</p>
                     </Button>
@@ -78,7 +77,6 @@ export function UnitAdj({ unitId, adjId, val }: { unitId: string, adjId: "adj_1"
         <Drawer open={open} onOpenChange={setOpen}>
             <DrawerTrigger asChild>
                 <Button variant="outline" className="cursor-pointer">
-                    <EditIcon />
                     {val} ({adjLabel})
                 </Button>
             </DrawerTrigger>
