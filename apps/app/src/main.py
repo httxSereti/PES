@@ -3060,6 +3060,8 @@ def mk2b_init():
                 # Channels usage
                 "ch_A_use": DEFAULT_USAGE[init_bt_name]["A"],  # ch_A usage
                 "ch_B_use": DEFAULT_USAGE[init_bt_name]["B"],  # ch_B usage
+                "ch_A_limit": USAGE_LIMIT.get(DEFAULT_USAGE[init_bt_name]["A"], USAGE_LIMIT["default"]),
+                "ch_B_limit": USAGE_LIMIT.get(DEFAULT_USAGE[init_bt_name]["B"], USAGE_LIMIT["default"]),
                 # waveform setting 1
                 "adj_1": DEFAULT_USAGE_SETTING[init_bt_name][
                     "adj_1"
@@ -3117,6 +3119,8 @@ def mk2b_init():
             # Channels usage
             "ch_A_use": DEFAULT_USAGE[init_bt_name]["A"],  # ch_A usage
             "ch_B_use": DEFAULT_USAGE[init_bt_name]["B"],  # ch_B usage
+            "ch_A_limit": USAGE_LIMIT.get(DEFAULT_USAGE[init_bt_name]["A"], USAGE_LIMIT["default"]),
+            "ch_B_limit": USAGE_LIMIT.get(DEFAULT_USAGE[init_bt_name]["B"], USAGE_LIMIT["default"]),
             # waveform setting 1
             "adj_1": DEFAULT_USAGE_SETTING[init_bt_name][
                 "adj_1"
