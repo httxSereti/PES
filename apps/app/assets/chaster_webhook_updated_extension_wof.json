@@ -1,0 +1,148 @@
+{
+    "event": "action_log.created",
+    "sentAt": "2026-04-17T17:52:24.313Z",
+    "requestId": "DgdU0dDYvkbwXeDIQWOfT",
+    "data": {
+        "actionLog": {
+            "_id": "69e27358ed1256ec29d5efb3",
+            "type": "extension_updated",
+            "lock": "69e26c5baf89fe990bcbbaba",
+            "role": "keyholder",
+            "extension": "wheel-of-fortune",
+            "createdAt": "2026-04-17T17:52:24.208Z",
+            "title": "%USER% updated an extension",
+            "description": "Wheel of Fortune",
+            "color": null,
+            "icon": "fa-puzzle-piece",
+            "payload": {
+                "oldConfig": {
+                    "slug": "wheel-of-fortune",
+                    "config": {
+                        "segments": [
+                            {
+                                "type": "text",
+                                "duration": 3600,
+                                "text": "JfA: Spank on pads"
+                            },
+                            {
+                                "type": "text",
+                                "duration": 3600,
+                                "text": "JfA: Spank on pads\u208a\u2729\u2027\u208a\u02daJdA\u2729 Spank on pads"
+                            },
+                            {
+                                "type": "text",
+                                "duration": 3600,
+                                "text": "Dda:  Anal fuck"
+                            },
+                            {
+                                "type": "text",
+                                "duration": 3600,
+                                "text": "DdA: Anal fuck 10s"
+                            },
+                            {
+                                "type": "text",
+                                "duration": 3600,
+                                "text": "Eca:  Edging"
+                            },
+                            {
+                                "type": "text",
+                                "duration": 3600,
+                                "text": "Eca:  Stronger Edging"
+                            },
+                            {
+                                "type": "text",
+                                "duration": 3600,
+                                "text": "EcC: Edging Subject 30s"
+                            }
+                        ]
+                    },
+                    "mode": "unlimited",
+                    "regularity": 3600,
+                    "_id": "6900912ab5619a7c75610b33"
+                },
+                "newConfig": {
+                    "slug": "wheel-of-fortune",
+                    "config": {
+                        "segments": [
+                            {
+                                "type": "text",
+                                "duration": 3600,
+                                "text": "JfA: Spank on pads"
+                            },
+                            {
+                                "type": "text",
+                                "duration": 3600,
+                                "text": "JfA: Spank on pads\u208a\u2729\u2027\u208a\u02daJdA\u2729 Spank on pads"
+                            },
+                            {
+                                "type": "text",
+                                "duration": 3600,
+                                "text": "Dda:  Anal fuck"
+                            },
+                            {
+                                "type": "text",
+                                "duration": 3600,
+                                "text": "DdA: Anal fuck 10s"
+                            },
+                            {
+                                "type": "text",
+                                "duration": 3600,
+                                "text": "Eca:  Edging"
+                            },
+                            {
+                                "type": "text",
+                                "duration": 3600,
+                                "text": "Eca:  Stronger Edging"
+                            },
+                            {
+                                "type": "text",
+                                "duration": 3600,
+                                "text": "EcC: Edging Subject 30s"
+                            },
+                            {
+                                "type": "add-time",
+                                "duration": 3600,
+                                "text": ""
+                            },
+                            {
+                                "type": "set-unfreeze",
+                                "duration": 3600,
+                                "text": ""
+                            },
+                            {
+                                "type": "set-freeze",
+                                "duration": 3600,
+                                "text": ""
+                            },
+                            {
+                                "type": "pillory",
+                                "duration": 3600,
+                                "text": ""
+                            },
+                            {
+                                "type": "remove-time",
+                                "duration": 3600,
+                                "text": ""
+                            },
+                            {
+                                "type": "add-time",
+                                "duration": 90000,
+                                "text": ""
+                            }
+                        ]
+                    },
+                    "mode": "unlimited",
+                    "regularity": 3600,
+                    "_id": "69e27358ed1256ec29d5ef6e"
+                },
+                "slug": "wheel-of-fortune"
+            },
+            "prefix": "default",
+            "user": {
+                "_id": "677b50f6a48fa9f174cc256f",
+                "username": "Sereti"
+            }
+        },
+        "sessionId": "xNnOhxmu9ycLmk0ojXimD"
+    }
+}

@@ -1,0 +1,32 @@
+{
+    "event": "action_log.created",
+    "sentAt": "2026-04-17T17:39:18.395Z",
+    "requestId": "FpKIhBG3aq0vtyqnAyJqO",
+    "data": {
+        "actionLog": {
+            "_id": "69e27009af10f5d86d4ede12",
+            "type": "wheel_of_fortune_turned",
+            "lock": "69e26c5baf89fe990bcbbaba",
+            "role": "user",
+            "extension": "wheel-of-fortune",
+            "createdAt": "2026-04-17T17:38:17.910Z",
+            "title": "%USER% turned the wheel of fortune",
+            "description": "JfA: Spank on pads",
+            "color": null,
+            "icon": "fa-puzzle-piece",
+            "payload": {
+                "segment": {
+                    "type": "text",
+                    "duration": 3600,
+                    "text": "JfA: Spank on pads"
+                }
+            },
+            "prefix": "default",
+            "user": {
+                "_id": "624752208023266a09c03460",
+                "username": "Luluuuu"
+            }
+        },
+        "sessionId": "xNnOhxmu9ycLmk0ojXimD"
+    }
+}

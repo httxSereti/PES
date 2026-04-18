@@ -1,0 +1,26 @@
+{
+    "event": "action_log.created",
+    "sentAt": "2026-04-17T17:42:25.951Z",
+    "requestId": "YlCCVTT_zpbOzaI1tdXKY",
+    "data": {
+        "actionLog": {
+            "_id": "69e27101a909a4b5cad88a31",
+            "type": "keyholder_trusted",
+            "lock": "69e26c5baf89fe990bcbbaba",
+            "role": "user",
+            "extension": null,
+            "createdAt": "2026-04-17T17:42:25.875Z",
+            "title": "%USER% trusted the keyholder",
+            "description": "The keyholder can now edit lock settings",
+            "color": null,
+            "icon": "fa-handshake",
+            "payload": {},
+            "prefix": "default",
+            "user": {
+                "_id": "624752208023266a09c03460",
+                "username": "Luluuuu"
+            }
+        },
+        "sessionId": "xNnOhxmu9ycLmk0ojXimD"
+    }
+}

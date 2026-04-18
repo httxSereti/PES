@@ -57,7 +57,7 @@ from utils.users.generate_root_access import generate_root_access
 
 from contextlib import asynccontextmanager
 from api.ws.websocket_notifier import ws_notifier
-from api.rest import users, auth, admin
+from api.rest import users, auth, admin, chaster
 
 from api.ws.commands import (
     handle_stop,
@@ -252,6 +252,7 @@ app = FastAPI(lifespan=lifespan)
 app.include_router(users.router)
 app.include_router(auth.router)
 app.include_router(admin.router)
+app.include_router(chaster.router)
 
 app.add_middleware(
     CORSMiddleware,
