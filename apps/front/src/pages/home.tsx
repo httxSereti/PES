@@ -1,5 +1,4 @@
 import type { Route } from "../pages/+types/home";
-import usePluneWebSocket from "@/hooks/usePluneWebSocket";
 
 // eslint-disable-next-line no-empty-pattern
 export function meta({ }: Route.MetaArgs) {
@@ -10,12 +9,10 @@ export function meta({ }: Route.MetaArgs) {
 }
 
 export default function Home() {
-  const { readyState, events } = usePluneWebSocket();
-
   return (
     <div className="home">
-      {readyState === 1 ? "Connected" : "Disconnected"}
-      {JSON.stringify(events)}
+      <h1 >Home</h1>
+      <button className="px-4 py-2 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90">Button</button>
     </div>
   );
 }
