@@ -7,5 +7,9 @@
         "**/.git/objects/**": true,
         "**/node_modules/**": true,
         "**/venv/**": true
-    }
+    },
+    "python.analysis.extraPaths": [
+        "./apps/app/src"
+    ],
+    "python.defaultInterpreterPath": "${workspaceFolder}/.venv/Scripts/python.exe"
 }

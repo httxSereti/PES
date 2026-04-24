@@ -11,6 +11,7 @@ class Notifier():
     
     def __init__(self, bot):
         self.bot = bot
+        print('Notifier initialized')
 
     async def triggerEvent(
         self, 
@@ -19,6 +20,7 @@ class Notifier():
     ) -> nextcord.Message | None:
         nextcordMessage: nextcord.Message | None = None
         
+        print(f'event detected: {self.bot.logChannel.id}')
         print(eventType)
         
         # Start a Pillory on Chaster

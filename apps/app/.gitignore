@@ -7,3 +7,4 @@ resources/sounds/*.wav
 userdata/*
 backup/
 tmp/
+plunes.db*

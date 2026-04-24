@@ -72,8 +72,6 @@ def get_cogs() -> set[str]:
     """
     paths: list[str] = [
         "src\\commands",
-        "src\\jobs",
-        "src\\events"
     ]
     
     cogs = set()

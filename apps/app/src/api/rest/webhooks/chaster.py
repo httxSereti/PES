@@ -1,27 +1,45 @@
+import os
+import re
+import secrets
+import time
+
 from fastapi import APIRouter, HTTPException, status, Depends, Request
 from fastapi.security import HTTPBasic, HTTPBasicCredentials
-from store import Store
-from pprint import pprint
-import secrets
-import os
-import json
 
+from events.dispatcher import EventDispatcher
+from events.enums import TriggerableEvent
+from utils import Logger
 
-router = APIRouter(prefix="/webhooks",tags=["chaster"])
-store = Store()
+router = APIRouter(prefix="/webhooks", tags=["webhooks"])
 security = HTTPBasic()
+
+# Dispatcher — set during app startup
+_dispatcher: EventDispatcher | None = None
+
+
+def setup(dispatcher: EventDispatcher) -> None:
+    """Called during app startup to inject the event dispatcher."""
+    global _dispatcher
+    _dispatcher = dispatcher
+
+
+def _get_dispatcher() -> EventDispatcher:
+    if _dispatcher is None:
+        raise RuntimeError("Webhook router not initialized")
+    return _dispatcher
+
 
 def verify_credentials(credentials: HTTPBasicCredentials = Depends(security)):
     expected_user = os.getenv("CHASTER_WEBHOOK_USER", "sereti")
     expected_pwd = os.getenv("CHASTER_WEBHOOK_PWD", "password")
-    
+
     correct_username = secrets.compare_digest(
-        credentials.username.encode("utf8"), 
-        expected_user.encode("utf8")
+        credentials.username.encode("utf8"),
+        expected_user.encode("utf8"),
     )
     correct_password = secrets.compare_digest(
-        credentials.password.encode("utf8"), 
-        expected_pwd.encode("utf8")
+        credentials.password.encode("utf8"),
+        expected_pwd.encode("utf8"),
     )
     if not (correct_username and correct_password):
         raise HTTPException(
@@ -31,63 +49,153 @@ def verify_credentials(credentials: HTTPBasicCredentials = Depends(security)):
         )
     return credentials.username
 
+
 @router.post("/chaster", tags=["chaster"])
 async def read_chaster_webhook(
-    request: Request, 
-    username: str = Depends(verify_credentials)
+    request: Request,
+    username: str = Depends(verify_credentials),
 ):
-    print("----- PAYLOAD -----")
+    """
+    Handle Chaster webhook events.
+    Parses action_log.created events and dispatches them to the event system.
+    """
     data = await request.json()
-    pprint(data)
+    dispatcher = _get_dispatcher()
 
-    with open("assets/chaster_webhook.json", "w") as outfile:
-        json.dump(data, outfile, indent=4)
+    event: str = data.get("event", "")
+    webhook_id: str = data.get("requestId", "")
 
-    event: str = data["event"]
-    webhookId: str = data["requestId"]
+    Logger.info(f"[Webhook] Received Chaster event='{event}' requestId='{webhook_id}'")
 
-    print(f"event '{event}'")
-    print(f"webhookId '{webhookId}'")
-    print("-------------")
-    
     if event == "action_log.created":
-        actionPayload: dict = data["data"]["actionLog"]
-        actionType: str = actionPayload["type"]
+        action_log: dict = data.get("data", {}).get("actionLog", {})
+        action_type: str = action_log.get("type", "")
+        payload: dict = action_log.get("payload", {})
+        role: str = action_log.get("role", "unknown")
+        created_at: str = action_log.get("createdAt", "")
 
-        print(f"actionType '{actionType}'")
-        
-        if actionType == "keyholder_trusted":
-            print("lock trusted")
+        origin = f"chaster:{action_type}:{webhook_id}"
 
-        if actionType == "lock_frozen":
-            print("lock frozen")
+        # ── Wheel of Fortune ──
+        if action_type == "wheel_of_fortune_turned":
+            segment = payload.get("segment", {})
+            segment_type = segment.get("type", "")
 
-        if actionType == "wheel_of_fortune_turned":
-            print("wheel of fortune turned")
+            if segment_type == "text":
+                text = segment.get("text", "")
 
-            payload: dict = actionPayload["payload"]
-            segment: dict = payload["segment"]
+                # Check for dynamic WOF action code (e.g. "AaB: description")
+                m = re.match(r"^(\d|[A-Z][A-Za-z][A-Za-z]):", text)
+                if m:
+                    wof_code = f"wof_{m.group(1)}"
+                    Logger.info(f"[Webhook] WOF dynamic action: {wof_code}")
+                    await dispatcher.dispatch(
+                        event_type=wof_code,
+                        event_data={
+                            "author": role,
+                            "wofText": text,
+                            "wofAction": m.group(1),
+                            "triggeredAt": created_at,
+                        },
+                        origin=origin,
+                    )
+                else:
+                    Logger.info(f"[Webhook] WOF text without action code: '{text}'")
 
-            if segment["type"] == "add-time":
-                print("add time")
-            elif segment["type"] == "set-unfreeze":
-                print("set unfreeze")
-            elif segment["type"] == "set-freeze":
-                print("set freeze")
-            elif segment["type"] == "pillory":
-                print("pillory")
-            elif segment["type"] == "remove-time":
-                print("remove time")
-            elif segment["type"] == "text":
-                payloadText: str = segment["text"]
-                print(f"payloadText '{payloadText}'")
+            # WOF with non-text segment — dispatch generic event
+            await dispatcher.dispatch(
+                event_type=TriggerableEvent.CHASTER_WOF_TURNED.value,
+                event_data={
+                    "author": role,
+                    "wofText": segment.get("text", ""),
+                    "segmentType": segment_type,
+                    "triggeredAt": created_at,
+                },
+                origin=origin,
+            )
 
-            print(f"segmentType '{segment["type"]}'")
+        # ── Time changes (keyholder/user/extension) ──
+        elif action_type == "time_changed":
+            if "duration" in payload:
+                duration = payload["duration"]
+                event_type = (
+                    TriggerableEvent.CHASTER_TIME_ADD.value
+                    if duration > 0
+                    else TriggerableEvent.CHASTER_TIME_SUB.value
+                )
+                await dispatcher.dispatch(
+                    event_type=event_type,
+                    event_data={
+                        "author": role,
+                        "duration": duration,
+                        "triggeredAt": created_at,
+                    },
+                    origin=origin,
+                )
 
-        if actionType == "extension_updated":
-            print("extension updated")
+        # ── Shared Link votes ──
+        elif action_type == "link_time_changed":
+            duration = payload.get("duration", 0)
+            user_data = data.get("data", {}).get("user", {})
+            author = user_data.get("username", "Someone") if user_data else "Someone"
 
+            event_type = (
+                TriggerableEvent.CHASTER_VOTE_ADD.value
+                if duration > 0
+                else TriggerableEvent.CHASTER_VOTE_SUB.value
+            )
+            await dispatcher.dispatch(
+                event_type=event_type,
+                event_data={
+                    "author": author,
+                    "duration": duration,
+                    "triggeredAt": created_at,
+                },
+                origin=origin,
+            )
 
+        # ── Lock frozen/unfrozen ──
+        elif action_type == "lock_frozen":
+            await dispatcher.dispatch(
+                event_type=TriggerableEvent.CHASTER_LOCK_FROZEN.value,
+                event_data={"triggeredAt": created_at},
+                origin=origin,
+            )
+
+        elif action_type == "lock_unfrozen":
+            await dispatcher.dispatch(
+                event_type=TriggerableEvent.CHASTER_LOCK_UNFROZEN.value,
+                event_data={"triggeredAt": created_at},
+                origin=origin,
+            )
+
+        # ── Pillory ──
+        elif action_type == "pillory_start":
+            await dispatcher.dispatch(
+                event_type=TriggerableEvent.CHASTER_PILLORY_STARTED.value,
+                event_data={**payload, "triggeredAt": created_at},
+                origin=origin,
+            )
+
+        elif action_type == "pillory_ended":
+            await dispatcher.dispatch(
+                event_type=TriggerableEvent.CHASTER_PILLORY_ENDED.value,
+                event_data={**payload, "triggeredAt": created_at},
+                origin=origin,
+            )
+
+        elif action_type == "pillory_in_vote":
+            await dispatcher.dispatch(
+                event_type=TriggerableEvent.CHASTER_PILLORY_VOTE.value,
+                event_data={
+                    **payload,
+                    "nbVotes": 1,
+                    "triggeredAt": created_at,
+                },
+                origin=origin,
+            )
+
+        else:
+            Logger.debug(f"[Webhook] Unhandled action_log type: '{action_type}'")
 
     return {"status": "ok"}
-    

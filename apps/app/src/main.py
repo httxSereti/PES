@@ -47,7 +47,6 @@ from constants import DISCORD_GUILD_IDS, BT_UNITS, MODE_2B
 
 from typings import *
 from typings import Permission, UnitDict
-from services.chaster import *
 from services.notifier import *
 from utils import Logger, calculate_magic_number
 from utils import *
@@ -57,7 +56,16 @@ from utils.users.generate_root_access import generate_root_access
 
 from contextlib import asynccontextmanager
 from api.ws.websocket_notifier import ws_notifier
-from api.rest import users, auth, admin, chaster
+from api.rest import users, auth, admin
+from api.rest.webhooks import chaster as chaster_webhooks
+from api.rest import trigger_rules as trigger_rules_router
+
+from database.connection import Database
+from database.seed import seed_from_json
+from events.executor import ActionExecutor
+from events.queue import ActionQueue
+from events.registry import EventRegistry
+from events.dispatcher import EventDispatcher
 
 from api.ws.commands import (
     handle_stop,
@@ -103,9 +111,8 @@ SERIAL_KEEPALIVE = 20  # check every x second the connexion (100 ms steps)
 # Bot config
 DISCORD_TOKEN = os.getenv("DISCORD_TOKEN")
 
-# Default event config
-with open("configurations/event_action.json") as json_file:
-    EVENT_ACTION = json.load(json_file)
+# Database singleton
+db = Database()
 
 # Limit for estim level for every usage
 with open("configurations/usage_limit.json") as json_file:
@@ -182,8 +189,7 @@ PROFILE_FIELDS = [
     "ramp_wave",
 ]
 
-# Queue statistics
-queue_stats = {"waiting": 0, "constant": 0, "running": 0, "done": 0}
+
 
 # --start---------
 
@@ -229,6 +235,12 @@ Logger_nextcord.addHandler(handler_nextcord)
 # init Store
 store = Store()
 
+# Initialize event system singletons early for global access (e.g. Discord Bot)
+registry = EventRegistry(db)
+executor = ActionExecutor(store, ws_notifier=ws_notifier)
+action_queue = ActionQueue(executor, ws_notifier=ws_notifier)
+dispatcher = EventDispatcher(registry, action_queue, ws_notifier=ws_notifier)
+
 # ------------------
 # fastAPI
 # ------------------
@@ -243,8 +255,24 @@ async def lifespan(app: FastAPI):
     loop = asyncio.get_event_loop()
     ws_notifier.setup(loop)
     asyncio.create_task(ws_notifier.consume(store.websocket))
+
+    # Initialize database and seed data
+    await db.init()
+    
+    # Create tables if they don't exist
+    from database.base import Base
+    async with db._engine.begin() as conn:
+        await conn.run_sync(Base.metadata.create_all)
+        
+    await seed_from_json(db)
+
+    # Inject into routers
+    chaster_webhooks.setup(dispatcher)
+
     yield
+
     # shutdown
+    await db.close()
 
 
 app = FastAPI(lifespan=lifespan)
@@ -252,7 +280,8 @@ app = FastAPI(lifespan=lifespan)
 app.include_router(users.router)
 app.include_router(auth.router)
 app.include_router(admin.router)
-app.include_router(chaster.router)
+app.include_router(chaster_webhooks.router)
+app.include_router(trigger_rules_router.router)
 
 app.add_middleware(
     CORSMiddleware,
@@ -868,35 +897,14 @@ class Bot2b3(NextcordBot):
         self.logChannel: nextcord.abc.GuildChannel | None = None
         self.statusChannel: nextcord.abc.GuildChannel | None = None
 
-        self.chaster: Chaster = Chaster(self)
         self.notifier: Notifier = Notifier(self)
-
-        # Queue
-        self.queueRunning = True  # Queue status.
-        self.action_queue = []  # async actions for estim config
-        self.back_action_queue = []  # async back actions for estim config
-
-        # Queue V2
-        self.queueActions: list[ActionDict] = []
-        # pprint(self.queueActions)
-
-        # self.queueActions.append({
-        #     "type": "PROFILE",
-        #     "issuer": "user:Sereti",
-        #     "duration": 15
-        # })
-
-        # pprint(self.queueActions)
+        
+        # Event system (set from lifespan after FastAPI starts)
+        self._action_queue: ActionQueue | None = None
+        self._dispatcher: EventDispatcher | None = None
+        Logger.info("Bot initialized")
 
         self.previous_2B_sync = False  # previous global 2B sync
-
-        self.chaster_lockid = None  # id of the current chaster lock
-        self.chaster_taskid = None  # id of the task extension
-        self.chaster_task_pool = 0  # number of poll
-        self.chaster_taskvote = {}  # vote list for task
-        self.chaster_history_event_parsed = []  # wof/vote list for duration already parsed
-        self.chaster_pilloryid = None  # id of the pillory extension
-        self.chaster_pillory_vote_by_id = {}
 
         @self.slash_command(name="backup", description="Backup bot config")
         async def bot_backup(
@@ -907,7 +915,6 @@ class Bot2b3(NextcordBot):
         ):
             print(DIR_BACKUP)
             backup_data = {
-                "EVENT_ACTION": EVENT_ACTION,
                 "threads_settings": store.get_all_units_settings(),
                 "sensors_settings": store.get_all_sensors_settings(),
                 "USAGE_LIMIT": USAGE_LIMIT,
@@ -929,9 +936,7 @@ class Bot2b3(NextcordBot):
             bck_file = open(DIR_BACKUP / filename, "r")
             backup_data = json.load(bck_file)
             bck_file.close()
-            # actions
-            for action in backup_data["EVENT_ACTION"]:
-                EVENT_ACTION[action] = backup_data["EVENT_ACTION"][action]
+            # actions logic is now stored persistently in trigger_rules in DB
             # 2B
             for bck_bt_name in backup_data["threads_settings"]:
                 unit = UnitDict(bck_bt_name)
@@ -1115,257 +1120,7 @@ class Bot2b3(NextcordBot):
                         # end
                     await interaction.response.send_message("\n".join(txt))
 
-        @self.slash_command(
-            name="event_multi",
-            description="Associate event with level multiplier change",
-        )
-        async def bot_event_multi(
-            interaction: Interaction,
-            event_arg: str = SlashOption(
-                name="event",
-                description="event name",
-                choices=EVENT_ACTION.keys(),
-                required=True,
-            ),
-            usage_arg: str = SlashOption(
-                name="target",
-                description="Estim output",
-                choices=CHOICE_USAGE_ALL,
-                required=True,
-            ),
-            prct_arg: int = SlashOption(
-                name="prct",
-                description="percentage add or sub to the multiplier",
-                required=True,
-                min_value=-20,
-                default=5,
-                max_value=20,
-            ),
-            rnd_arg: int = SlashOption(
-                name="random",
-                description="randomize between 0 and prct value",
-                choices={"Yes": True, "No": False},
-                required=True,
-            ),
-        ) -> None:
-            if await check_permission(interaction, "administrator"):
-                # Event exist ?
-                if event_arg not in EVENT_ACTION:
-                    await interaction.response.send_message("invalid event")
-                    return None
-
-                # add event
-                EVENT_ACTION[event_arg] = {
-                    "type": "multi",
-                    "target": usage_arg,
-                    "prct": prct_arg,
-                    "rnd": rnd_arg,
-                }
-            await interaction.response.send_message(
-                "event {} modified".format(event_arg)
-            )
-            return None
-
-        @self.slash_command(
-            name="event_level", description="Associate event with Estim config change"
-        )
-        async def bot_event_level(
-            interaction: Interaction,
-            event_arg: str = SlashOption(
-                name="event",
-                description="event name",
-                choices=EVENT_ACTION.keys(),
-                required=True,
-            ),
-            unit_arg: str = SlashOption(
-                name="unit",
-                description="units impacted",
-                choices=CHOICE_UNIT_RANDOM,
-                required=True,
-            ),
-            dest_arg: str = SlashOption(
-                name="channels",
-                description="channels impacted",
-                choices=CHOICE_CHANNEL_RANDOM,
-                required=True,
-            ),
-            level_op: str = SlashOption(
-                name="operation",
-                description="how the level is changing",
-                choices=CHOICE_LEVEL_ACTION,
-                required=True,
-            ),
-            level_arg_min: int = SlashOption(
-                name="level_start",
-                description="level or min level range",
-                required=True,
-            ),
-            duration_arg_min: int = SlashOption(
-                name="duration_start",
-                description="duration or min duration range(sec),0=permanent",
-                required=True,
-            ),
-            wait_arg: int = SlashOption(
-                name="queuing",
-                description="put the action in queue",
-                required=True,
-                choices={"Yes": 1, "No": 0},
-            ),
-            level_arg_max: int = SlashOption(
-                name="level_max",
-                description="max level range",
-                required=False,
-            ),
-            duration_arg_max: int = SlashOption(
-                name="duration_max",
-                description="max duration range (sec)",
-                required=False,
-            ),
-        ) -> None:
-            if await check_permission(interaction, "administrator"):
-                # Event exist ?
-                if event_arg not in EVENT_ACTION:
-                    await interaction.response.send_message("invalid event")
-                    return None
-                # Unit valid ?
-                if await self.check_unit(interaction, unit_arg) == "":
-                    return None
-                # Channel valid ?
-                if await self.check_ch(interaction, dest_arg) == "":
-                    return None
-                level_arg = level_op + str(level_arg_min)
-                if level_arg_max:
-                    level_arg = level_arg + ">" + str(level_arg_max)
-                level_arg = await self.check_level(interaction, level_arg)
-                if not level_arg:
-                    return None
-                # Duration valid ?
-                duration_arg = str(duration_arg_min)
-                if duration_arg_max:
-                    duration_arg = duration_arg + ">" + str(duration_arg_max)
-                if await self.check_duration(interaction, duration_arg) < 0:
-                    return None
-                # add
-                EVENT_ACTION[event_arg] = {
-                    "type": "lvl",
-                    "unit": unit_arg,
-                    "dest": dest_arg,
-                    "level": level_arg,
-                    "duration": duration_arg,
-                    "wait": bool(wait_arg),
-                }
-            await interaction.response.send_message(
-                "event {} modified".format(event_arg)
-            )
-            return None
-
-        @self.slash_command(
-            name="event_duration",
-            description="Associate event with session duration increasing",
-        )
-        async def bot_event_duration(
-            interaction: Interaction,
-            event_arg: str = SlashOption(
-                name="event",
-                description="event name",
-                choices=EVENT_ACTION.keys(),
-                required=True,
-            ),
-            duration_arg: int = SlashOption(
-                name="duration",
-                description="number of minute added to the max duration",
-                required=True,
-                min_value=1,
-                max_value=60,
-            ),
-            add_arg: int = SlashOption(
-                name="add_current",
-                description="add time also in resting time",
-                required=True,
-                choices={"Yes": 0, "No": 1},
-            ),
-        ) -> None:
-            if await check_permission(interaction, "administrator"):
-                # Event exist ?
-                if event_arg not in EVENT_ACTION:
-                    await interaction.response.send_message("invalid event")
-                    return None
-                # add
-                EVENT_ACTION[event_arg] = {
-                    "type": "add",
-                    "duration": duration_arg,
-                    "only_max": bool(add_arg),
-                }
-            await interaction.response.send_message(
-                "event {} modified".format(event_arg)
-            )
-            return None
-
-        @self.slash_command(
-            name="event_profile", description="Associate event with Estim profile"
-        )
-        async def bot_event_profile(
-            interaction: Interaction,
-            event_arg: str = SlashOption(
-                name="event",
-                description="event name",
-                choices=EVENT_ACTION.keys(),
-                required=True,
-            ),
-            profile_arg: str = SlashOption(
-                name="profile", description="profile name", required=True
-            ),
-            level_arg: int = SlashOption(
-                name="level_prct",
-                description="percentage for level 100=original settings ",
-                required=True,
-                min_value=10,
-                max_value=400,
-            ),
-            duration_arg_min: int = SlashOption(
-                name="duration_start",
-                description="duration or min duration range(sec),0=permanent",
-                required=True,
-            ),
-            wait_arg: int = SlashOption(
-                name="queuing",
-                description="put the action in queue",
-                required=True,
-                choices={"Yes": 1, "No": 0},
-            ),
-            duration_arg_max: int = SlashOption(
-                name="duration_max",
-                description="max duration range (sec)",
-                required=False,
-            ),
-        ) -> None:
-            if await check_permission(interaction, "administrator"):
-                # Event exist ?
-                if event_arg not in EVENT_ACTION:
-                    await interaction.response.send_message("invalid event")
-                    return None
-                # profile valid ?
-                if not os.path.exists(DIR_PROFILE / (profile_arg.upper() + ".json")):
-                    await interaction.response.send_message("profile not exist")
-                    return None
-                # Duration valid ?
-                duration_arg = str(duration_arg_min)
-                if duration_arg_max:
-                    duration_arg = duration_arg + ">" + str(duration_arg_max)
-                if await self.check_duration(interaction, duration_arg) < 0:
-                    return None
-                # add
-                EVENT_ACTION[event_arg] = {
-                    "type": "pro",
-                    "profile": profile_arg.upper(),
-                    "level": level_arg,
-                    "duration": duration_arg,
-                    "wait": bool(wait_arg),
-                }
-            await interaction.response.send_message(
-                "event {} modified".format(event_arg)
-            )
-            return None
+        # Event management commands removed — use REST API /api/trigger-groups
 
         @self.slash_command(name="mode", description="Change Estim mode")
         async def bot_mode(
@@ -1839,13 +1594,8 @@ class Bot2b3(NextcordBot):
             return None
 
         # ----- EVENT MANAGEMENT ----
-        @self.slash_command(name="events")
-        async def bot_events(interaction: nextcord.Interaction):
-            pass
-
-        @bot_events.subcommand(description="List all events action")
-        async def list(interaction: Interaction) -> None:
-            await interaction.response.send_message(embed=EmbedEventList(EVENT_ACTION))
+        # Event management is now handled via REST API /api/trigger-groups
+        # Use GET /api/events/types to list available event types
 
         # ----- EMERGENCY STOP ----------
         @self.slash_command(name="stop", description="Emergency stop")
@@ -1854,7 +1604,9 @@ class Bot2b3(NextcordBot):
                 if interaction.user.id == self.subjectId or await check_permission(
                     interaction, "administrator"
                 ):
-                    self.queueRunning = False
+                    # Cancel all queued actions via new system
+                    if self._action_queue:
+                        await self._action_queue.cancel_all()
                     for unit_str in BT_UNITS:
                         unit = UnitDict(unit_str)
                         store.update_thread_settings(
@@ -1966,358 +1718,18 @@ class Bot2b3(NextcordBot):
                 )
             return None
 
-    # ------------- Event management ------------------
-    async def trigger_event(
-        self,
-        event_type: TriggerableEvent,
-        **kwargs,
-    ) -> None:
-        """
-        WIP
-        Handle triggered Events, will check for `TriggerRules` and call them and send `Notifications`
-        """
-        # TODO: trigger event func
-        Logger.info(f"[Events] Events received, [type={event_type}]")
-
-        # dispatch notification through discord
-        await self.notifier.triggerEvent(event_type, eventData=kwargs["eventData"])
-
-        # debug
-        if kwargs and "eventData" in kwargs:
-            pprint(kwargs["eventData"])
-
-    # add action into queue
-    async def add_event_action(
-        self, type_action: str, origin_action: str, event_time
-    ) -> None:
-        Logger.info(f"Action received! {type_action}")
-        # action parsed in the event
-
-        ws_notifier.notify(
-            payload_type="events:triggered",
-            payload={
-                "type_action": type_action,
-                "origin_action": origin_action,
-                "event_time": event_time,
-            },
-        )
-
-        m = re.search("^wof_([A-Z])([A-Z,a-z])([A-Z,a-z])$", type_action)
-        if m:
-            Logger.info("New event type {} added in queue ".format(type_action))
-            Logger.info("New custom task event")
-            profile = m.group(1).upper()
-            level_coef = 100
-            if m.group(2).isupper():
-                level_coef = 100 + (ord(m.group(2)) - 65) * 5  # add 5% peer steep
-            else:
-                level_coef = 100 - (ord(m.group(2)) - 97) * 2  # sub 2% peer steep
-            duration = 0
-            if m.group(3).isupper():
-                duration = (ord(m.group(3)) - 64) * 10  # add 10 sec peer steep
-            else:
-                duration = random.randint(
-                    10, (ord(m.group(3)) - 96) * 10
-                )  # add 10 sec peer steep
-
-            self.action_queue.append(
-                {
-                    "origine": origin_action,
-                    "type": "pro",
-                    "profile": profile,
-                    "level": level_coef,
-                    "duration": duration,
-                    "wait": True,
-                    "display": type_action
-                    + " "
-                    + time.strftime("%H:%M:%S", event_time),
-                    "counter": -1,
-                }
-            )
-
-        # find action associated to the event
-        elif EVENT_ACTION[type_action]:
-            Logger.info(
-                "New event type {} added in queue : {}".format(
-                    type_action, EVENT_ACTION[type_action]
-                )
-            )
-            # Level change -> queue
-            if EVENT_ACTION[type_action]["type"] == "lvl":
-                Logger.warning("New level event")
-                self.action_queue.append(
-                    {
-                        "origine": origin_action,
-                        "type": "lvl",
-                        "unit": EVENT_ACTION[type_action]["unit"],
-                        "dest": EVENT_ACTION[type_action]["dest"],
-                        "level": await self.check_level(
-                            self, EVENT_ACTION[type_action]["level"]
-                        ),
-                        "duration": await self.check_duration(
-                            self, EVENT_ACTION[type_action]["duration"]
-                        ),
-                        "wait": EVENT_ACTION[type_action]["wait"],
-                        "display": type_action
-                        + " "
-                        + time.strftime("%H:%M:%S", event_time),
-                        "counter": -1,
-                    }
-                )
-            # Apply profile -> queue
-            elif EVENT_ACTION[type_action]["type"] == "pro":
-                Logger.warning("New profile event")
-                self.action_queue.append(
-                    {
-                        "origine": origin_action,
-                        "type": "pro",
-                        "profile": EVENT_ACTION[type_action]["profile"],
-                        "level": EVENT_ACTION[type_action]["level"],
-                        "duration": await self.check_duration(
-                            self, EVENT_ACTION[type_action]["duration"]
-                        ),
-                        "wait": EVENT_ACTION[type_action]["wait"],
-                        "display": type_action
-                        + " "
-                        + time.strftime("%H:%M:%S", event_time),
-                        "counter": -1,
-                    }
-                )
-            # Multi change
-            elif EVENT_ACTION[type_action]["type"] == "multi":
-                Logger.warning("New multiplier event")
-                action = EVENT_ACTION[type_action]
-
-                for unit_str in BT_UNITS:
-                    unit = UnitDict(unit_str)
-                    snapshot = store.get_unit_dict(unit)
-                    changes = {}
-
-                    for ch in ("A", "B"):
-                        if (
-                            snapshot[f"ch_{ch}_use"] == action["target"].lower()
-                            or action["target"].lower() == "all"
-                        ):
-                            ch_name = f"ch_{ch}_multiplier"
-
-                            if action["rnd"]:
-                                add_val = random.randint(
-                                    min(0, action["prct"]),
-                                    max(0, action["prct"]),
-                                )
-                            else:
-                                add_val = action["prct"]
-
-                            changes[ch_name] = snapshot[ch_name] + add_val
-
-                    if changes:
-                        changes["updated"] = True
-                        store.update_unit_dict(unit, changes)
-            # Add max time / Add time
-            elif EVENT_ACTION[type_action]["type"] == "add":
-                Logger.warning("New duration event")
-                duration = int(EVENT_ACTION[type_action]["duration"]) * 60
-                # Chaster
-                if self.chaster_lockid:
-                    async with aiohttp.ClientSession() as session:
-                        async with session.get(
-                            f"{CHASTER_URL}/locks/{self.chaster_lockid}",
-                            headers=CHASTER_HEADERS,
-                        ) as current_lock:
-                            json_data = await current_lock.json()
-                            max_time = datetime.datetime.strptime(
-                                json_data["maxDate"], "%Y-%m-%dT%H:%M:%S.%fZ"
-                            )
-                            if json_data["maxLimitDate"]:  # case of no max
-                                max_time = datetime.datetime.strptime(
-                                    json_data["maxLimitDate"], "%Y-%m-%dT%H:%M:%S.%fZ"
-                                )
-                            max_time = max_time + datetime.timedelta(seconds=duration)
-                            async with session.post(
-                                f"{CHASTER_URL}/locks/{self.chaster_lockid}/max-limit-date",
-                                json={
-                                    "maxLimitDate": max_time.strftime(
-                                        "%Y-%m-%dT%H:%M:%S.%fZ"
-                                    ),
-                                    "disableMaxLimitDate": False,
-                                },
-                                headers=CHASTER_HEADERS,
-                            ) as update_dur:
-                                Logger.debug(update_dur.text())
-                            if not EVENT_ACTION[type_action]["only_max"]:
-                                async with session.post(
-                                    f"{CHASTER_URL}/locks/{self.chaster_lockid}/update-time",
-                                    json={"duration": duration},
-                                    headers=CHASTER_HEADERS,
-                                ) as update_dur:
-                                    Logger.debug(update_dur.text())
-        else:
-            Logger.info("[Actions] New event type {} unknow".format(type_action))
-
-    async def reverse_action(self, action: dict) -> None:
-        # TODO: REF everything
-
-        """
-        Reverse change from a previous action
-        Args:
-            action: Dict with action to reverse
-
-        Returns:None
-
-        """
-
-        if action["type"] == "lvl":
-            unit = UnitDict(action["unit"])
-            var = action["dest"]
-            snapshot = store.get_unit_dict(unit)
-
-            new_val = max(0, min(100, snapshot[var] + action["level_diff"]))
-
-            Logger.info(
-                f"Return to initial value for unit {action['unit']} var {var} is {new_val}"
-            )
-
-            store.update_unit_dict(
-                unit,
-                {
-                    "updated": True,
-                    var: new_val,
-                },
-            )
-
-            Logger.info("[Action] Successfully reversed to initial Levels.")
-
-        elif action["type"] == "pro":
-            with open(DIR_TMP / action["bck_file"], "r") as f:
-                backup_data = json.load(f)
-
-            bck_settings = backup_data["threads_settings"]
-            os.remove(DIR_TMP / action["bck_file"])
-
-            for bck_bt_name, bck_unit in bck_settings.items():
-                unit = UnitDict(bck_bt_name)
-
-                changes = {
-                    field: value
-                    for field, value in bck_unit.items()
-                    if field in PROFILE_FIELDS
-                }
-
-                if changes:
-                    changes.update({"sync": False, "updated": True})
-                    store.update_unit_dict(unit, changes)
-
-            Logger.info("[Action] Successfully reversed to initial Profile.")
-
-    async def apply_action(self, action: dict) -> None:
-        # TODO: REF everything
-        """
-        Apply action from Event
-        Args:
-            action: Dict with action to do
-
-        Returns: None
-
-        """
-        Logger.info("{} Action start\n".format(action["origine"]))
-        # Level update
-        if action["type"] == "lvl":
-            for unit_num in await self.check_unit(None, action["unit"]):
-                unit_str = f"UNIT{unit_num}"
-                unit = UnitDict(unit_str)
-                snapshot = store.get_unit_dict(unit)
-                changes = {}
-
-                for ch in await self.check_ch(None, action["dest"].upper()):
-                    ch_name = f"ch_{ch}_max"
-                    old_val = snapshot[ch_name]
-                    new_val = self.calc_new_val(action["level"], unit_str, ch_name)
-
-                    changes[ch_name] = new_val
-                    self.back_action_queue.append(
-                        {
-                            "type": action["type"],
-                            "unit": unit_str,
-                            "dest": ch_name,
-                            "level_diff": old_val - new_val,
-                            "origine": action["origine"],
-                        }
-                    )
-
-                    Logger.info(
-                        f"[Action] level for {snapshot[f'ch_{ch}_use']} {old_val} -> {new_val}"
-                    )
-
-                if changes:
-                    changes["updated"] = True
-                    store.update_unit_dict(unit, changes)
-        # profile update
-        elif action["type"] == "pro":
-            if action["profile"] == "X":
-                action["profile"] = random.choice(PROFILE_RANDOM)
-
-            filename = action["profile"] + ".json"
-            profile_path = DIR_PROFILE / filename
-
-            if not os.path.isfile(profile_path):
-                Logger.info(f"Profile file {profile_path} missing")
-                return
-
-            # backup current profile
-            with open(DIR_TMP / action["origine"], "w") as f:
-                json.dump(
-                    {"threads_settings": store.get_all_units_settings()}, f, indent=4
-                )
-
-            self.back_action_queue.append(
-                {
-                    "type": action["type"],
-                    "bck_file": action["origine"],
-                    "origine": action["origine"],
-                }
-            )
-
-            # load + apply new profile
-            with open(profile_path, "r") as f:
-                profile_data = json.load(f)
-
-            bck_settings = profile_data["threads_settings"]
-
-            for bck_bt_name, bck_unit in bck_settings.items():
-                unit = UnitDict(bck_bt_name)
-                changes = {"sync": False, "updated": True, "ramp_progress": 0}
-
-                for field, value in bck_unit.items():
-                    if field not in PROFILE_FIELDS:
-                        continue
-                    if field in ("ch_A_max", "ch_B_max"):
-                        new_val = round(int(value) * int(action["level"]) / 100)
-                        changes[field] = min(100, max(0, new_val))
-                    else:
-                        changes[field] = value
-
-                store.update_unit_dict(unit, changes)
 
     # BT sensors polling for new alarm
     async def bt_sensor_alarm(self):
         """
         Check alarm about position and moving for the BT sensors and apply actions if needed
-        Args:
-
-        Returns:
-            None
-
         """
-        # loop by sensor
         for sensor_name in sorted(store.get_all_sensors_settings().keys()):
             current_sensor_settings = store.get_sensor_setting(sensor_name)
 
-            # loop by value from the sensor
             for field in sorted(current_sensor_settings.keys()):
-                # find the name of the sensor from the config
                 if m := re.match(r"^(\w+)_alarm_number$", field):
                     value = m[1]
-                    # check if the alarm counter have changed
                     if (
                         current_sensor_settings[value + "_alarm_number"]
                         != current_sensor_settings[value + "_alarm_number_action"]
@@ -2331,25 +1743,20 @@ class Bot2b3(NextcordBot):
                             current_sensor_settings[value + "_alarm_number"],
                         )
 
-                        # if alarm is active, add event in queue
-                        if (
-                            EVENT_ACTION[value]
-                            and current_sensor_settings["alarm_enable"]
-                        ):
+                        # Dispatch sensor alarm event via new system
+                        if current_sensor_settings["alarm_enable"] and self._dispatcher:
+                            sensor_event_map = {
+                                "sound": "sensor_sound",
+                                "position": "sensor_position",
+                                "move": "sensor_move",
+                            }
+                            event_type = sensor_event_map.get(value, value)
                             Logger.warning(
                                 f'[Sensor] Alarm! "{sensor_name}" Sensor fired!'
                             )
-                            await self.add_event_action(
-                                value,
-                                sensor_name
-                                + " BT sensor "
-                                + value
-                                + str(
-                                    current_sensor_settings[
-                                        value + "_alarm_number_action"
-                                    ]
-                                ),
-                                time.localtime(),
+                            await self._dispatcher.dispatch(
+                                event_type=event_type,
+                                origin=f"sensor:{sensor_name}:{value}",
                             )
 
     # for exception in tasks bt_sensor_alarm
@@ -2363,325 +1770,17 @@ class Bot2b3(NextcordBot):
             Logger.warning(f"Task exception bt_sensor_alarm")
             Logger.debug(traceback.print_exc())
 
-    # Chaster detect active lock et task/pillory pooling
-    async def set_chaster(self) -> None:
-        """
-        Enable current chaster session for detect event
-        Args:
-
-        Returns: None
-        """
-        # get active lock from API
-        async with aiohttp.ClientSession() as session:
-            async with session.get(
-                f"{CHASTER_URL}/locks?status=active", headers=CHASTER_HEADERS
-            ) as data_current_lock:
-                json_feed = await data_current_lock.json()
-                if len(json_feed) > 0:
-                    # get the first active lock
-                    if not self.chaster_lockid:
-                        Logger.warning(
-                            "Chaster active lock detected lockid : {}".format(
-                                json_feed[0]["_id"]
-                            )
-                        )
-                    self.chaster_lockid = json_feed[0]["_id"]
-                    # check which extensions are actives
-                    for idx in range(len(json_feed[0]["extensions"])):
-                        # Tasks detection
-                        if json_feed[0]["extensions"][idx]["displayName"] == "Tasks":
-                            taskid = json_feed[0]["extensions"][idx]["userData"][
-                                "currentTaskVote"
-                            ]
-                            if taskid:
-                                if self.chaster_taskid != taskid:
-                                    self.chaster_taskvote = {}  # New poll, reset previous results
-                                    Logger.warning(
-                                        "Chaster tasks voting detected taskid : {}".format(
-                                            taskid
-                                        )
-                                    )
-                                    self.chaster_taskid = taskid
-                                self.chaster_task_pool = (
-                                    self.chaster_task_pool + 1
-                                )  # used for uniq id for action
-                        # Pilory detection
-                        if json_feed[0]["extensions"][idx]["displayName"] == "Pillory":
-                            pilloryid = json_feed[0]["extensions"][idx]["_id"]
-                            if pilloryid:
-                                if self.chaster_pilloryid != pilloryid:
-                                    Logger.warning(
-                                        "Chaster pillory detected pilloryid : {}".format(
-                                            pilloryid
-                                        )
-                                    )
-                                    self.chaster_pilloryid = pilloryid
-
-    # for exception in tasks set_chaster
-    @tasks.loop(seconds=60)
-    async def rerun_set_chaster(self):
-        try:
-            await self.set_chaster()
-        except asyncio.CancelledError:
-            raise
-        except Exception:
-            Logger.warning(f"Task exception set_chaster")
-            Logger.debug(traceback.print_exc())
-
-    async def chaster_history(self) -> None:
-        """
-        Parse Chaster history for event detecting
-        Args:
-
-        Returns: None
-        """
-        # if no active lock
-        if not self.chaster_lockid:
-            return
-        # get votes info from API history
-        async with aiohttp.ClientSession() as session:
-            async with session.post(
-                f"{CHASTER_URL}/locks/{self.chaster_lockid}/history",
-                json={"limit": 30},
-                headers=CHASTER_HEADERS,
-            ) as data_current_history:
-                json_history = await data_current_history.json()
-                for chaster_event in json_history["results"]:
-                    # check if event is new
-                    if chaster_event["_id"] not in self.chaster_history_event_parsed:
-                        self.chaster_history_event_parsed.append(chaster_event["_id"])
-                        # parse voting
-                        if chaster_event["type"] == "link_time_changed":
-                            if "duration" not in chaster_event["payload"]:
-                                Logger.warning("new chaster vote without duration")
-                                await self.add_event_action(
-                                    "vote",
-                                    "vote" + chaster_event["_id"],
-                                    time.localtime(),
-                                )
-                            elif chaster_event["payload"]["duration"] > 0:
-                                Logger.warning("new chaster vote add")
-                                await self.add_event_action(
-                                    "vote",
-                                    "vote" + chaster_event["_id"],
-                                    time.localtime(),
-                                )
-                            else:
-                                Logger.warning("new chaster vote sub")
-                                await self.add_event_action(
-                                    "vote_sub",
-                                    "vote" + chaster_event["_id"],
-                                    time.localtime(),
-                                )
-                        # parse wheel of fortune
-                        elif (
-                            chaster_event["type"] == "wheel_of_fortune_turned"
-                            and chaster_event["payload"]["segment"]["type"] == "text"
-                        ):
-                            # Looking for keyword
-
-                            m = re.search(
-                                "^(\\d|[A-Z][A-Z,a-z][A-Z,a-z]):",
-                                chaster_event["payload"]["segment"]["text"],
-                            )
-                            if m:
-                                print(
-                                    "new chaster wheel of fortune action:" + m.group(1)
-                                )
-                                await self.add_event_action(
-                                    "wof_" + m.group(1),
-                                    "wof" + chaster_event["_id"],
-                                    time.localtime(),
-                                )
-                            else:
-                                Logger.warning(
-                                    "unknow wheel of fortune test:"
-                                    + chaster_event["payload"]["segment"]["text"]
-                                )
-
-    # for exception in tasks chaster_history
-    @tasks.loop(seconds=30)
-    async def rerun_chaster_history(self):
-        try:
-            await self.chaster_history()
-            await self.chaster.monitorHistory()
-        except asyncio.CancelledError:
-            raise
-        except Exception:
-            Logger.warning(f"Task exception chaster_history")
-            Logger.debug(traceback.print_exc())
-
-    # Chaster parse task pooling
-    async def chaster_task(self) -> None:
-        """
-        Parse Chaster task extention for detecting new vote
-        Args:
-
-        Returns: None
-        """
-        # if no task extention
-        if not self.chaster_taskid:
-            return
-        elif self.chaster_taskid not in self.chaster_taskvote:
-            self.chaster_taskvote[self.chaster_taskid] = {}
-
-        # get tasks info from API
-        async with aiohttp.ClientSession() as session:
-            async with session.get(
-                f"{CHASTER_URL}/extensions/tasks/votes/{self.chaster_taskid}",
-                headers=CHASTER_HEADERS,
-            ) as data_current_vote:
-                json_feed = await data_current_vote.json()
-                # parse voting task stats
-                for idx in range(len(json_feed["choices"])):
-                    # looking for keyword
-                    m = re.search(
-                        "^(\\d|[A-Z][A-Z,a-z][A-Z,a-z]):",
-                        json_feed["choices"][idx]["task"],
-                    )
-                    if m:
-                        type_action = "wof_" + m.group(1)
-                        nb_votes = int(json_feed["choices"][idx]["nbVotes"])
-                        # new entry
-                        if (
-                            type_action
-                            not in self.chaster_taskvote[self.chaster_taskid]
-                        ):
-                            self.chaster_taskvote[self.chaster_taskid][type_action] = 0
-                        # check if there are some new votes
-                        for i in range(
-                            self.chaster_taskvote[self.chaster_taskid][type_action],
-                            nb_votes,
-                        ):
-                            Logger.warning(f"new chaster vote task {type_action}")
-                            # add event to queue
-                            await self.add_event_action(
-                                type_action,
-                                type_action
-                                + "_chaster_"
-                                + str(i)
-                                + "_"
-                                + str(self.chaster_task_pool),
-                                time.localtime(),
-                            )
-                        self.chaster_taskvote[self.chaster_taskid][type_action] = (
-                            nb_votes
-                        )
-
-    # for exception in tasks chaster_task
-    @tasks.loop(seconds=30)
-    async def rerun_chaster_task(self):
-        try:
-            await self.chaster_task()
-        except asyncio.CancelledError:
-            raise
-        except Exception:
-            Logger.warning(f"Task exception chaster_task")
-            Logger.debug(traceback.print_exc())
-
-    # for exception in tasks chaster_pillory
-    @tasks.loop(seconds=30)
-    async def rerun_chaster_pillory(self):
-        try:
-            await self.chaster.fetchPillories()
-        except asyncio.CancelledError:
-            raise
-        except Exception:
-            Logger.error(f"[Chaster-Threads] Task exception chaster_pillory")
-            Logger.debug(traceback.print_exc())
-
-    # Event action queueing
-    async def event_queue_mgmt(self):
-        """
-        Check queue for all actions form vent
-        Returns:
-
-        """
-        # purge finished actions (except for duration=0 of permanent action)
-        tmp_array = []
-        queue_nb_run = 0
-        queue_nb_wait = 0
-        # Browse all the queue for see if something need to do
-        for idx in range(len(self.action_queue)):
-            # if duration=0 => permanent action so no need to return on old values and no
-            if (
-                self.action_queue[idx]["counter"] > 0
-                and self.action_queue[idx]["duration"] == 0
-            ):
-                queue_stats["constant"] = queue_stats["constant"] + 1
-                continue
-            # for action with fixed duration, check if it is finished
-            if self.action_queue[idx]["counter"] < self.action_queue[idx]["duration"]:
-                # not finished, the action is keep in queue
-                tmp_array.append(self.action_queue[idx])
-                # statistics
-                if self.action_queue[idx]["counter"] == -1:
-                    queue_nb_wait = queue_nb_wait + 1
-                else:
-                    queue_nb_run = queue_nb_run + 1
-            else:
-                # Action Finished
-                Logger.warning(
-                    "{} action stop after {} sec".format(
-                        self.action_queue[idx]["display"],
-                        self.action_queue[idx]["duration"],
-                    )
-                )
-                queue_stats["done"] = queue_stats["done"] + 1
-                # Make a reverse action for returned to the original settings
-                for action in self.back_action_queue:
-                    if self.action_queue[idx]["origine"] == action["origine"]:
-                        await self.reverse_action(action)
-        # Update global stats
-        queue_stats["running"] = queue_nb_run
-        queue_stats["waiting"] = queue_nb_wait
-
-        # Stop here if Queue in pause
-        if not self.queueRunning:
-            return
-
-        self.action_queue = tmp_array
-        # find if some actions are already active and increase the counter
-        something_active = 0
-        for idx in range(len(self.action_queue)):
-            if self.action_queue[idx]["counter"] > 0:
-                something_active = something_active + 1
-                self.action_queue[idx]["counter"] = (
-                    self.action_queue[idx]["counter"] + 1
-                )
-
-        # look if no-cumulative action can be start if nothing already running
-        if something_active == 0:
-            for idx in range(len(self.action_queue)):
-                # start the new event
-                if (
-                    self.action_queue[idx]["wait"]
-                    and self.action_queue[idx]["counter"] == -1
-                ):
-                    self.action_queue[idx]["counter"] = 1
-                    await self.apply_action(self.action_queue[idx])
-                    break  # Only one action in progress in no cumulative mode
-
-        # look if cumulative action can be start
-        for idx in range(len(self.action_queue)):
-            if (
-                not self.action_queue[idx]["wait"]
-                and self.action_queue[idx]["counter"] == -1
-            ):
-                self.action_queue[idx]["counter"] = 1
-                await self.apply_action(self.action_queue[idx])
-
-    # for exception in tasks event_queue_mgmt
+    # Event action queueing (new system)
     @tasks.loop(seconds=1)
     async def rerun_event_queue_mgmt(self):
         try:
-            await self.event_queue_mgmt()
+            if self._action_queue:
+                await self._action_queue.tick()
         except asyncio.CancelledError:
             raise
         except Exception:
             Logger.warning(f"Task exception event_queue_mgmt")
             Logger.debug(traceback.print_exc())
-
     # update boot status
     async def update_status(self):
         """
@@ -2720,8 +1819,6 @@ class Bot2b3(NextcordBot):
         # Find and save usefull channels
         self.logChannel = self.get_channel(CONFIGURATION["logsChannelId"])  # type: ignore
         self.statusChannel = self.get_channel(CONFIGURATION["statusChannelId"])  # type: ignore
-        # print(f"chaster={self.chaster.linked}")
-        # print(f"profile={self.profile.profileFiles}")
 
         # create root and redirect host to it
         magicLink: str = generate_root_access()
@@ -2729,17 +1826,15 @@ class Bot2b3(NextcordBot):
             content=f"Magic Link: {magicLink}"
         )
 
-        await self.chaster.linkLock()
+        # Get event system references via singletons
+        self._action_queue = ActionQueue.get_instance()
+        self._dispatcher = EventDispatcher.get_instance()
+        self._dispatcher._notifier = self.notifier
 
         # Start all tasks
         self.rerun_update_status.start()  # bot console
         self.rerun_event_queue_mgmt.start()  # queue management
         self.rerun_bt_sensor_alarm.start()  # Bluetooth sensors
-
-        self.rerun_set_chaster.start()  # Detect Chaster lock
-        self.rerun_chaster_history.start()  # Chaster votes
-        self.rerun_chaster_task.start()  # Chaster tasks
-        self.rerun_chaster_pillory.start()  # Chaster Pillory
         return True
 
     # cmd arg errors
@@ -3247,9 +2342,9 @@ async def websocket_endpoint(websocket: WebSocket, token: str):
                     await websocket.send_json({"type": "pong"})
                     continue
 
-                # TODO: remove, action queue is in bot atm so..
                 if msg_type == "core:stop":
-                    bot.queueRunning = False
+                    if bot._action_queue:
+                        await bot._action_queue.cancel_all()
 
                 # fetch command to use
                 handler_tuple = HANDLERS.get(msg_type)
