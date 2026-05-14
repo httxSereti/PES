@@ -261,6 +261,7 @@ async def lifespan(app: FastAPI):
     
     # Create tables if they don't exist
     from database.base import Base
+    from database.models.triggered_event import TriggeredEvent  # ensure table is registered
     async with db._engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
         
@@ -2317,6 +2318,10 @@ async def websocket_endpoint(websocket: WebSocket, token: str):
         await websocket.send_json(
             {"type": "units:init", "payload": store.get_all_units_settings()}
         )
+
+        # Replay the last 250 triggered events to the newly connected client
+        assert user_id is not None
+        await ws_notifier.send_history(user_id, store.websocket)
 
         # Heartbeat and Message handling
         while True:

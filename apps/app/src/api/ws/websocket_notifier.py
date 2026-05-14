@@ -21,6 +21,34 @@ class WebSocketNotifier:
         message = {"type": payload_type, "payload": payload}
         self._loop.call_soon_threadsafe(self._queue.put_nowait, message)
 
+    async def send_history(self, client_id: str, ws_manager: WebSocketManager, limit: int = 250):
+        """
+        Send the last `limit` triggered events to a single newly connected client.
+        Events are sent oldest-first inside a single 'events:history' message.
+        """
+        from database.repositories.triggered_event_repo import TriggeredEventRepo
+
+        repo = TriggeredEventRepo()
+        events = await repo.get_recent(limit=limit)
+
+        payload = [
+            {
+                "id": ev.id,
+                "event_type": ev.event_type,
+                "origin": ev.origin,
+                "event_data": ev.event_data,
+                "triggered_at": ev.triggered_at.isoformat(),
+                "triggered_rules": ev.triggered_rules,
+            }
+            for ev in events
+        ]
+
+        await ws_manager.send_personal_message(
+            message={"type": "events:history", "payload": payload},
+            client_id=client_id,
+        )
+        Logger.info(f"[WSNotifier] Sent {len(payload)} historical events to '{client_id}'")
+
     async def consume(self, ws_manager: WebSocketManager):
         while True:
             try:
