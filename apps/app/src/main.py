@@ -47,7 +47,7 @@ from constants import DISCORD_GUILD_IDS, BT_UNITS, MODE_2B
 
 from typings import *
 from typings import Permission, UnitDict
-from services.notifier import *
+
 from utils import Logger, calculate_magic_number
 from utils import *
 
@@ -897,8 +897,6 @@ class Bot2b3(NextcordBot):
         self.logChannel: nextcord.abc.GuildChannel | None = None
         self.statusChannel: nextcord.abc.GuildChannel | None = None
 
-        self.notifier: Notifier = Notifier(self)
-        
         # Event system (set from lifespan after FastAPI starts)
         self._action_queue: ActionQueue | None = None
         self._dispatcher: EventDispatcher | None = None
@@ -1829,7 +1827,6 @@ class Bot2b3(NextcordBot):
         # Get event system references via singletons
         self._action_queue = ActionQueue.get_instance()
         self._dispatcher = EventDispatcher.get_instance()
-        self._dispatcher._notifier = self.notifier
 
         # Start all tasks
         self.rerun_update_status.start()  # bot console

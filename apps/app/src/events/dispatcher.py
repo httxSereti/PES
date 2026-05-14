@@ -17,7 +17,6 @@ from pprint import pprint
 
 if TYPE_CHECKING:
     from api.ws.websocket_notifier import WebSocketNotifier
-    from services.notifier import Notifier
 
 generate_id = cuid_wrapper()
 
@@ -36,13 +35,11 @@ class EventDispatcher:
         registry: EventRegistry,
         queue: ActionQueue,
         ws_notifier: WebSocketNotifier | None = None,
-        notifier: Notifier | None = None,
     ):
         EventDispatcher._instance = self
         self._registry = registry
         self._queue = queue
         self._ws_notifier = ws_notifier
-        self._notifier = notifier
 
     async def dispatch(
         self,
@@ -71,15 +68,6 @@ class EventDispatcher:
                     "event_data": event_data,
                 },
             )
-
-        # Notify via Discord
-        if self._notifier:
-            try:
-                triggerable = TriggerableEvent(event_type)
-                await self._notifier.triggerEvent(triggerable, eventData=event_data)
-            except ValueError:
-                print(f"[Dispatcher] Not a known TriggerableEvent: {event_type}")
-                pass  # Not a known TriggerableEvent (e.g. dynamic WOF)
 
         # Check for dynamic WOF action (wof_XYZ pattern)
         wof_items = self._parse_wof_dynamic(event_type, origin)
