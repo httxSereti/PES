@@ -1,5 +1,6 @@
 import * as React from "react"
 import {
+  Archive,
   BellIcon,
   Crown,
   Frame,
@@ -45,6 +46,11 @@ const data = {
       title: "Sensors",
       url: "/app/sensors",
       icon: Wifi,
+    },
+    {
+      title: "Events",
+      url: "/app/events",
+      icon: Archive,
     },
   ],
   navPlayground: [

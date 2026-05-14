@@ -11,6 +11,10 @@ export default [
         route("units", "pages/app/units.tsx"),
         route("sensors", "pages/app/sensors.tsx"),
 
+        route("events", "components/layout/events-layout.tsx", [
+            index("pages/app/events/index.tsx")
+        ]),
+
         // admin 
         route("admin", "components/layout/admin-layout.tsx", [
             index("pages/app/admin/dashboard.tsx"),
