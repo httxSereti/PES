@@ -12,7 +12,8 @@ export default [
         route("sensors", "pages/app/sensors.tsx"),
 
         route("events", "components/layout/events-layout.tsx", [
-            index("pages/app/events/index.tsx")
+            index("pages/app/events/index.tsx"),
+            route("trigger-rules", "pages/app/events/trigger-rules.tsx"),
         ]),
 
         // admin 

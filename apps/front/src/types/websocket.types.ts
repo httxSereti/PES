@@ -106,8 +106,24 @@ export interface UnitsUpdateMessage {
 }
 
 export interface CoreStopMessage {
-    status: string;
-    message: string;
+    id?: string;
+    type: 'core:stop';
+    payload: {
+        status: string;
+        message: string;
+    };
+}
+
+export interface EventsHistoryMessage {
+    id?: string;
+    type: 'events:history';
+    payload: unknown[];
+}
+
+export interface EventsTriggeredMessage {
+    id?: string;
+    type: 'events:triggered';
+    payload: unknown;
 }
 
 export type WebSocketIncomingMessage =
@@ -123,6 +139,8 @@ export type WebSocketIncomingMessage =
     | UnitsInitialMessage
     | UnitsUpdateMessage
     | CoreStopMessage
+    | EventsHistoryMessage
+    | EventsTriggeredMessage
     ;
 
 export interface WebSocketConfig {

@@ -4,6 +4,7 @@ import { logout } from '@/store/slices/authSlice';
 import { sensorsInitialized, sensorUpdated } from '@/store/slices/sensorsSlice';
 import { unitsInitialized, unitUpdated } from '@/store/slices/unitsSlice';
 import { setError, setStatus, resetReconnect, incrementReconnect } from '@/store/slices/websocketSlice';
+import { eventsHistoryLoaded, eventTriggered, type TriggeredEvent } from '@/store/slices/eventsSlice';
 import type { Sensor, UnitSettings, WebSocketConfig, WebSocketIncomingMessage, WebSocketMessage } from '@/types';
 import type { Middleware } from '@reduxjs/toolkit';
 
@@ -174,6 +175,17 @@ export function createWebSocketMiddleware(config: WebSocketConfig): Middleware {
                             id: message.payload.id,
                             changes: message.payload.changes
                         }))
+                        break;
+
+                    /**
+                     * @Events
+                     */
+                    case 'events:history':
+                        dispatch(eventsHistoryLoaded(message.payload as unknown as TriggeredEvent[]));
+                        break;
+
+                    case 'events:triggered':
+                        dispatch(eventTriggered(message.payload as unknown as TriggeredEvent));
                         break;
 
                     case 'notification':
