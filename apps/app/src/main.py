@@ -1745,9 +1745,9 @@ class Bot2b3(NextcordBot):
                         # Dispatch sensor alarm event via new system
                         if current_sensor_settings["alarm_enable"] and self._dispatcher:
                             sensor_event_map = {
-                                "sound": "sensor_sound",
-                                "position": "sensor_position",
-                                "move": "sensor_move",
+                                "sound": "sensor_sound_alarm",
+                                "position": "sensor_position_alarm",
+                                "move": "sensor_move_alarm",
                             }
                             event_type = sensor_event_map.get(value, value)
                             Logger.warning(

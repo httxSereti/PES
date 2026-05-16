@@ -43,6 +43,6 @@ class TriggerableEvent(str, Enum):
     CHASTER_LOCK_UNFROZEN = "chaster_lock_unfrozen"
 
     # Sensors
-    SENSOR_SOUND = "sensor_sound"
-    SENSOR_POSITION = "sensor_position"
-    SENSOR_MOVE = "sensor_move"
+    SENSOR_SOUND_ALARM = "sensor_sound_alarm"
+    SENSOR_POSITION_ALARM = "sensor_position_alarm"
+    SENSOR_MOVE_ALARM = "sensor_move_alarm"

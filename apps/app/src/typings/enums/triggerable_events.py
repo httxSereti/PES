@@ -23,9 +23,9 @@ class TriggerableEvent(Enum):
     """
         Sensors Events
     """
-    SENSOR_SOUND = "sensor_Sound",
-    SENSOR_POSITION = "sensor_Position",
-    SENSOR_MOVE = "sensor_Move",
+    SENSOR_SOUND_ALARM = "sensor_sound_alarm",
+    SENSOR_POSITION_ALARM = "sensor_position_alarm",
+    SENSOR_MOVE_ALARM = "sensor_move_alarm",
     
     """
         # TODO: X/Twitter Events
