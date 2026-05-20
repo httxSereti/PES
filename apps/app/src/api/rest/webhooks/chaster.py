@@ -1,7 +1,6 @@
 import os
 import re
 import secrets
-import time
 
 from fastapi import APIRouter, HTTPException, status, Depends, Request
 from fastapi.security import HTTPBasic, HTTPBasicCredentials
@@ -84,17 +83,55 @@ async def read_chaster_webhook(
             if segment_type == "text":
                 text = segment.get("text", "")
 
-                # Check for dynamic WOF action code (e.g. "AaB: description")
-                m = re.match(r"^(\d|[A-Z][A-Za-z][A-Za-z]):", text)
-                if m:
-                    wof_code = f"wof_{m.group(1)}"
-                    Logger.info(f"[Webhook] WOF dynamic action: {wof_code}")
+                """
+                    Check for custom WOF action code to apply profile (e.g. "{p:JfA} description")
+                    The code must be wrapped in curly braces "{}".
+                    it need to start with "p:".
+                    and followed by 3-letter abbreviations (profile id, profile level, duration).
+                    like "{p:JfA}", "{p:AdB}", or "{p:XcC}".
+                """
+                match_profile = re.match(r"^\{p:([A-Z][A-Za-z][A-Za-z])\}", text)
+
+                """
+                    # TODO: custom wof update for units
+                    Check for custom WOF update unit action code to apply unit update (e.g. "{u:1@A@%+5} description")
+                    The code must be wrapped in curly braces "{}".
+                    it need to start with "u:".
+                    and followed by 3-letter abbreviations (profile id, profile level, duration).
+                    like "{u:[unit]@[channel]@[operator]}"; "{u:12RO@ABRM@[5-25]}", or "{u:1@A@%+5}".
+                """
+                match_unit_update = re.match(r"^\{u:([A-Z]@[A-Za-z]@[A-Za-z])\}", text)
+
+                # handle logic for profile action
+                if match_profile:
+                    wof_code = f"custom:wof_profile_{match_profile.group(1)}"
+                    Logger.info(
+                        f"[Webhook] Custom WOF profile action: {match_profile.group(1)}"
+                    )
                     await dispatcher.dispatch(
                         event_type=wof_code,
                         event_data={
                             "author": role,
                             "wofText": text,
-                            "wofAction": m.group(1),
+                            "wofCustomType": "profile",
+                            "wofAction": match_profile.group(1),
+                            "triggeredAt": created_at,
+                        },
+                        origin=origin,
+                    )
+                elif match_unit_update:
+                    wof_code = f"custom:wof_unit_{match_unit_update.group(1)}"
+                    Logger.info(
+                        f"[Webhook] Custom WOF update unit action: {match_unit_update.group(1)}"
+                    )
+                    # TODO: implement unit update logic
+                    await dispatcher.dispatch(
+                        event_type=wof_code,
+                        event_data={
+                            "author": role,
+                            "wofText": text,
+                            "wofCustomType": "unit",
+                            "wofAction": match_unit_update.group(1),
                             "triggeredAt": created_at,
                         },
                         origin=origin,
@@ -113,7 +150,6 @@ async def read_chaster_webhook(
                 },
                 origin=origin,
             )
-
         # ── Time changes (keyholder/user/extension) ──
         elif action_type == "time_changed":
             if "duration" in payload:
@@ -170,28 +206,17 @@ async def read_chaster_webhook(
             )
 
         # ── Pillory ──
-        elif action_type == "pillory_start":
+        elif action_type == "pillory_in":
             await dispatcher.dispatch(
                 event_type=TriggerableEvent.CHASTER_PILLORY_STARTED.value,
                 event_data={**payload, "triggeredAt": created_at},
                 origin=origin,
             )
 
-        elif action_type == "pillory_ended":
+        elif action_type == "pillory_out":
             await dispatcher.dispatch(
                 event_type=TriggerableEvent.CHASTER_PILLORY_ENDED.value,
                 event_data={**payload, "triggeredAt": created_at},
-                origin=origin,
-            )
-
-        elif action_type == "pillory_in_vote":
-            await dispatcher.dispatch(
-                event_type=TriggerableEvent.CHASTER_PILLORY_VOTE.value,
-                event_data={
-                    **payload,
-                    "nbVotes": 1,
-                    "triggeredAt": created_at,
-                },
                 origin=origin,
             )
 

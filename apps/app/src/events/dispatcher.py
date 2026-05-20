@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import math
 import random
 import re
 from datetime import datetime, timezone
@@ -8,7 +7,7 @@ from typing import TYPE_CHECKING
 
 from cuid2 import cuid_wrapper
 
-from events.enums import ActionType, QueueItemStatus, TriggerableEvent
+from events.enums import ActionType, QueueItemStatus
 from events.models import QueueItem, TriggerRule
 from events.registry import EventRegistry
 from events.queue import ActionQueue
@@ -61,19 +60,46 @@ class EventDispatcher:
         event_id = generate_id()
         triggered_at = datetime.now(timezone.utc)
 
-        Logger.info(f"[Dispatcher] Event received: id={event_id}, type={event_type}, origin={origin}")
+        Logger.info(
+            f"[Dispatcher] Event received: id={event_id}, type={event_type}, origin={origin}"
+        )
 
-        # ── Step 1: Resolve what will be triggered ──
+        """
+        Check for custom WOF action 
+            - Predefined Profile: {p:[profileChar][levelPercentage][duration]}
+            - [WIP] Custom Profile {p!:[profileId][levelPercentage][duration]}
+            - [WIP] Unit
+            - [WIP] Sensor
+        """
 
-        # Check for dynamic WOF action (wof_XYZ pattern)
-        wof_items = self._parse_wof_dynamic(event_type, origin)
-        if wof_items:
-            triggered_rules_summary = self._build_wof_summary(wof_items)
-            await self._save_and_notify(
-                event_id, event_type, origin, event_data, triggered_at, triggered_rules_summary
-            )
-            self._queue.enqueue(wof_items)
-            return
+        if "wofCustomType" in event_data:
+            if event_data["wofCustomType"] == "profile":
+                wof_items = self._parse_wof_dynamic_profile(
+                    event_action_text=event_data["wofText"], origin=origin
+                )
+
+                if wof_items:
+                    triggered_rules_summary = self._build_wof_summary(
+                        f"Execute profile ({event_data['wofAction']})", wof_items
+                    )
+                    await self._save_and_notify(
+                        event_id,
+                        event_type,
+                        origin,
+                        event_data,
+                        triggered_at,
+                        triggered_rules_summary,
+                    )
+                    self._queue.enqueue(wof_items)
+                    return
+            elif event_data["wofCustomType"] == "unit":
+                # TODO: implement unit update logic
+                pass
+            else:
+                Logger.warning(
+                    f"[Dispatcher] Unknown WOF custom type: {event_data['wofCustomType']}"
+                )
+                return
 
         # Resolve trigger rules from DB
         rules = await self._registry.get_rules_for_event(event_type)
@@ -100,14 +126,17 @@ class EventDispatcher:
 
         # ── Step 2: Persist + notify with full context ──
         await self._save_and_notify(
-            event_id, event_type, origin, event_data, triggered_at, triggered_rules_summary
+            event_id,
+            event_type,
+            origin,
+            event_data,
+            triggered_at,
+            triggered_rules_summary,
         )
 
         # ── Step 3: Enqueue ──
         if queue_items:
             self._queue.enqueue(queue_items)
-
-    # ───────── Internal helpers ─────────
 
     async def _save_and_notify(
         self,
@@ -168,12 +197,12 @@ class EventDispatcher:
         }
 
     @staticmethod
-    def _build_wof_summary(queue_items: list[QueueItem]) -> list[dict]:
+    def _build_wof_summary(rule_name: str, queue_items: list[QueueItem]) -> list[dict]:
         """Build a summary for WOF dynamic events (no DB rule involved)."""
         return [
             {
                 "rule_id": None,
-                "rule_name": "WOF Dynamic",
+                "rule_name": rule_name or "Custom WOF",
                 "priority": 0,
                 "actions": [
                     {
@@ -190,18 +219,18 @@ class EventDispatcher:
             }
         ]
 
-    # ───────── WOF Dynamic Parsing ─────────
-
     @staticmethod
-    def _parse_wof_dynamic(event_type: str, origin: str) -> list[QueueItem]:
+    def _parse_wof_dynamic_profile(
+        event_action_text: str, origin: str
+    ) -> list[QueueItem]:
         """
-        Parse dynamic WOF action codes (e.g. wof_AaB).
-        Format: wof_[Profile][Level][Duration]
+        Parse dynamic WOF action codes (e.g. {p:Jfa}).
+        Format: {p:[Profile][Level][Duration]}
           - Profile: uppercase letter A-J (or X for random)
           - Level: uppercase = +5% per step from A, lowercase = -2% per step from a
           - Duration: uppercase = 10s per step from A, lowercase = random up to 10s per step from a
         """
-        m = re.match(r"^wof_([A-Z])([A-Za-z])([A-Za-z])$", event_type)
+        m = re.match(r"^\{p:([A-Z])([A-Za-z])([A-Za-z])\}", event_action_text)
         if not m:
             return []
 
@@ -222,8 +251,7 @@ class EventDispatcher:
             duration = random.randint(10, (ord(dur_char) - 96) * 10)
 
         Logger.info(
-            f"[Dispatcher] Parsed WOF dynamic: profile={profile}, "
-            f"level={level_pct}%, duration={duration}s"
+            f"[Dispatcher] Parsed WOF dynamic: profile={profile}, level={level_pct}%, duration={duration}s"
         )
 
         return [
@@ -236,12 +264,10 @@ class EventDispatcher:
                 priority=0,
                 status=QueueItemStatus.WAITING,
                 origin=origin,
-                display_name=f"WOF {event_type}",
+                display_name=f"WOF | Profile: {profile} at {level_pct} for {duration}s",
                 created_at=datetime.now(),
             )
         ]
-
-    # ───────── Rule to QueueItems ─────────
 
     @staticmethod
     def _rule_to_queue_items(rule: TriggerRule, origin: str) -> list[QueueItem]:
