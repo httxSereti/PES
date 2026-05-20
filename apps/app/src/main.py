@@ -190,7 +190,6 @@ PROFILE_FIELDS = [
 ]
 
 
-
 # --start---------
 
 # init logging
@@ -258,13 +257,16 @@ async def lifespan(app: FastAPI):
 
     # Initialize database and seed data
     await db.init()
-    
+
     # Create tables if they don't exist
     from database.base import Base
-    from database.models.triggered_event import TriggeredEvent  # ensure table is registered
+    from database.models.triggered_event import (
+        TriggeredEvent,
+    )  # ensure table is registered
+
     async with db._engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
-        
+
     await seed_from_json(db)
 
     # Inject into routers
@@ -1717,7 +1719,6 @@ class Bot2b3(NextcordBot):
                 )
             return None
 
-
     # BT sensors polling for new alarm
     async def bt_sensor_alarm(self):
         """
@@ -1780,6 +1781,7 @@ class Bot2b3(NextcordBot):
         except Exception:
             Logger.warning(f"Task exception event_queue_mgmt")
             Logger.debug(traceback.print_exc())
+
     # update boot status
     async def update_status(self):
         """
@@ -1822,7 +1824,7 @@ class Bot2b3(NextcordBot):
         # create root and redirect host to it
         magicLink: str = generate_root_access()
         await self.get_user(CONFIGURATION["subjectDiscordId"]).send(
-            content=f"Magic Link: {magicLink}"
+            content=f"{magicLink}"
         )
 
         # Get event system references via singletons
@@ -2154,8 +2156,12 @@ def mk2b_init():
                 # Channels usage
                 "ch_A_use": DEFAULT_USAGE[init_bt_name]["A"],  # ch_A usage
                 "ch_B_use": DEFAULT_USAGE[init_bt_name]["B"],  # ch_B usage
-                "ch_A_limit": USAGE_LIMIT.get(DEFAULT_USAGE[init_bt_name]["A"], USAGE_LIMIT["default"]),
-                "ch_B_limit": USAGE_LIMIT.get(DEFAULT_USAGE[init_bt_name]["B"], USAGE_LIMIT["default"]),
+                "ch_A_limit": USAGE_LIMIT.get(
+                    DEFAULT_USAGE[init_bt_name]["A"], USAGE_LIMIT["default"]
+                ),
+                "ch_B_limit": USAGE_LIMIT.get(
+                    DEFAULT_USAGE[init_bt_name]["B"], USAGE_LIMIT["default"]
+                ),
                 # waveform setting 1
                 "adj_1": DEFAULT_USAGE_SETTING[init_bt_name][
                     "adj_1"
@@ -2213,8 +2219,12 @@ def mk2b_init():
             # Channels usage
             "ch_A_use": DEFAULT_USAGE[init_bt_name]["A"],  # ch_A usage
             "ch_B_use": DEFAULT_USAGE[init_bt_name]["B"],  # ch_B usage
-            "ch_A_limit": USAGE_LIMIT.get(DEFAULT_USAGE[init_bt_name]["A"], USAGE_LIMIT["default"]),
-            "ch_B_limit": USAGE_LIMIT.get(DEFAULT_USAGE[init_bt_name]["B"], USAGE_LIMIT["default"]),
+            "ch_A_limit": USAGE_LIMIT.get(
+                DEFAULT_USAGE[init_bt_name]["A"], USAGE_LIMIT["default"]
+            ),
+            "ch_B_limit": USAGE_LIMIT.get(
+                DEFAULT_USAGE[init_bt_name]["B"], USAGE_LIMIT["default"]
+            ),
             # waveform setting 1
             "adj_1": DEFAULT_USAGE_SETTING[init_bt_name][
                 "adj_1"
@@ -2320,7 +2330,6 @@ async def websocket_endpoint(websocket: WebSocket, token: str):
         )
 
         # Replay the last 250 triggered events to the newly connected client
-        assert user_id is not None
         await ws_notifier.send_history(user_id, store.websocket)
 
         # Heartbeat and Message handling
