@@ -13,7 +13,7 @@ from .enums import ActionType
 from .models import QueueItem
 from store import Store
 from utils import Logger
-from constants import BT_UNITS, MODE_2B
+from constants import BT_UNITS
 
 if TYPE_CHECKING:
     from api.ws.websocket_notifier import WebSocketNotifier
@@ -33,17 +33,28 @@ _CHASTER_HEADERS = {
 
 # Fields used for profile backup/restore
 _PROFILE_FIELDS = [
-    "ch_A", "ch_B", "adj_1", "adj_2",
-    "adj_3", "adj_4", "mode", "level_h", "level_d",
-    "power_bias", "level_map",
-    "ch_A_ramp_phase", "ch_A_ramp_prct",
-    "ch_B_ramp_phase", "ch_B_ramp_prct",
-    "adj_1_ramp_phase", "adj_1_ramp_prct",
-    "adj_2_ramp_phase", "adj_2_ramp_prct",
-    "ramp_time", "ramp_wave",
+    "ch_A",
+    "ch_B",
+    "adj_1",
+    "adj_2",
+    "adj_3",
+    "adj_4",
+    "mode",
+    "level_h",
+    "level_d",
+    "power_bias",
+    "level_map",
+    "ch_A_ramp_phase",
+    "ch_A_ramp_prct",
+    "ch_B_ramp_phase",
+    "ch_B_ramp_prct",
+    "adj_1_ramp_phase",
+    "adj_1_ramp_prct",
+    "adj_2_ramp_phase",
+    "adj_2_ramp_prct",
+    "ramp_time",
+    "ramp_wave",
 ]
-
-
 
 
 class ActionExecutor:
@@ -61,7 +72,9 @@ class ActionExecutor:
         Apply an action and return snapshot data for future reversal.
         Returns None if no snapshot is needed.
         """
-        Logger.info(f"[Executor] Applying action '{item.action_type.value}' from '{item.origin}'")
+        Logger.info(
+            f"[Executor] Applying action '{item.action_type.value}' from '{item.origin}'"
+        )
 
         action_type = item.action_type
         payload = item.payload
@@ -87,7 +100,9 @@ class ActionExecutor:
         if item.snapshot_data is None:
             return
 
-        Logger.info(f"[Executor] Reversing action '{item.action_type.value}' from '{item.origin}'")
+        Logger.info(
+            f"[Executor] Reversing action '{item.action_type.value}' from '{item.origin}'"
+        )
 
         if item.action_type == ActionType.LEVEL:
             self._reverse_level(item.snapshot_data)
@@ -117,13 +132,17 @@ class ActionExecutor:
                 new_val = self._calc_new_val(value_str, unit_name, ch_name)
 
                 changes[ch_name] = new_val
-                snapshot["changes"].append({
-                    "unit": unit_name,
-                    "field": ch_name,
-                    "diff": old_val - new_val,
-                })
+                snapshot["changes"].append(
+                    {
+                        "unit": unit_name,
+                        "field": ch_name,
+                        "diff": old_val - new_val,
+                    }
+                )
 
-                Logger.info(f"[Executor] Level {unit_name}.{ch_name}: {old_val} -> {new_val}")
+                Logger.info(
+                    f"[Executor] Level {unit_name}.{ch_name}: {old_val} -> {new_val}"
+                )
 
             if changes:
                 changes["updated"] = True
@@ -227,7 +246,9 @@ class ActionExecutor:
             for ch in ("A", "B"):
                 if snapshot.get(f"ch_{ch}_use") == target or target == "all":
                     ch_name = f"ch_{ch}_multiplier"
-                    add_val = random.randint(min(0, pct), max(0, pct)) if is_random else pct
+                    add_val = (
+                        random.randint(min(0, pct), max(0, pct)) if is_random else pct
+                    )
                     changes[ch_name] = snapshot.get(ch_name, 100) + add_val
 
             if changes:
@@ -290,7 +311,9 @@ class ActionExecutor:
                 ) as resp:
                     Logger.debug(f"[Executor] Current time updated: {resp.status}")
 
-        Logger.info(f"[Executor] Chaster time added: {duration_minutes}min (only_max={only_max})")
+        Logger.info(
+            f"[Executor] Chaster time added: {duration_minutes}min (only_max={only_max})"
+        )
 
     # ───────── Helpers ─────────
 
