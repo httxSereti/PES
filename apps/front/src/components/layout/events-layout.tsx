@@ -1,5 +1,5 @@
 import { useAppSelector } from "@/store/hooks";
-import { Navigate, NavLink, Outlet } from "react-router";
+import { Link, Navigate, NavLink, Outlet } from "react-router";
 import { Activity, Zap, } from "lucide-react";
 
 const TABS = [
@@ -32,6 +32,10 @@ export default function EventsLayout() {
                         <span>{eventsCount}</span>
                         <Activity size={11} className="text-violet-400" />
                     </div>
+                    <Link to="/app/events/trigger-rules/new" className="flex items-center gap-2 px-3 py-1.5 rounded-md bg-[#161226] border border-purple-800/40 text-xs text-muted-foreground/70">
+                        <Zap size={11} className="text-violet-400" />
+                        <span>New TriggerRule</span>
+                    </Link>
                 </div>
             </div>
 

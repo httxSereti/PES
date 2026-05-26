@@ -46,3 +46,13 @@ export type {
     UnitsState,
     UnitSettings,
 } from './units.types';
+
+export type {
+    ActionType,
+    TriggerRule,
+    CreateTriggerRule,
+    UpdateTriggerRule,
+    TriggerAction,
+    CreateTriggerAction,
+    UpdateTriggerAction,
+} from './events.types'

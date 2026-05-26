@@ -2,6 +2,7 @@ import {
     type RouteConfig,
     index,
     route,
+    prefix,
 } from "@react-router/dev/routes";
 
 export default [
@@ -13,7 +14,12 @@ export default [
 
         route("events", "components/layout/events-layout.tsx", [
             index("pages/app/events/index.tsx"),
-            route("trigger-rules", "pages/app/events/trigger-rules.tsx"),
+
+            ...prefix("trigger-rules", [
+                index("pages/app/events/trigger-rules/index.tsx"),
+                route("new", "pages/app/events/trigger-rules/new.tsx"),
+                route(":id/edit", "pages/app/events/trigger-rules/edit.tsx"),
+            ]),
         ]),
 
         // admin 

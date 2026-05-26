@@ -2,7 +2,6 @@ import type { Route } from ".react-router/types/src/pages/app/admin/+types/dashb
 import { useMemo, useState } from "react";
 import { useAppSelector } from "@/store/hooks";
 import { ChevronDown, Zap, Clock, Layers } from "lucide-react";
-import type { TriggeredRule } from "@/store/slices/eventsSlice";
 
 // eslint-disable-next-line no-empty-pattern
 export function meta({ }: Route.MetaArgs) {
@@ -33,7 +32,7 @@ function ActionTypeBadge({ type }: { type: string }) {
         PROFILE: "bg-violet-500/15 text-violet-300 border-violet-500/30",
         LEVEL: "bg-sky-500/15 text-sky-300 border-sky-500/30",
         MULT: "bg-amber-500/15 text-amber-300 border-amber-500/30",
-        CHASTER_TIME_ADD: "bg-emerald-500/15 text-emerald-300 border-emerald-500/30",
+        CHASTER_TIME_UPDATE: "bg-emerald-500/15 text-emerald-300 border-emerald-500/30",
     };
     const c = colors[type] ?? "bg-slate-500/15 text-slate-300 border-slate-500/30";
     return (
@@ -52,7 +51,7 @@ function RuleCard({ summary }: { summary: RuleSummary }) {
     const lastAt = useMemo(() => {
         if (!summary.last_triggered) return null;
         return new Date(summary.last_triggered).toLocaleString("fr-FR", {
-            day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit",
+            day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit", second: "2-digit"
         });
     }, [summary.last_triggered]);
 

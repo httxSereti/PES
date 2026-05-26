@@ -1,3 +1,4 @@
+import type { TriggerRule } from '@/types';
 import { createSlice, type PayloadAction } from '@reduxjs/toolkit';
 
 export interface TriggeredAction {
@@ -28,6 +29,7 @@ export interface TriggeredEvent {
 
 interface EventsState {
     events: TriggeredEvent[];
+    triggerRules: TriggerRule[];
     /** Max events kept in memory */
     maxEvents: number;
 }
@@ -35,6 +37,7 @@ interface EventsState {
 const initialState: EventsState = {
     events: [],
     maxEvents: 250,
+    triggerRules: []
 };
 
 const eventsSlice = createSlice({
