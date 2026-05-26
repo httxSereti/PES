@@ -7,7 +7,7 @@ class ActionType(str, Enum):
     PROFILE = "PROFILE"
     LEVEL = "LEVEL"
     MULT = "MULT"
-    CHASTER_TIME_ADD = "CHASTER_TIME_ADD"
+    CHASTER_TIME_UPDATE = "CHASTER_TIME_UPDATE"
 
 
 class QueueItemStatus(str, Enum):

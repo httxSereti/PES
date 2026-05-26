@@ -2353,6 +2353,7 @@ async def websocket_endpoint(websocket: WebSocket, token: str):
                     await websocket.send_json({"type": "pong"})
                     continue
 
+                # TODO: remove after trigger rule/events update
                 if msg_type == "core:stop":
                     if bot._action_queue:
                         await bot._action_queue.cancel_all()

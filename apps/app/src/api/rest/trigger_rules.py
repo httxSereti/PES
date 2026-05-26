@@ -10,6 +10,7 @@ from events.queue import ActionQueue
 
 router = APIRouter(prefix="/api", tags=["trigger-rules"])
 
+
 def _repo() -> TriggerRuleRepo:
     return TriggerRuleRepo()
 
@@ -76,7 +77,9 @@ def _serialize_action(action) -> dict:
     return {
         "id": action.id,
         "trigger_rule_id": action.trigger_rule_id,
-        "action_type": action.action_type.value if hasattr(action.action_type, "value") else action.action_type,
+        "action_type": action.action_type.value
+        if hasattr(action.action_type, "value")
+        else action.action_type,
         "payload": action.payload,
         "duration": action.duration,
         "cumulative": action.cumulative,
@@ -321,8 +324,8 @@ async def list_action_types():
             "pct": "integer (percentage to add/subtract)",
             "random": "boolean (randomize between 0 and pct)",
         },
-        ActionType.CHASTER_TIME_ADD: {
-            "duration_minutes": "integer (minutes to add)",
+        ActionType.CHASTER_TIME_UPDATE: {
+            "duration_minutes": "integer (positive to add, negative to remove)",
             "only_max": "boolean (only update max, not current time)",
         },
     }
