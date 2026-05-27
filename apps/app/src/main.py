@@ -7,7 +7,6 @@
 # task with 0,5 cycle for calc new value for each channel
 
 import asyncio
-import datetime
 import json
 import logging
 import math
@@ -18,7 +17,6 @@ import random
 import re
 import time
 import traceback
-import uuid
 from functools import partial
 from threading import Thread
 from typing import Optional
@@ -28,7 +26,6 @@ import uvicorn
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 
-import aiohttp
 import bluetooth  # type: ignore
 import dotenv
 import nextcord
@@ -40,6 +37,7 @@ from bleak.exc import BleakDeviceNotFoundError
 from nextcord import Interaction, SlashOption
 from nextcord.ext.commands import Bot as NextcordBot
 from nextcord.ext import tasks
+from datetime import datetime
 
 from pprint import pprint
 
@@ -48,7 +46,7 @@ from constants import DISCORD_GUILD_IDS, BT_UNITS, MODE_2B
 from typings import *
 from typings import Permission, UnitDict
 
-from utils import Logger, calculate_magic_number
+from utils import Logger, calculate_magic_number, initialize_logger
 from utils import *
 
 from store import Store
@@ -76,8 +74,14 @@ from api.ws.commands import (
     handle_update_power_mode,
 )
 
+
 # load env
 dotenv.load_dotenv("config.env")
+
+# Configure logger to make log readable
+start_time = datetime.now()
+session_name = start_time.strftime("%d_%m_%y_%Hh%M")
+new_logger = initialize_logger(session_name=session_name, level=logging.NOTSET)
 
 # DEBUG setting
 ENABLE_MK2BT = True  # Disable mk2bt thread
@@ -2459,7 +2463,7 @@ def start_mock_units():
 
 
 if __name__ == "__main__":
-    Logger.info("Starting PlunEStim 1.0.0")
+    new_logger.info("Starting PlunEStim 1.0.0")
 
     threads = {}
 
@@ -2485,20 +2489,20 @@ if __name__ == "__main__":
 
     # start all thread
     for tr in threads.keys():
-        Logger.warning(f"[Main] Starting thread '{tr}'!")
+        new_logger.warning(f"[Main] Starting thread '{tr}'!")
         threads[tr].daemon = True
         threads[tr].start()
 
     # start Discord Bot
     while True:
         try:
-            Logger.info("[Discord] Loading Discord cogs...")
+            new_logger.info("[Discord] Loading Discord cogs...")
 
             # Try to load all the cogs
             for cog in get_cogs():
                 try:
                     bot.load_extension(cog)
-                    Logger.success(f"[Cogs] Successfully loaded '{cog}'!")
+                    new_logger.info(f"[Cogs] Successfully loaded '{cog}'!")
                     # Logger.info("Loaded " + cog)
                 except Exception as e:
                     Logger.error(e)

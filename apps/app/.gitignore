@@ -8,3 +8,4 @@ userdata/*
 backup/
 tmp/
 plunes.db*
+logs/
