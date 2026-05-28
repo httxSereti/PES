@@ -1,7 +1,9 @@
 import asyncio
+import structlog
 from typing import Optional
-from utils.logger import Logger
 from .websocket_manager import WebSocketManager
+
+logger = structlog.get_logger("pes")
 
 
 class WebSocketNotifier:
@@ -15,13 +17,15 @@ class WebSocketNotifier:
 
     def notify(self, payload_type: str, payload: dict):
         if self._loop is None or self._queue is None:
-            Logger.warning("WSNotifier not ready, dropping event")
+            logger.warning("WSNotifier not ready, dropping event")
             return
 
         message = {"type": payload_type, "payload": payload}
         self._loop.call_soon_threadsafe(self._queue.put_nowait, message)
 
-    async def send_history(self, client_id: str, ws_manager: WebSocketManager, limit: int = 250):
+    async def send_history(
+        self, client_id: str, ws_manager: WebSocketManager, limit: int = 250
+    ):
         """
         Send the last `limit` triggered events to a single newly connected client.
         Events are sent oldest-first inside a single 'events:history' message.
@@ -47,15 +51,17 @@ class WebSocketNotifier:
             message={"type": "events:history", "payload": payload},
             client_id=client_id,
         )
-        Logger.info(f"[WSNotifier] Sent {len(payload)} historical events to '{client_id}'")
+        logger.info(
+            f"[WSNotifier] Sent {len(payload)} events history", client_id=client_id
+        )
 
     async def consume(self, ws_manager: WebSocketManager):
         while True:
             try:
                 message = await self._queue.get()
                 await ws_manager.broadcast(message)
-            except Exception as e:
-                Logger.error(f"WSNotifier consume error: {e}")
+            except Exception:
+                logger.exception("WSNotifier consume error")
 
 
 ws_notifier = WebSocketNotifier()

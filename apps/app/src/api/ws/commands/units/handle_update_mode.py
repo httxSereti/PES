@@ -1,4 +1,4 @@
-from utils import Logger
+import structlog
 from store import Store
 from api.ws.websocket_notifier import WebSocketNotifier
 from typings import UnitDict
@@ -6,6 +6,7 @@ from typings import UnitDict
 from constants import MODE_2B
 
 store = Store()
+logger = structlog.get_logger("pes")
 
 
 async def handle_update_mode(payload: dict, ws_notifier: WebSocketNotifier) -> dict:
@@ -24,8 +25,17 @@ async def handle_update_mode(payload: dict, ws_notifier: WebSocketNotifier) -> d
         unit = UnitDict(unit_id)
         snapshot = store.get_unit_dict(unit)
 
-        Logger.info(
-            f"[WS|units:update_mode] Updated mode for {unit_id} from '{snapshot['mode']}' to '{new_mode}'"
+        logger.info(
+            f"[WS|units:update_mode] Updated mode for {unit_id}",
+            unit_name=unit_id,
+            changes={
+                "old_mode": snapshot["mode"],
+                "new_mode": new_mode,
+                "ch_A": 0,
+                "ch_A_max": 0,
+                "ch_B": 0,
+                "ch_B_max": 0,
+            },
         )
 
         changes = {

@@ -1,8 +1,9 @@
+import structlog
 from store import Store
-from utils import Logger
 from api.ws.websocket_notifier import WebSocketNotifier
 
 store = Store()
+logger = structlog.get_logger("pes")
 
 
 async def handle_sensors_update(payload: dict, ws_notifier: WebSocketNotifier) -> dict:
@@ -15,6 +16,6 @@ async def handle_sensors_update(payload: dict, ws_notifier: WebSocketNotifier) -
     except KeyError:
         return {"status": "error", "message": "Can't update Sensor! (KeyError)"}
 
-    Logger.info(f"[WS|sensors:update] Updated Sensors '{','.join(payload.keys())}'")
+    logger.info("[WS|sensors:update] Updated Sensors", sensors=payload.keys())
 
     return {"status": "ok"}

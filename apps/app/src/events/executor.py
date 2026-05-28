@@ -5,6 +5,7 @@ import os
 import pathlib
 import random
 import re
+import structlog
 from typing import TYPE_CHECKING
 
 import aiohttp
@@ -12,7 +13,6 @@ import aiohttp
 from .enums import ActionType
 from .models import QueueItem
 from store import Store
-from utils import Logger
 from constants import BT_UNITS
 
 if TYPE_CHECKING:
@@ -56,6 +56,8 @@ _PROFILE_FIELDS = [
     "ramp_wave",
 ]
 
+logger = structlog.get_logger("pes")
+
 
 class ActionExecutor:
     """
@@ -72,8 +74,9 @@ class ActionExecutor:
         Apply an action and return snapshot data for future reversal.
         Returns None if no snapshot is needed.
         """
-        Logger.info(
-            f"[Executor] Applying action '{item.action_type.value}' from '{item.origin}'"
+        logger.info(
+            f"[Executor] Applying action '{item.action_type.value}' from '{item.origin}'",
+            origin=item.origin,
         )
 
         action_type = item.action_type
@@ -90,7 +93,9 @@ class ActionExecutor:
             await self._apply_chaster_time(payload)
             return None
 
-        Logger.info(f"[Executor] Unknown action type: {action_type}")
+        logger.info(
+            f"[Executor] Unknown action type: {action_type}", origin=item.origin
+        )
         return None
 
     async def reverse(self, item: QueueItem) -> None:
@@ -100,8 +105,9 @@ class ActionExecutor:
         if item.snapshot_data is None:
             return
 
-        Logger.info(
-            f"[Executor] Reversing action '{item.action_type.value}' from '{item.origin}'"
+        logger.info(
+            f"[Executor] Reversing action '{item.action_type.value}' from '{item.origin}'",
+            origin=item.origin,
         )
 
         if item.action_type == ActionType.LEVEL:
@@ -140,8 +146,9 @@ class ActionExecutor:
                     }
                 )
 
-                Logger.info(
-                    f"[Executor] Level {unit_name}.{ch_name}: {old_val} -> {new_val}"
+                logger.info(
+                    f"[Executor] Action updated level on {unit_name}.{ch_name}: {old_val} -> {new_val}",
+                    unit_name=unit_name,
                 )
 
             if changes:
@@ -161,12 +168,16 @@ class ActionExecutor:
             new_val = max(0, min(100, unit_data.get(field, 0) + change["diff"]))
 
             self._store.update_unit_dict(unit, {"updated": True, field: new_val})
-            Logger.info(f"[Executor] Reversed {change['unit']}.{field} to {new_val}")
+            logger.info(
+                f"[Executor] Reversed {change['unit']}.{field} to {new_val}",
+                unit_name=change["unit"],
+            )
 
     # ───────── PROFILE ─────────
 
     async def _apply_profile(self, payload: dict) -> dict:
         """Apply a profile and return snapshot of all unit settings."""
+        # TODO: refactor here profile
         from typings import UnitDict
 
         profile_name = payload.get("profile", "")
@@ -180,7 +191,7 @@ class ActionExecutor:
         profile_path = _DIR_PROFILE / filename
 
         if not profile_path.is_file():
-            Logger.info(f"[Executor] Profile file {profile_path} not found")
+            logger.error(f"[Executor] Profile file {profile_path} not found")
             return {"type": "profile", "units": {}}
 
         # Snapshot current state
@@ -207,7 +218,11 @@ class ActionExecutor:
 
             self._store.update_unit_dict(unit, changes)
 
-        Logger.info(f"[Executor] Profile '{profile_name}' applied at {level_pct}%")
+        logger.info(
+            f"[Executor] Profile '{profile_name}' applied at {level_pct}%",
+            changes=changes,
+            snapshot=snapshot,
+        )
         return snapshot
 
     def _reverse_profile(self, snapshot: dict) -> None:
@@ -226,7 +241,7 @@ class ActionExecutor:
                 changes.update({"sync": False, "updated": True})
                 self._store.update_unit_dict(unit, changes)
 
-        Logger.info("[Executor] Profile reversed to previous state")
+        logger.info("[Executor] Profile reversed to previous state")
 
     # ───────── MULT ─────────
 
@@ -255,7 +270,7 @@ class ActionExecutor:
                 changes["updated"] = True
                 self._store.update_unit_dict(unit, changes)
 
-        Logger.info(f"[Executor] Multiplier applied: target={target}, pct={pct}")
+        logger.info(f"[Executor] Multiplier applied: target={target}, pct={pct}")
 
     # ───────── CHASTER_TIME_ADD ─────────
 
@@ -266,7 +281,7 @@ class ActionExecutor:
         duration_secs = duration_minutes * 60
 
         if not _CHASTER_URL or not _CHASTER_TOKEN:
-            Logger.info("[Executor] Chaster not configured, skipping time add")
+            logger.info("[Executor] Chaster not configured, skipping time add")
             return
 
         # Need lock ID — fetch from API
@@ -276,7 +291,7 @@ class ActionExecutor:
             ) as resp:
                 locks = await resp.json()
                 if not locks:
-                    Logger.info("[Executor] No active Chaster lock found")
+                    logger.info("[Executor] No active Chaster lock found")
                     return
                 lock_id = locks[0]["_id"]
 
@@ -300,7 +315,7 @@ class ActionExecutor:
                     },
                     headers=_CHASTER_HEADERS,
                 ) as resp:
-                    Logger.debug(f"[Executor] Max limit date updated: {resp.status}")
+                    logger.debug(f"[Executor] Max limit date updated: {resp.status}")
 
             # Also add to current time if not only_max
             if not only_max:
@@ -309,9 +324,9 @@ class ActionExecutor:
                     json={"duration": duration_secs},
                     headers=_CHASTER_HEADERS,
                 ) as resp:
-                    Logger.debug(f"[Executor] Current time updated: {resp.status}")
+                    logger.debug(f"[Executor] Current time updated: {resp.status}")
 
-        Logger.info(
+        logger.info(
             f"[Executor] Chaster time added: {duration_minutes}min (only_max={only_max})"
         )
 

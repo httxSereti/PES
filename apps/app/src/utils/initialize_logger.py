@@ -1,4 +1,3 @@
-from datetime import datetime
 from pathlib import Path
 import logging
 import sys
@@ -21,6 +20,7 @@ def initialize_logger(
         structlog.contextvars.merge_contextvars,
         structlog.stdlib.add_log_level,
         structlog.processors.TimeStamper(fmt="iso", utc=False),
+        structlog.processors.dict_tracebacks,
     ]
 
     console_formatter = structlog.stdlib.ProcessorFormatter(

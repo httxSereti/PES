@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import random
 import re
+import structlog
 from datetime import datetime, timezone
 from typing import TYPE_CHECKING
 
@@ -11,13 +12,14 @@ from events.enums import ActionType, QueueItemStatus
 from events.models import QueueItem, TriggerRule
 from events.registry import EventRegistry
 from events.queue import ActionQueue
-from utils import Logger
 from database.models.triggered_event import TriggeredEvent
 from database.repositories.triggered_event_repo import TriggeredEventRepo
+
 
 if TYPE_CHECKING:
     from api.ws.websocket_notifier import WebSocketNotifier
 
+logger = structlog.get_logger("pes")
 generate_id = cuid_wrapper()
 
 
@@ -60,8 +62,11 @@ class EventDispatcher:
         event_id = generate_id()
         triggered_at = datetime.now(timezone.utc)
 
-        Logger.info(
-            f"[Dispatcher] Event received: id={event_id}, type={event_type}, origin={origin}"
+        logger.info(
+            "[Dispatcher] Event received",
+            event_id=event_id,
+            event_type=event_type,
+            origin=origin,
         )
 
         """
@@ -96,15 +101,21 @@ class EventDispatcher:
                 # TODO: implement unit update logic
                 pass
             else:
-                Logger.warning(
-                    f"[Dispatcher] Unknown WOF custom type: {event_data['wofCustomType']}"
+                logger.warning(
+                    f"[Dispatcher] Unknown WOF custom type: {event_data['wofCustomType']}",
+                    origin=origin,
+                    event_id=event_id,
                 )
                 return
 
         # Resolve trigger rules from DB
         rules = await self._registry.get_rules_for_event(event_type)
         if not rules:
-            Logger.debug(f"[Dispatcher] No trigger rules for event '{event_type}'")
+            logger.debug(
+                f"[Dispatcher] No trigger rules for event '{event_type}'",
+                event_id=event_id,
+                origin=origin,
+            )
             await self._save_and_notify(
                 event_id, event_type, origin, event_data, triggered_at, []
             )
@@ -119,9 +130,11 @@ class EventDispatcher:
             queue_items.extend(items)
             triggered_rules_summary.append(self._build_rule_summary(rule, items))
 
-        Logger.info(
-            f"[Dispatcher] Created {len(queue_items)} queue items from "
-            f"{len(rules)} rule(s) for '{event_type}'"
+        logger.info(
+            f"[Dispatcher] Created {len(queue_items)} queue items from {len(rules)} rule(s)",
+            event_id=event_id,
+            event_type=event_type,
+            origin=origin,
         )
 
         # ── Step 2: Persist + notify with full context ──
@@ -250,8 +263,10 @@ class EventDispatcher:
         else:
             duration = random.randint(10, (ord(dur_char) - 96) * 10)
 
-        Logger.info(
-            f"[Dispatcher] Parsed WOF dynamic: profile={profile}, level={level_pct}%, duration={duration}s"
+        logger.info(
+            f"[Dispatcher] Parsed WOF dynamic profile profile={profile}, level={level_pct}%, duration={duration}s",
+            profile=profile,
+            origin=origin,
         )
 
         return [

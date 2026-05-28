@@ -46,7 +46,7 @@ from constants import DISCORD_GUILD_IDS, BT_UNITS, MODE_2B
 from typings import *
 from typings import Permission, UnitDict
 
-from utils import Logger, calculate_magic_number, initialize_logger
+from utils import calculate_magic_number, initialize_logger, get_cogs
 from utils import *
 
 from store import Store
@@ -81,7 +81,47 @@ dotenv.load_dotenv("config.env")
 # Configure logger to make log readable
 start_time = datetime.now()
 session_name = start_time.strftime("%d_%m_%y_%Hh%M")
-new_logger = initialize_logger(session_name=session_name, level=logging.NOTSET)
+logger = initialize_logger(session_name=session_name, level=logging.INFO)
+
+
+# init logging TODO: refactor here
+std_logger = logging.getLogger()
+
+
+# filter
+def filter_Logger(record):
+    # if record.module == 'proactor_events':
+    #   return False
+    return True
+
+
+# File
+logging.basicConfig(
+    level=logging.DEBUG,
+    format="[%(asctime)s] %(threadName)s %(module)s %(message)s",
+    datefmt="%H:%M:%S",
+    filename="log.txt",
+    filemode="w",
+)
+# Console
+console = logging.StreamHandler()
+console.setLevel(logging.INFO)
+console.setFormatter(
+    logging.Formatter("[%(asctime)s] %(threadName)s %(module)s %(message)s")
+)
+console.addFilter(filter_Logger)
+std_logger.addHandler(console)
+# Discord Log
+# debug
+Logger_nextcord = logging.getLogger("nextcord")
+Logger_nextcord.setLevel(logging.INFO)
+handler_nextcord = logging.FileHandler(
+    filename="nextcord.log", encoding="utf-8", mode="w"
+)
+handler_nextcord.setFormatter(
+    logging.Formatter("[%(asctime)s]%(levelname)s:%(name)s: %(message)s")
+)
+Logger_nextcord.addHandler(handler_nextcord)
 
 # DEBUG setting
 ENABLE_MK2BT = True  # Disable mk2bt thread
@@ -192,48 +232,6 @@ PROFILE_FIELDS = [
     "ramp_time",
     "ramp_wave",
 ]
-
-
-# --start---------
-
-# init logging
-logger = logging.getLogger()
-
-
-# filter
-def filter_Logger(record):
-    # if record.module == 'proactor_events':
-    #   return False
-    return True
-
-
-# File
-logging.basicConfig(
-    level=logging.DEBUG,
-    format="[%(asctime)s] %(threadName)s %(module)s %(message)s",
-    datefmt="%H:%M:%S",
-    filename="log.txt",
-    filemode="w",
-)
-# Console
-console = logging.StreamHandler()
-console.setLevel(logging.INFO)
-console.setFormatter(
-    logging.Formatter("[%(asctime)s] %(threadName)s %(module)s %(message)s")
-)
-console.addFilter(filter_Logger)
-logger.addHandler(console)
-# Discord Log
-# debug
-Logger_nextcord = logging.getLogger("nextcord")
-Logger_nextcord.setLevel(logging.INFO)
-handler_nextcord = logging.FileHandler(
-    filename="nextcord.log", encoding="utf-8", mode="w"
-)
-handler_nextcord.setFormatter(
-    logging.Formatter("[%(asctime)s]%(levelname)s:%(name)s: %(message)s")
-)
-Logger_nextcord.addHandler(handler_nextcord)
 
 # init Store
 store = Store()
@@ -445,6 +443,10 @@ class UnitConnect:
         }
         # serial access for the BT connexion
         self.serial_dev = None
+
+        # bind logger to unit for better logging
+        self.logger = logger.bind(unit_name=unit_name)
+
         # start trying to connect the 2B
         self.detect()
 
@@ -459,7 +461,7 @@ class UnitConnect:
         """
         reply = reply_raw.decode().rstrip("\r\n")
 
-        Logger.debug("{} 2B reply : {}".format(self.name, reply))
+        self.logger.debug("Received reply from 2B unit", reply=reply)
 
         if m := re.match(
             r"^(\d+):(\d+):(\d+):(\d+):(\d+):(\d+):([L,H]):(\d+):(\d+):(\d+):(\d+):(\d+):(2\..+)$",
@@ -478,15 +480,8 @@ class UnitConnect:
             self.settings_return["adj_4"] = int(m[11])
             self.settings_return["adj_3"] = int(m[12])
 
-            # ws_notifier.notify(
-            #     "units:update",
-            #     {self.name: {**self.settings_return}},
-            # )
-
             return str(m[13])  # return firmware version
-        Logger.info(
-            "Fail to parse the 2B {} reply {} -> reconnecting".format(self.name, reply)
-        )
+        self.logger.info("Fail to parse the 2B reply -> reconnecting", reply=reply)
         self.detect()
         return None
 
@@ -500,32 +495,36 @@ class UnitConnect:
         # close previous open (lost connexion)
         if self.serial_dev:
             if self.serial_dev.isOpen():
-                Logger.debug("{} close serial port".format(self.name))
+                self.logger.debug("close serial port")
                 self.serial_dev.close()
             else:
-                Logger.debug("{} port already close".format(self.name))
+                self.logger.debug("port already close")
 
         # loop for BT serial connexion until succes
         while True:
-            Logger.info("{} BTscan for devices".format(self.name))
+            self.logger.info("Scanning for device using BT...")
             nearby_devices = bluetooth.discover_devices(
                 duration=1, lookup_names=True, flush_cache=True, lookup_class=False
             )
-            #
+
+            # don't spam
             if len(nearby_devices) == 0:
-                time.sleep(5)  # BT desactivate
+                time.sleep(5)
+
             # Loop on BT device to find the good one
             for addr, name in nearby_devices:
                 if self.name == name:
-                    Logger.debug("{} detected in {}".format(self.name, addr))
+                    self.logger.debug(
+                        "Detected an UNIT associated on machine", address=addr
+                    )
                     com_ports = list(serial.tools.list_ports.comports())
                     addr = addr.replace(":", "")
+
                     # Find the associated COM port
-                    for com, des, hwenu in com_ports:
+                    for com, _des, hwenu in com_ports:
                         if addr in hwenu:
-                            Logger.debug(
-                                "{} serial port detected {}".format(self.name, com)
-                            )
+                            self.logger.debug("Serial port detected", port=com)
+
                             for retry in range(1, SERIAL_RETRY):
                                 try:
                                     self.serial_dev = serial.Serial(
@@ -537,10 +536,8 @@ class UnitConnect:
                                         stopbits=serial.STOPBITS_ONE,
                                     )
                                 except serial.SerialException:
-                                    Logger.debug(
-                                        "{} serial retry open {}".format(
-                                            self.name, retry
-                                        )
+                                    self.logger.debug(
+                                        "Serial retry open", retry_count=retry
                                     )
                                     time.sleep(0.5)
                                 else:
@@ -549,22 +546,16 @@ class UnitConnect:
                                         self.serial_dev.readline()
                                     )
                                     if firmware_version is not None:
-                                        Logger.info(
-                                            f"{self.name} serial access to 2B is OK"
-                                        )
-                                        Logger.debug(
-                                            f"{self.name} version={firmware_version}"
+                                        self.logger.info(
+                                            "Serial access to 2B is OK",
+                                            firmware_version=firmware_version,
                                         )
                                         self.settings_target["cnx_ok"] = True
                                         return self.serial_dev
-                                    Logger.info(
-                                        "{} 2B not responding".format(self.name)
-                                    )
+                                    self.logger.info("2B not responding")
                                     self.serial_dev.close()
-                                    Logger.debug(
-                                        "{} serial retry open {}".format(
-                                            self.name, retry
-                                        )
+                                    self.logger.debug(
+                                        "Serial retry open", retry_count=retry
                                     )
                                     time.sleep(0.5)
 
@@ -601,13 +592,11 @@ class UnitConnect:
         for field in FW_2B_CMD.keys():
             # check if update is needed
             if self.settings_return[field] != self.settings_target[field]:
-                Logger.info(
-                    "[{}] Adjust '{}' {} -> {}".format(
-                        self.name,
-                        field,
-                        self.settings_return[field],
-                        self.settings_target[field],
-                    )
+                self.logger.info(
+                    "Adjust 2B Settings",
+                    field=field,
+                    previous=self.settings_return[field],
+                    new=self.settings_target[field],
                 )
 
                 updated_fields[field] = self.settings_target[field]
@@ -618,7 +607,7 @@ class UnitConnect:
                     cmd = FW_2B_CMD[field].split("-")[int(self.settings_target[field])]
                 # if something to do
                 if cmd != "":
-                    Logger.debug("{} cmd {}".format(self.name, cmd))
+                    self.logger.debug("Sending 2B command", cmd=cmd)
                     # check if target and 2B synchronized on the next call
                     self.settings_target["sync"] = False
                     no_updated = False
@@ -674,10 +663,8 @@ def thread_bt_unit(unit_str: str) -> None:
                 else:
                     time.sleep(0.1)
                     cycle = cycle + 1
-        except Exception as err:
-            Logger.info(
-                f"[BTUnit] Thread error with estim unit {unit_str} : {err=}, {type(err)=}"
-            )
+        except Exception:
+            logger.exception("ThreadError for unit", unit_name=unit_str)
             time.sleep(30)
 
 
@@ -907,7 +894,8 @@ class Bot2b3(NextcordBot):
         # Event system (set from lifespan after FastAPI starts)
         self._action_queue: ActionQueue | None = None
         self._dispatcher: EventDispatcher | None = None
-        Logger.info("Bot initialized")
+
+        logger.info("Discord bot initalized")
 
         self.previous_2B_sync = False  # previous global 2B sync
 
@@ -1755,8 +1743,9 @@ class Bot2b3(NextcordBot):
                                 "move": "sensor_move_alarm",
                             }
                             event_type = sensor_event_map.get(value, value)
-                            Logger.warning(
-                                f'[Sensor] Alarm! "{sensor_name}" Sensor fired!'
+
+                            logger.info(
+                                "[Sensors] Sensor alarm fired!", sensor_name=sensor_name
                             )
                             await self._dispatcher.dispatch(
                                 event_type=event_type,
@@ -1771,8 +1760,7 @@ class Bot2b3(NextcordBot):
         except asyncio.CancelledError:
             raise
         except Exception:
-            Logger.warning(f"Task exception bt_sensor_alarm")
-            Logger.debug(traceback.print_exc())
+            logger.exception("[Sensors] Task exception for bt_sensor_alarm")
 
     # Event action queueing (new system)
     @tasks.loop(seconds=1)
@@ -1783,41 +1771,7 @@ class Bot2b3(NextcordBot):
         except asyncio.CancelledError:
             raise
         except Exception:
-            Logger.warning(f"Task exception event_queue_mgmt")
-            Logger.debug(traceback.print_exc())
-
-    # update boot status
-    async def update_status(self):
-        """
-        Update the status in bot status
-        Returns:
-
-        """
-        # text status for the bot
-        msg = "Cnx: "
-        bot_status = nextcord.Status.online
-        for unit in BT_UNITS:
-            if threads_settings[unit]["cnx_ok"]:
-                msg += unit
-            else:
-                bot_status = nextcord.Status.do_not_disturb
-        await self.change_presence(
-            status=bot_status,
-            activity=nextcord.Activity(
-                type=nextcord.ActivityType.listening, state="", name=msg
-            ),
-        )
-
-    # for exception in tasks update_status
-    @tasks.loop(seconds=30)
-    async def rerun_update_status(self):
-        try:
-            await self.update_status()
-        except asyncio.CancelledError:
-            raise
-        except Exception:
-            Logger.warning(f"Task exception update_status")
-            Logger.debug(traceback.print_exc())
+            logger.exception("[Sensors] Task exception for event_queue_mgmt")
 
     # @Bot is Ready
     async def on_ready(self):
@@ -1836,14 +1790,13 @@ class Bot2b3(NextcordBot):
         self._dispatcher = EventDispatcher.get_instance()
 
         # Start all tasks
-        self.rerun_update_status.start()  # bot console
         self.rerun_event_queue_mgmt.start()  # queue management
         self.rerun_bt_sensor_alarm.start()  # Bluetooth sensors
         return True
 
     # cmd arg errors
     async def on_command_error(self, context, exception):
-        Logger.error(str(exception))
+        logger.error(str(exception))
 
 
 def sensor_check_val(sensor_name: str, measure: str, val: int) -> None:
@@ -1968,10 +1921,10 @@ async def sensor_bt(sensor_name: str, address: str, char_uuid: str) -> None:
     current_sensor_settings["sensor_online"] = False
 
     disconnected_event = asyncio.Event()
-    Logger.info(f"[Sensors] Searching sensor '{sensor_name}'...")
+    logger.info("[Sensors] Searching Sensor...", sensor_name=sensor_name)
 
     def disconnected_callback(bt_client):
-        Logger.info(f"[Sensors] {sensor_name} sensor is disconnected")
+        logger.info("[Sensors] Sensor offline", sensor_name=sensor_name)
         current_sensor_settings["sensor_online"] = False
 
         if sensor_name == "sound":
@@ -1991,7 +1944,7 @@ async def sensor_bt(sensor_name: str, address: str, char_uuid: str) -> None:
     async with BleakClient(
         address, disconnected_callback=disconnected_callback
     ) as client:
-        Logger.info(f"[Sensors] {sensor_name} sensor is connected")
+        logger.info("[Sensors] Sensor online", sensor_name=sensor_name)
         current_sensor_settings["sensor_online"] = True
 
         # queue ws update
@@ -2014,7 +1967,7 @@ def thread_sensors_bt(sensor: str, addr: str, service: str) -> None:
     Returns:
 
     """
-    Logger.info(f"[Sensors] Start Sensor '{sensor}' thread")
+    logger.info("[Sensors] Start Sensor thread", sensor_name=sensor)
     while True:
         try:
             # thread isolation
@@ -2025,9 +1978,10 @@ def thread_sensors_bt(sensor: str, addr: str, service: str) -> None:
             loop.close()
         except BleakDeviceNotFoundError:
             time.sleep(30)
-        except Exception as err:
-            Logger.info(
-                f"Thread error in start_sensors_bt {sensor}: {err=}, {type(err)=}"
+        except Exception:
+            logger.exception(
+                f"[Sensors] Thread error in start_sensors_bt {sensor}",
+                sensor_name=sensor,
             )
             time.sleep(30)
 
@@ -2036,7 +1990,7 @@ def thread_sensors_bt(sensor: str, addr: str, service: str) -> None:
 def thread_update_ramp():
     # TODO: REF ramp mechanism
     RAMP_STEP = 2
-    Logger.info(f"Start software ramp thread")
+    logger.info(f"Start software ramp thread")
     while True:
         try:
             time.sleep(RAMP_STEP)
@@ -2128,8 +2082,8 @@ def thread_update_ramp():
                 threads_settings[unit]["ramp_progress"] = (
                     threads_settings[unit]["ramp_progress"] + RAMP_STEP
                 )
-        except Exception as err:
-            Logger.info(f"Thread error in update_ramp {err=}, {type(err)=}")
+        except Exception:
+            logger.exception("Thread error in update_ramp")
             time.sleep(30)
 
 
@@ -2264,9 +2218,7 @@ def mk2b_init():
             "updated": False,  # values are changed
         }
 
-    Logger.success(
-        f"[UNITS] Initialized 2B initials settings for {len(BT_UNITS)} Units."
-    )
+    logger.info(f"[Units] Initialized 2B initials settings for {len(BT_UNITS)} Units.")
 
 
 bot = Bot2b3()
@@ -2393,22 +2345,19 @@ async def websocket_endpoint(websocket: WebSocket, token: str):
                             }
                         )
             except asyncio.TimeoutError:
-                print("💓 Sending heartbeat ping")
+                logger.debug("💓 Sending heartbeat ping")
                 await websocket.send_json({"type": "ping"})
                 continue
 
-    except jwt.PyJWTError as e:
-        print(f"❌ JWT error: {e}")
+    except jwt.PyJWTError:
+        logger.exception("❌ JWT error:")
         await websocket.close(code=4001, reason="Invalid token")
 
     except WebSocketDisconnect:
-        print(f"🔴 Client disconnected: {user_id}")
+        logger.info(f"🔴 Client disconnected: {user_id}", user_id=user_id)
 
-    except Exception as e:
-        print(f"❌ WebSocket error: {e}")
-        import traceback
-
-        traceback.print_exc()
+    except Exception:
+        logger.exception(f"🔴 WebSocket error for {user_id}", user_id=user_id)
 
     finally:
         if user_id:
@@ -2463,7 +2412,7 @@ def start_mock_units():
 
 
 if __name__ == "__main__":
-    new_logger.info("Starting PlunEStim 1.0.0")
+    logger.info("Starting PlunEStim 1.0.0")
 
     threads = {}
 
@@ -2489,29 +2438,27 @@ if __name__ == "__main__":
 
     # start all thread
     for tr in threads.keys():
-        new_logger.warning(f"[Main] Starting thread '{tr}'!")
+        logger.info(f"[Main] Starting thread '{tr}'!", thread_name=tr)
         threads[tr].daemon = True
         threads[tr].start()
 
     # start Discord Bot
     while True:
         try:
-            new_logger.info("[Discord] Loading Discord cogs...")
+            logger.info("[Discord] Loading Discord cogs...")
 
             # Try to load all the cogs
             for cog in get_cogs():
                 try:
                     bot.load_extension(cog)
-                    new_logger.info(f"[Cogs] Successfully loaded '{cog}'!")
-                    # Logger.info("Loaded " + cog)
-                except Exception as e:
-                    Logger.error(e)
-                    print(e)
+                    logger.info("[Cogs] Successfully loaded cog!", cog_name=cog)
+                except Exception:
+                    logger.exception("[Cogs] Failed to load cog", cog_name=cog)
 
-            Logger.info("[Discord] Starting Discord Bot...")
+            logger.info("[Discord] Starting Discord Bot...")
             bot.run(DISCORD_TOKEN)
 
-        except Exception as err:
-            Logger.error(f"Restarting Discord bot after major error {err}")
+        except Exception:
+            logger.exception("Restarting Discord bot after major error")
             time.sleep(1000)
             continue

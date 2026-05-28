@@ -74,7 +74,7 @@
       "ch_A_max": 0,
       "ch_A_ramp_phase": 0,
       "ch_A_ramp_prct": 100,
-      "ch_B": 0,
+      "ch_B": 50,
       "ch_B_max": 50,
       "ch_B_ramp_phase": 0,
       "ch_B_ramp_prct": 100,

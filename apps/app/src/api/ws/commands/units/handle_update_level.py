@@ -1,9 +1,11 @@
-from utils import Logger, calculate_magic_number
+from utils import calculate_magic_number
 from store import Store
 from api.ws.websocket_notifier import WebSocketNotifier
 from typings import UnitDict
+import structlog
 
 store = Store()
+logger = structlog.get_logger("pes")
 
 
 async def handle_update_level(payload: dict, ws_notifier: WebSocketNotifier) -> dict:
@@ -22,8 +24,17 @@ async def handle_update_level(payload: dict, ws_notifier: WebSocketNotifier) -> 
                 # calc new value using lexer for operators
                 new_value = calculate_magic_number(snapshot[field], str(field_value))
 
-                Logger.info(
-                    f"[WS|units:update_level] Adjust {unit_id}@'{field}' from '{snapshot[field]}' to '{new_value}' with '{field_value}'"
+                logger.info(
+                    f"[WS|units:update_level] Adjust {unit_id}",
+                    changes={
+                        "unit_id": unit_id,
+                        "field": {
+                            "name": field,
+                            "old": snapshot[field],
+                            "new": new_value,
+                            "operators": field_value,
+                        },
+                    },
                 )
                 changes[field] = new_value
 
