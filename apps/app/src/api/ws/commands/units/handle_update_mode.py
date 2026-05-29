@@ -32,9 +32,7 @@ async def handle_update_mode(payload: dict, ws_notifier: WebSocketNotifier) -> d
                 "old_mode": snapshot["mode"],
                 "new_mode": new_mode,
                 "ch_A": 0,
-                "ch_A_max": 0,
                 "ch_B": 0,
-                "ch_B_max": 0,
             },
         )
 
@@ -42,9 +40,7 @@ async def handle_update_mode(payload: dict, ws_notifier: WebSocketNotifier) -> d
             "updated": True,
             "mode": new_mode,
             "ch_A": 0,
-            "ch_A_max": 0,
             "ch_B": 0,
-            "ch_B_max": 0,
         }
 
         # reset adj_2 for mode without adj2
@@ -61,9 +57,7 @@ async def handle_update_mode(payload: dict, ws_notifier: WebSocketNotifier) -> d
                 "changes": {
                     "mode": new_mode,
                     "ch_A": 0,
-                    "ch_A_max": 0,
                     "ch_B": 0,
-                    "ch_B_max": 0,
                 },
             },
         )

@@ -22,9 +22,7 @@ async def handle_stop(_payload: dict, ws_notifier: WebSocketNotifier) -> dict:
             {
                 "updated": True,
                 "ch_A": 0,
-                "ch_A_max": 0,
                 "ch_B": 0,
-                "ch_B_max": 0,
             },
         )
 

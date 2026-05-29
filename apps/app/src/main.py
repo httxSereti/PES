@@ -210,10 +210,10 @@ FW_2B_CMD = {
 
 # fields used for profile
 PROFILE_FIELDS = [
-    "ch_A_max",
-    "ch_B_max",
-    "adj_1_max",
-    "adj_2_max",
+    "ch_A",
+    "ch_B",
+    "adj_1",
+    "adj_2",
     "adj_3",
     "adj_4",
     "mode",
@@ -551,6 +551,7 @@ class UnitConnect:
                                             firmware_version=firmware_version,
                                         )
                                         self.settings_target["cnx_ok"] = True
+                                        # TODO: ws notify device is online
                                         return self.serial_dev
                                     self.logger.info("2B not responding")
                                     self.serial_dev.close()
@@ -1021,7 +1022,7 @@ class Bot2b3(NextcordBot):
                         threads_settings[bck_bt_name]["updated"] = True
                         for field in bck_settings[bck_bt_name]:
                             if field in PROFILE_FIELDS:
-                                if field in ("ch_A_max", "ch_B_max"):
+                                if field in ("ch_A", "ch_B"):
                                     threads_settings[bck_bt_name][field] = int(
                                         bck_settings[bck_bt_name][field]
                                         * lvl_prct_arg
@@ -1059,7 +1060,7 @@ class Bot2b3(NextcordBot):
                             "{} chA {}: lvl {} Ramp {}% {}° ".format(
                                 unit_name,
                                 threads_settings[unit_name]["ch_A_use"],
-                                threads_settings[unit_name]["ch_A_max"],
+                                threads_settings[unit_name]["ch_A"],
                                 threads_settings[unit_name]["ch_A_ramp_prct"],
                                 threads_settings[unit_name]["ch_A_ramp_phase"],
                             )
@@ -1068,7 +1069,7 @@ class Bot2b3(NextcordBot):
                             "{} chB {}: lvl {} Ramp {}% {}° ".format(
                                 unit_name,
                                 threads_settings[unit_name]["ch_B_use"],
-                                threads_settings[unit_name]["ch_B_max"],
+                                threads_settings[unit_name]["ch_B"],
                                 threads_settings[unit_name]["ch_B_ramp_prct"],
                                 threads_settings[unit_name]["ch_B_ramp_phase"],
                             )
@@ -1077,7 +1078,7 @@ class Bot2b3(NextcordBot):
                             "{} {}: lvl {} Ramp {}% {}° ".format(
                                 unit_name,
                                 MODE_2B[threads_settings[unit_name]["mode"]]["adj_1"],
-                                threads_settings[unit_name]["adj_1_max"],
+                                threads_settings[unit_name]["adj_1"],
                                 threads_settings[unit_name]["adj_1_ramp_prct"],
                                 threads_settings[unit_name]["adj_1_ramp_phase"],
                             )
@@ -1086,7 +1087,7 @@ class Bot2b3(NextcordBot):
                             "{} {}: lvl {} Ramp {}% {}° ".format(
                                 unit_name,
                                 MODE_2B[threads_settings[unit_name]["mode"]]["adj_2"],
-                                threads_settings[unit_name]["adj_2_max"],
+                                threads_settings[unit_name]["adj_2"],
                                 threads_settings[unit_name]["adj_2_ramp_prct"],
                                 threads_settings[unit_name]["adj_2_ramp_phase"],
                             )
@@ -1112,44 +1113,6 @@ class Bot2b3(NextcordBot):
                         )
                         # end
                     await interaction.response.send_message("\n".join(txt))
-
-        # Event management commands removed — use REST API /api/trigger-groups
-
-        @self.slash_command(name="mode", description="Change Estim mode")
-        async def bot_mode(
-            interaction: Interaction,
-            unit_arg: str = SlashOption(
-                name="unit",
-                description="Estim unit impacted with the new mode",
-                required=True,
-                choices=CHOICE_UNIT,
-            ),
-            mode_arg: str = SlashOption(
-                name="mode",
-                description="New mode for the selected units",
-                required=True,
-                choices=CHOICE_MODE,
-            ),
-        ) -> None:
-            if await check_permission(interaction, "administrator"):
-                mode_id = await self.check_mode(interaction, mode_arg)
-                if mode_id:
-                    for unit_num in await self.check_unit(interaction, unit_arg):
-                        unit = UnitDict(f"UNIT{unit_num}")
-
-                        changes = {"updated": True, "mode": mode_id}
-
-                        # reset adj_2 pour les modes sans adj_2
-                        if MODE_2B[mode_id]["adj_2"] == "":
-                            changes["adj_2"] = store.get_thread_setting(
-                                unit, "adj_1", default=0
-                            )
-
-                        store.update_thread_settings(unit, changes)
-                    await interaction.response.send_message(
-                        "new mode for unit {} is {}".format(unit_arg, mode_arg)
-                    )
-            return None
 
         @self.slash_command(name="usage", description="Change channel usage")
         async def bot_usage(
@@ -1185,257 +1148,6 @@ class Bot2b3(NextcordBot):
                         unit_arg, ch_arg, usage_arg
                     )
                 )
-            return None
-
-        #
-        # ---------Refactoring
-        #
-        @self.slash_command(name="multi", description="manuel multiplier change")
-        async def bot_multi(
-            interaction: Interaction,
-            usage_arg: str = SlashOption(
-                name="usage",
-                description="Estim ouput usage",
-                choices=CHOICE_USAGE_ALL,
-                required=True,
-            ),
-            prct_arg: int = SlashOption(
-                name="prct",
-                description="new percentage for the multiplier",
-                required=True,
-                min_value=-50,
-                default=100,
-                max_value=200,
-            ),
-        ):
-            if await check_permission(interaction, "administrator"):
-                for unit in BT_UNITS:
-                    for ch in ["A", "B"]:
-                        # find channel with this usage
-                        if (
-                            threads_settings[unit][f"ch_{ch}_use"] == usage_arg.lower()
-                            or usage_arg.lower() == "all"
-                        ):
-                            ch_name = f"ch_{ch}_multiplier"
-                            threads_settings[unit]["updated"] = True
-                            threads_settings[unit][ch_name] = prct_arg
-                await interaction.response.send_message("Multiplier updated")
-                return None
-
-        # ----- Quick change
-
-        # --- Quick Level ------
-        @self.slash_command(name="add", description="quick increase level")
-        async def bot_add(
-            interaction: Interaction,
-            usage_arg: str = SlashOption(
-                name="usage",
-                description="Estim ouput usage",
-                choices=CHOICE_USAGE_ALL,
-                required=True,
-            ),
-        ):
-            if await check_permission(interaction, "administrator"):
-                txt = []
-                level_arg = "%+5"
-                for unit in BT_UNITS:
-                    for ch in ["A", "B"]:
-                        # find channel with this usage
-                        if (
-                            threads_settings[unit][f"ch_{ch}_use"] == usage_arg.lower()
-                            or usage_arg.lower() == "all"
-                        ):
-                            ch_name = f"ch_{ch}_max"
-                            level_arg = await self.check_level(interaction, level_arg)
-                            if level_arg:
-                                new_val = self.calc_new_val(level_arg, unit, ch_name)
-                                txt.append(
-                                    ">>new level for unit {} ch {} ({}) change from {} to {}".format(
-                                        unit,
-                                        ch,
-                                        threads_settings[unit][f"ch_{ch}_use"],
-                                        threads_settings[unit][ch_name],
-                                        new_val,
-                                    )
-                                )
-                                threads_settings[unit]["updated"] = True
-                                threads_settings[unit][ch_name] = new_val
-                if len(txt) == 0:
-                    await interaction.response.send_message(
-                        "There are no channel with this usage"
-                    )
-                else:
-                    await interaction.response.send_message("\n".join(txt))
-                return None
-
-        @self.slash_command(name="sub", description="quick decrease level")
-        async def bot_sub(
-            interaction: Interaction,
-            usage_arg: str = SlashOption(
-                name="usage",
-                description="Estim ouput usage",
-                choices=CHOICE_USAGE_ALL,
-                required=True,
-            ),
-        ):
-            txt = []
-            level_arg = "%-5"
-            for unit in BT_UNITS:
-                for ch in ["A", "B"]:
-                    # find channel with this usage
-                    if (
-                        threads_settings[unit][f"ch_{ch}_use"] == usage_arg.lower()
-                        or usage_arg.lower() == "all"
-                    ):
-                        ch_name = f"ch_{ch}_max"
-                        level_arg = await self.check_level(interaction, level_arg)
-                        if level_arg:
-                            new_val = self.calc_new_val(level_arg, unit, ch_name)
-                            txt.append(
-                                ">>new level for unit {} ch {} ({}) change from {} to {}".format(
-                                    unit,
-                                    ch,
-                                    threads_settings[unit][f"ch_{ch}_use"],
-                                    threads_settings[unit][ch_name],
-                                    new_val,
-                                )
-                            )
-                            threads_settings[unit]["updated"] = True
-                            threads_settings[unit][ch_name] = new_val
-            if len(txt) == 0:
-                await interaction.response.send_message(
-                    "There are no channel with this usage"
-                )
-            else:
-                await interaction.response.send_message("\n".join(txt))
-            return None
-
-        # ----- LEVEL SETTINGS -----
-        @self.slash_command(name="level")
-        async def bot_level(interaction: nextcord.Interaction):
-            pass
-
-        @bot_level.subcommand(description="Advanced Estim level change")
-        async def advanced(
-            interaction: Interaction,
-            unit_arg: str = SlashOption(
-                name="unit",
-                description="units impacted",
-                choices=CHOICE_UNIT_RANDOM,
-                required=True,
-            ),
-            dest_arg: str = SlashOption(
-                name="channels",
-                description="channels impacted",
-                choices=CHOICE_CHANNEL_RANDOM,
-                required=True,
-            ),
-            level_op: str = SlashOption(
-                name="operation",
-                description="how the level is changing",
-                choices=CHOICE_LEVEL_ACTION,
-                required=True,
-            ),
-            level_arg_min: int = SlashOption(
-                name="level_start",
-                description="min or fixed level",
-                required=True,
-            ),
-            level_arg_max: int = SlashOption(
-                name="level_max",
-                description="max level",
-                required=False,
-            ),
-        ) -> None:
-            if await check_permission(interaction, "administrator"):
-                level_arg = level_op + str(level_arg_min)
-                if level_arg_max:
-                    level_arg = level_arg + ">" + str(level_arg_max)
-                txt = []
-                for unit in await self.check_unit(interaction, unit_arg):
-                    unit = "UNIT" + str(unit)
-                    for ch in await self.check_ch(interaction, dest_arg):
-                        ch_name = f"ch_{ch}_max"
-                        level_arg_ch = await self.check_level(interaction, level_arg)
-                        if level_arg:
-                            new_val = self.calc_new_val(level_arg_ch, unit, ch_name)
-                            txt.append(
-                                ">>new level for unit {} ch {} ({}) change from {} to {}".format(
-                                    unit,
-                                    ch,
-                                    threads_settings[unit][f"ch_{ch}_use"],
-                                    threads_settings[unit][ch_name],
-                                    new_val,
-                                )
-                            )
-                            threads_settings[unit]["updated"] = True
-                            threads_settings[unit][ch_name] = new_val
-                await interaction.response.send_message("\n".join(txt))
-            return None
-
-        @bot_level.subcommand(description="Estim level change by use")
-        async def usage(
-            interaction: Interaction,
-            usage_arg: str = SlashOption(
-                name="usage",
-                description="Estim ouput usage",
-                choices=CHOICE_USAGE,
-                required=True,
-            ),
-            level_op: str = SlashOption(
-                name="operation",
-                description="how the level is changing",
-                choices=CHOICE_LEVEL_ACTION,
-                required=True,
-            ),
-            level_arg_min: int = SlashOption(
-                name="level_start",
-                description="min or fixed level",
-                required=True,
-            ),
-            level_arg_max: int = SlashOption(
-                name="level_max",
-                description="max level",
-                required=False,
-            ),
-        ) -> None:
-            # only commands for increase level are permitted all the time
-            if (
-                level_op == "+"
-                or level_op == "%+"
-                or await check_permission(interaction, "administrator")
-            ):
-                level_arg = level_op + str(level_arg_min)
-                # when range of level is used
-                if level_arg_max:
-                    level_arg = level_arg + ">" + str(level_arg_max)
-                txt = []
-                for unit in BT_UNITS:
-                    for ch in ["A", "B"]:
-                        # find channel with this usage
-                        if threads_settings[unit][f"ch_{ch}_use"] == usage_arg.lower():
-                            ch_name = f"ch_{ch}_max"
-                            level_arg = await self.check_level(interaction, level_arg)
-                            if level_arg:
-                                new_val = self.calc_new_val(level_arg, unit, ch_name)
-                                txt.append(
-                                    ">>new level for unit {} ch {} ({}) change from {} to {}".format(
-                                        unit,
-                                        ch,
-                                        threads_settings[unit][f"ch_{ch}_use"],
-                                        threads_settings[unit][ch_name],
-                                        new_val,
-                                    )
-                                )
-                                threads_settings[unit]["updated"] = True
-                                threads_settings[unit][ch_name] = new_val
-                                pprint(threads_settings[unit])
-                if len(txt) == 0:
-                    await interaction.response.send_message(
-                        "There are no channel with this usage"
-                    )
-                else:
-                    await interaction.response.send_message("\n".join(txt))
             return None
 
         # ----- UNIT SETTINGS -----
@@ -1572,47 +1284,18 @@ class Bot2b3(NextcordBot):
                         ">>new setting for unit {} {} change from {} to {}".format(
                             unit,
                             setting_arg,
-                            threads_settings[unit][adj_set + "_max"],
+                            threads_settings[unit][adj_set],
                             new_val,
                         )
                     )
                     threads_settings[unit]["updated"] = True
-                    threads_settings[unit][adj_set + "_max"] = new_val
+                    threads_settings[unit][adj_set] = new_val
                     # reset to adj_1 for modes without adj_2
                     if MODE_2B[threads_settings[unit]["mode"]]["adj_2"] == "":
-                        threads_settings[unit]["adj_2_max"] = threads_settings[unit][
-                            "adj_1_max"
+                        threads_settings[unit]["adj_2"] = threads_settings[unit][
+                            "adj_1"
                         ]
                 await interaction.response.send_message("\n".join(txt))
-            return None
-
-        # ----- EVENT MANAGEMENT ----
-        # Event management is now handled via REST API /api/trigger-groups
-        # Use GET /api/events/types to list available event types
-
-        # ----- EMERGENCY STOP ----------
-        @self.slash_command(name="stop", description="Emergency stop")
-        async def bot_stop(interaction: Interaction) -> None:
-            if interaction.user:
-                if interaction.user.id == self.subjectId or await check_permission(
-                    interaction, "administrator"
-                ):
-                    # Cancel all queued actions via new system
-                    if self._action_queue:
-                        await self._action_queue.cancel_all()
-                    for unit_str in BT_UNITS:
-                        unit = UnitDict(unit_str)
-                        store.update_thread_settings(
-                            unit,
-                            {
-                                "updated": True,
-                                "ch_A": 0,
-                                "ch_A_max": 0,
-                                "ch_B": 0,
-                                "ch_B_max": 0,
-                            },
-                        )
-                    await interaction.response.send_message("stop all channels")
             return None
 
         # ----- RAMP COMMANDS ------
@@ -2052,16 +1735,16 @@ def thread_update_ramp():
                             prct = 200 - prct
                         # ramp
                         delta = (
-                            threads_settings[unit][field + "_max"]
+                            threads_settings[unit][field]
                             * (100 - threads_settings[unit][field + "_ramp_prct"])
                             / 100
                         )
-                        new_val = threads_settings[unit][field + "_max"] - int(
+                        new_val = threads_settings[unit][field] - int(
                             delta * (100 - prct) / 100
                         )
                     else:
                         # no ramp
-                        new_val = threads_settings[unit][field + "_max"]
+                        new_val = threads_settings[unit][field]
                     # add multiplier for level
                     if field in ("ch_A", "ch_B"):
                         new_val = int(
@@ -2097,13 +1780,11 @@ def mk2b_init():
                 "id": init_bt_name,
                 # Channel A
                 "ch_A": 0,  # ch_A target level for the 2B
-                "ch_A_max": 0,  # ch_A set max value
                 "ch_A_ramp_phase": 0,  # ramp phase
                 "ch_A_ramp_prct": 100,  # ramp % of max for ch A
                 "ch_A_multiplier": 100,  # percentage of level multiplier
                 # Channel B
                 "ch_B": 0,  # ch_B target level for the 2B
-                "ch_B_max": 0,  # ch_B set max value
                 "ch_B_ramp_phase": 0,  # ramp phase
                 "ch_B_ramp_prct": 100,  # ramp % of max for ch B
                 "ch_B_multiplier": 100,  # percentage of level multiplier
@@ -2124,18 +1805,12 @@ def mk2b_init():
                 "adj_1": DEFAULT_USAGE_SETTING[init_bt_name][
                     "adj_1"
                 ],  # 2B adj 1 target setting
-                "adj_1_max": DEFAULT_USAGE_SETTING[init_bt_name][
-                    "adj_1"
-                ],  # 2B adj 1 set max value
                 "adj_1_ramp_phase": 0,  # ramp phase
                 "adj_1_ramp_prct": 100,  # ramp % of max for adj_1
                 # waveform setting 2
                 "adj_2": DEFAULT_USAGE_SETTING[init_bt_name][
                     "adj_2"
                 ],  # 2B adj 2 target setting
-                "adj_2_max": DEFAULT_USAGE_SETTING[init_bt_name][
-                    "adj_2"
-                ],  # 2B adj 2 set max value
                 "adj_2_ramp_phase": 0,  # ramp phase
                 "adj_2_ramp_prct": 100,  # ramp % of max for adj_2
                 # 2B timer adjusts
@@ -2160,13 +1835,11 @@ def mk2b_init():
             "id": init_bt_name,
             # Channel A
             "ch_A": 0,  # ch_A target level for the 2B
-            "ch_A_max": 0,  # ch_A set max value
             "ch_A_ramp_phase": 0,  # ramp phase
             "ch_A_ramp_prct": 100,  # ramp % of max for ch A
             "ch_A_multiplier": 100,  # percentage of level multiplier
             # Channel B
             "ch_B": 0,  # ch_B target level for the 2B
-            "ch_B_max": 0,  # ch_B set max value
             "ch_B_ramp_phase": 0,  # ramp phase
             "ch_B_ramp_prct": 100,  # ramp % of max for ch B
             "ch_B_multiplier": 100,  # percentage of level multiplier
@@ -2187,18 +1860,12 @@ def mk2b_init():
             "adj_1": DEFAULT_USAGE_SETTING[init_bt_name][
                 "adj_1"
             ],  # 2B adj 1 target setting
-            "adj_1_max": DEFAULT_USAGE_SETTING[init_bt_name][
-                "adj_1"
-            ],  # 2B adj 1 set max value
             "adj_1_ramp_phase": 0,  # ramp phase
             "adj_1_ramp_prct": 100,  # ramp % of max for adj_1
             # waveform setting 2
             "adj_2": DEFAULT_USAGE_SETTING[init_bt_name][
                 "adj_2"
             ],  # 2B adj 2 target setting
-            "adj_2_max": DEFAULT_USAGE_SETTING[init_bt_name][
-                "adj_2"
-            ],  # 2B adj 2 set max value
             "adj_2_ramp_phase": 0,  # ramp phase
             "adj_2_ramp_prct": 100,  # ramp % of max for adj_2
             # 2B timer adjusts
@@ -2364,53 +2031,6 @@ async def websocket_endpoint(websocket: WebSocket, token: str):
             store.websocket.disconnect(user_id)
 
 
-# Testings
-def start_mock_units():
-    cached_units: dict = {
-        "UNIT1": {
-            "ch_A": 0,
-            "ch_B": 0,
-        },
-        "UNIT2": {
-            "ch_A": 0,
-            "ch_B": 0,
-        },
-        "UNIT3": {
-            "ch_A": 0,
-            "ch_B": 0,
-        },
-    }
-
-    while True:
-        tick = random.randint(1, 3)
-
-        for unit_id in cached_units.keys():
-            # ch_A = 20 + random.randint(0, 30)
-            # ch_B = 20 + random.randint(0, 30)
-            unit = UnitDict(unit_id)
-            snapshot = store.get_unit_dict(unit)
-            changes = {}
-
-            if (
-                cached_units[unit_id]["ch_A"] != snapshot["ch_A_max"]
-                or cached_units[unit_id]["ch_B"] != snapshot["ch_B_max"]
-            ):
-                cached_units[unit_id]["ch_A"] = snapshot["ch_A_max"]
-                cached_units[unit_id]["ch_B"] = snapshot["ch_B_max"]
-
-                changes["ch_A"] = snapshot["ch_A_max"]
-                changes["ch_B"] = snapshot["ch_B_max"]
-
-                store.update_unit_dict(unit, changes)
-
-                ws_notifier.notify(
-                    payload_type="units:update",
-                    payload={"id": unit_id, "changes": changes},
-                )
-
-        time.sleep(1)
-
-
 if __name__ == "__main__":
     logger.info("Starting PlunEStim 1.0.0")
 
@@ -2432,9 +2052,6 @@ if __name__ == "__main__":
 
     # api
     threads["api"] = Thread(target=start_api)
-
-    # testing
-    # threads["testing"] = Thread(target=start_mock_units)
 
     # start all thread
     for tr in threads.keys():
