@@ -1,9 +1,7 @@
 import type { Route } from ".react-router/types/src/pages/app/admin/+types/dashboard";
 import { useMemo, useState } from "react";
 import { useAppSelector } from "@/store/hooks";
-import { ChevronDown, Zap, Clock, Layers, Activity } from "lucide-react";
-import { triggerRulesSelectors } from "@/store/slices/triggerRulesSlice";
-import { Link } from "react-router";
+import { ChevronDown, Zap, Clock, Layers } from "lucide-react";
 
 // eslint-disable-next-line no-empty-pattern
 export function meta({ }: Route.MetaArgs) {
@@ -134,13 +132,8 @@ function RuleCard({ summary }: { summary: RuleSummary }) {
 
 // ─── Main page ────────────────────────────────────────────────────────────────
 
-export default function TriggerRulesPage() {
+export default function TriggerredRulesPage() {
     const events = useAppSelector(state => state.events.events);
-    // const triggerRules = useAppSelector(state => state.triggerRules.entities);
-    const triggerRules = useAppSelector(state => triggerRulesSelectors.selectAll(state));
-
-
-    console.log(triggerRules)
 
     // Aggregate rule summaries from event history
     const rules = useMemo<RuleSummary[]>(() => {
@@ -193,26 +186,18 @@ export default function TriggerRulesPage() {
 
     return (
         <div className="space-y-3 px-5">
-            {triggerRules.length === 0 ? (
+            {rules.length === 0 ? (
                 <div className="py-16 text-center text-sm text-muted-foreground/40 italic">
                     No trigger rules have fired yet
                 </div>
             ) : (
                 <>
-                    <div className="ml-auto justify-between flex items-center">
-                        <div className="flex items-center gap-2 text-xs text-slate-50">
-                            <div className="text-xs text-muted-foreground/50 pb-1">
-                                {triggerRules.length} rule{triggerRules.length > 1 ? "s" : ""} available
-                            </div>
-                        </div>
-                        <Link to="/app/events/trigger-rules/triggered" className="flex items-center gap-2 text-xs text-muted-foreground/70">
-
-                            <span>view history</span>
-                        </Link>
+                    <div className="text-xs text-muted-foreground/50 pb-1">
+                        {rules.length} rule{rules.length > 1 ? "s" : ""} triggered across {events.length} event{events.length > 1 ? "s" : ""}
                     </div>
-                    {/* {rules.map((r, i) => (
+                    {rules.map((r, i) => (
                         <RuleCard key={r.rule_id ?? i} summary={r} />
-                    ))} */}
+                    ))}
                 </>
             )}
         </div>

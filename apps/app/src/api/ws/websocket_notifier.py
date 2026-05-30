@@ -2,6 +2,7 @@ import asyncio
 import structlog
 from typing import Optional
 from .websocket_manager import WebSocketManager
+from api.ws.loaders import trigger_rules_loader
 
 logger = structlog.get_logger("pes")
 
@@ -54,6 +55,10 @@ class WebSocketNotifier:
         logger.info(
             f"[WSNotifier] Sent {len(payload)} events history", client_id=client_id
         )
+
+    async def load_datas(self, client_id: str, ws_manager: WebSocketManager):
+        # Load TriggerRules from Database
+        await trigger_rules_loader(client_id, ws_manager)
 
     async def consume(self, ws_manager: WebSocketManager):
         while True:

@@ -1,7 +1,7 @@
-import { createSlice } from '@reduxjs/toolkit';
+import { createSlice, createEntityAdapter } from '@reduxjs/toolkit';
+import type { EntitySelectors } from '@reduxjs/toolkit';
 import type { UnitSettings } from '@/types';
 import type { RootState } from '@/store';
-import { createEntityAdapter } from "@reduxjs/toolkit";
 
 const unitsAdapter = createEntityAdapter<UnitSettings>();
 
@@ -14,9 +14,7 @@ const unitsSlice = createSlice({
     },
 });
 
-export const unitsSelectors = unitsAdapter.getSelectors(
-    (state: RootState) => state.units
-);
+export const unitsSelectors: EntitySelectors<UnitSettings, RootState, string> = unitsAdapter.getSelectors((state: RootState) => state.units);
 
 export const { unitsInitialized, unitUpdated } = unitsSlice.actions;
 export default unitsSlice.reducer;

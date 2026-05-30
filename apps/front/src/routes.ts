@@ -17,6 +17,7 @@ export default [
 
             ...prefix("trigger-rules", [
                 index("pages/app/events/trigger-rules/index.tsx"),
+                route("triggered", "pages/app/events/trigger-rules/triggered-rules.tsx"),
                 route("new", "pages/app/events/trigger-rules/new.tsx"),
                 route(":id/edit", "pages/app/events/trigger-rules/edit.tsx"),
             ]),

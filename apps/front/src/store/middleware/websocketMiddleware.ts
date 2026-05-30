@@ -5,8 +5,9 @@ import { sensorsInitialized, sensorUpdated } from '@/store/slices/sensorsSlice';
 import { unitsInitialized, unitUpdated } from '@/store/slices/unitsSlice';
 import { setError, setStatus, resetReconnect, incrementReconnect } from '@/store/slices/websocketSlice';
 import { eventsHistoryLoaded, eventTriggered, type TriggeredEvent } from '@/store/slices/eventsSlice';
-import type { Sensor, UnitSettings, WebSocketConfig, WebSocketIncomingMessage, WebSocketMessage } from '@/types';
+import type { Sensor, TriggerRule, UnitSettings, WebSocketConfig, WebSocketIncomingMessage, WebSocketMessage } from '@/types';
 import type { Middleware } from '@reduxjs/toolkit';
+import { triggerRulesInitialized } from '@/store/slices/triggerRulesSlice';
 
 export function createWebSocketMiddleware(config: WebSocketConfig): Middleware {
     const {
@@ -186,6 +187,13 @@ export function createWebSocketMiddleware(config: WebSocketConfig): Middleware {
 
                     case 'events:triggered':
                         dispatch(eventTriggered(message.payload as unknown as TriggeredEvent));
+                        break;
+
+                    /**
+                    * @TriggerRules
+                    */
+                    case 'trigger_rules:load':
+                        dispatch(triggerRulesInitialized(message.payload as unknown as TriggerRule[]));
                         break;
 
                     case 'notification':

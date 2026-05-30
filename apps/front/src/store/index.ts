@@ -5,6 +5,7 @@ import sensorsReducer from '@/store/slices/sensorsSlice';
 import unitsReducer from '@/store/slices/unitsSlice';
 import unitsHistorySlice from '@/store/slices/unitsHistorySlice';
 import eventsReducer from '@/store/slices/eventsSlice';
+import triggerRulesReducer from '@/store/slices/triggerRulesSlice';
 
 import { createWebSocketMiddleware } from '@/store/middleware/websocketMiddleware';
 
@@ -31,6 +32,7 @@ export const store = configureStore({
         units: unitsReducer,
         unitsHistory: unitsHistorySlice,
         events: eventsReducer,
+        triggerRules: triggerRulesReducer
     },
     middleware: (getDefaultMiddleware) =>
         getDefaultMiddleware({

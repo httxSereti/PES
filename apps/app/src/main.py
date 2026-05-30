@@ -1227,77 +1227,6 @@ class Bot2b3(NextcordBot):
                 )
             return None
 
-        @bot_unit_set.subcommand(description="Estim mode settings (change waveform)")
-        async def mode(
-            interaction: Interaction,
-            unit_arg: str = SlashOption(
-                name="unit",
-                description="Estim unit impacted with the new setting",
-                required=True,
-                choices=CHOICE_UNIT_UNIQ,
-            ),
-            setting_arg: str = SlashOption(
-                name="setting",
-                description="setting impacted",
-                choices=CHOICE_MODE_SETTING,
-                required=True,
-            ),
-            level_op: str = SlashOption(
-                name="operation",
-                description="how the value is changing",
-                choices=CHOICE_LEVEL_ACTION,
-                required=True,
-            ),
-            level_arg_min: int = SlashOption(
-                name="level_start",
-                description="min range or fixed val",
-                required=True,
-            ),
-            level_arg_max: int = SlashOption(
-                name="level_max",
-                description="max range",
-                required=False,
-            ),
-        ) -> None:
-            if await check_permission(interaction, "administrator"):
-                level_arg = level_op + str(level_arg_min)
-                if level_arg_max:
-                    level_arg = level_arg + ">" + str(level_arg_max)
-                txt = []
-                for unit in await self.check_unit(interaction, unit_arg):
-                    unit = "UNIT" + str(unit)
-                    # check if setting is valid
-                    adj_set = ""
-                    for adj in ("adj_1", "adj_2"):
-                        if MODE_2B[threads_settings[unit]["mode"]][adj] == setting_arg:
-                            adj_set = adj
-                    if adj_set == "":
-                        mode = MODE_2B[threads_settings[unit]["mode"]]["id"]
-                        await interaction.response.send_message(
-                            "Invalid setting {} for mode {}".format(
-                                setting_arg.lower(), mode
-                            )
-                        )
-                        return None
-                    new_val = self.calc_new_val(level_arg, unit, adj_set)
-                    txt.append(
-                        ">>new setting for unit {} {} change from {} to {}".format(
-                            unit,
-                            setting_arg,
-                            threads_settings[unit][adj_set],
-                            new_val,
-                        )
-                    )
-                    threads_settings[unit]["updated"] = True
-                    threads_settings[unit][adj_set] = new_val
-                    # reset to adj_1 for modes without adj_2
-                    if MODE_2B[threads_settings[unit]["mode"]]["adj_2"] == "":
-                        threads_settings[unit]["adj_2"] = threads_settings[unit][
-                            "adj_1"
-                        ]
-                await interaction.response.send_message("\n".join(txt))
-            return None
-
         # ----- RAMP COMMANDS ------
         @self.slash_command(
             name="ramp",
@@ -1954,6 +1883,9 @@ async def websocket_endpoint(websocket: WebSocket, token: str):
 
         # Replay the last 250 triggered events to the newly connected client
         await ws_notifier.send_history(user_id, store.websocket)
+
+        # Load datas
+        await ws_notifier.load_datas(user_id, store.websocket)
 
         # Heartbeat and Message handling
         while True:

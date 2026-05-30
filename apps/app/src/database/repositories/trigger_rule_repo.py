@@ -11,6 +11,7 @@ from events.enums import ActionType
 
 generate_id = cuid_wrapper()
 
+
 class TriggerRuleRepo:
     """
     Repository for TriggerRule and TriggerAction CRUD operations using SQLAlchemy.
@@ -21,15 +22,21 @@ class TriggerRuleRepo:
 
     # ───────── TriggerRule CRUD ─────────
 
-    async def get_all_rules(self, event_type: Optional[str] = None) -> List[TriggerRule]:
+    async def get_all_rules(
+        self, event_type: Optional[str] = None
+    ) -> List[TriggerRule]:
         """Get all rules, optionally filtered by event_type."""
         async with self._db.session_maker() as session:
             stmt = select(TriggerRule).options(selectinload(TriggerRule.actions))
             if event_type:
-                stmt = stmt.where(TriggerRule.event_type == event_type).order_by(TriggerRule.priority.desc())
+                stmt = stmt.where(TriggerRule.event_type == event_type).order_by(
+                    TriggerRule.priority.desc()
+                )
             else:
-                stmt = stmt.order_by(TriggerRule.event_type, TriggerRule.priority.desc())
-            
+                stmt = stmt.order_by(
+                    TriggerRule.event_type, TriggerRule.priority.desc()
+                )
+
             result = await session.execute(stmt)
             return list(result.scalars().all())
 
@@ -49,7 +56,11 @@ class TriggerRuleRepo:
     async def get_rule(self, rule_id: str) -> Optional[TriggerRule]:
         """Get a single rule by ID with its actions."""
         async with self._db.session_maker() as session:
-            stmt = select(TriggerRule).options(selectinload(TriggerRule.actions)).where(TriggerRule.id == rule_id)
+            stmt = (
+                select(TriggerRule)
+                .options(selectinload(TriggerRule.actions))
+                .where(TriggerRule.id == rule_id)
+            )
             result = await session.execute(stmt)
             return result.scalar_one_or_none()
 
@@ -90,13 +101,18 @@ class TriggerRuleRepo:
             rule = await session.get(TriggerRule, rule_id)
             if not rule:
                 return None
-            
-            if name is not None: rule.name = name
-            if description is not None: rule.description = description
-            if enabled is not None: rule.enabled = enabled
-            if priority is not None: rule.priority = priority
-            if event_type is not None: rule.event_type = event_type
-            
+
+            if name is not None:
+                rule.name = name
+            if description is not None:
+                rule.description = description
+            if enabled is not None:
+                rule.enabled = enabled
+            if priority is not None:
+                rule.priority = priority
+            if event_type is not None:
+                rule.event_type = event_type
+
             await session.commit()
             await session.refresh(rule)
             # Fetch with actions for consistency
@@ -166,13 +182,18 @@ class TriggerRuleRepo:
             action = await session.get(TriggerAction, action_id)
             if not action:
                 return None
-            
-            if action_type is not None: action.action_type = ActionType(action_type)
-            if payload is not None: action.payload = payload
-            if duration is not None: action.duration = duration
-            if cumulative is not None: action.cumulative = cumulative
-            if sort_order is not None: action.sort_order = sort_order
-            
+
+            if action_type is not None:
+                action.action_type = ActionType(action_type)
+            if payload is not None:
+                action.payload = payload
+            if duration is not None:
+                action.duration = duration
+            if cumulative is not None:
+                action.cumulative = cumulative
+            if sort_order is not None:
+                action.sort_order = sort_order
+
             await session.commit()
             await session.refresh(action)
             return action
