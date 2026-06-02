@@ -14,6 +14,7 @@ def _serialize_rule(rule) -> dict:
         "enabled": rule.enabled,
         "priority": rule.priority,
         "actions": [_serialize_action(a) for a in rule.actions],
+        "labels": [_serialize_label(a) for a in rule.labels],
     }
 
 
@@ -31,20 +32,38 @@ def _serialize_action(action) -> dict:
     }
 
 
+def _serialize_label(label) -> dict:
+    return {
+        "id": label.id,
+        "name": label.name,
+        "description": label.description,
+    }
+
+
 async def trigger_rules_loader(client_id: str, ws_manager: WebSocketManager):
     """
     Send all trigger rules to a single newly connected client.
     """
 
     repo = TriggerRuleRepo()
+
     trigger_rules = await repo.get_all_rules()
-    payload = [_serialize_rule(r) for r in trigger_rules]
+    trigger_rules_payload = [_serialize_rule(r) for r in trigger_rules]
+
+    labels = await repo.get_all_labels()
+    labels_payload = [_serialize_label(r) for r in labels]
 
     await ws_manager.send_personal_message(
-        message={"type": "trigger_rules:load", "payload": payload},
+        message={"type": "trigger_rules:load", "payload": trigger_rules_payload},
         client_id=client_id,
     )
+
+    await ws_manager.send_personal_message(
+        message={"type": "trigger_rules:load_labels", "payload": labels_payload},
+        client_id=client_id,
+    )
+
     logger.info(
-        f"[WSNotifier] Sent {len(payload)} trigger rules",
+        f"[WSNotifier] Sent {len(trigger_rules_payload)} trigger rules and {len(labels_payload)} labels",
         client_id=client_id,
     )

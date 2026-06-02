@@ -1,6 +1,6 @@
 import type { UnitSettings } from "@/types/units.types";
 import type { Sensor } from "@/types/sensor.types";
-import type { TriggerRule } from "@/types/events.types";
+import type { TriggerRule, TriggerRuleLabel } from "@/types/events.types";
 
 export type WebSocketStatus = 'connecting' | 'connected' | 'disconnected' | 'error';
 
@@ -133,6 +133,12 @@ export interface TriggerRulesInitialMessage {
     payload?: TriggerRule[];
 }
 
+export interface TriggerRuleLabelsInitialMessage {
+    id?: string;
+    type: 'trigger_rules:load_labels';
+    payload?: TriggerRuleLabel[];
+}
+
 export type WebSocketIncomingMessage =
     | ChatMessage
     | UserConnected
@@ -149,6 +155,7 @@ export type WebSocketIncomingMessage =
     | EventsHistoryMessage
     | EventsTriggeredMessage
     | TriggerRulesInitialMessage
+    | TriggerRuleLabelsInitialMessage
     ;
 
 export interface WebSocketConfig {

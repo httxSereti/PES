@@ -4,7 +4,6 @@ import type { TriggerRule } from '@/types';
 import type { RootState } from '@/store';
 
 const triggerRulesAdapter = createEntityAdapter<TriggerRule>();
-
 const triggerRulesSlice = createSlice({
     name: "triggerRules",
     initialState: triggerRulesAdapter.getInitialState(),

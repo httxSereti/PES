@@ -56,4 +56,5 @@ export type {
     TriggerAction,
     CreateTriggerAction,
     UpdateTriggerAction,
+    TriggerRuleLabel
 } from './events.types'
