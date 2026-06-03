@@ -139,6 +139,14 @@ export interface TriggerRuleLabelsInitialMessage {
     payload?: TriggerRuleLabel[];
 }
 
+export interface TriggerRuleUpdateMessage {
+    id?: string;
+    type: 'trigger_rules:update';
+    payload: {
+        id: string;
+        changes: Partial<TriggerRule>;
+    };
+}
 export type WebSocketIncomingMessage =
     | ChatMessage
     | UserConnected
@@ -156,6 +164,7 @@ export type WebSocketIncomingMessage =
     | EventsTriggeredMessage
     | TriggerRulesInitialMessage
     | TriggerRuleLabelsInitialMessage
+    | TriggerRuleUpdateMessage
     ;
 
 export interface WebSocketConfig {

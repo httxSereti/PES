@@ -1,4 +1,3 @@
-import { EventTypeBadge } from "@/components/common/events/event-badges";
 import TriggerRulesActions from "@/components/common/events/trigger-rules/actions/trigger-rules-actions";
 import { useWebSocket } from "@/hooks/useWebSocket";
 import { useAppDispatch } from "@/store/hooks";
@@ -29,19 +28,19 @@ export default function TriggerRulesCard({ triggerRule }: { triggerRule: Trigger
     const { sendCommand } = useWebSocket();
 
     const toggleStatus = async () => {
-        try {
-            const newStatus = !triggerRule.enabled;
+        const newStatus = !triggerRule.enabled;
 
+        try {
             dispatch(triggerRuleUpdated({
                 id: triggerRule.id,
                 changes: { enabled: newStatus }
             }));
 
-            // await sendCommand('sensors:update', {
-            //     [sensorId]: {
-            //         alarm_enable: newStatus,
-            //     },
-            // });
+            await sendCommand('trigger_rules:update', {
+                rule_id: triggerRule.id,
+                enabled: newStatus
+            });
+
         } catch (err: unknown) {
             const error: Error = err as Error;
 
@@ -49,6 +48,12 @@ export default function TriggerRulesCard({ triggerRule }: { triggerRule: Trigger
                 description: (error as Error).message,
                 position: "top-right",
             })
+
+            // revert optimistic ui
+            dispatch(triggerRuleUpdated({
+                id: triggerRule.id,
+                changes: { enabled: !newStatus }
+            }));
 
             console.error('Failed to update TriggerRule:', error);
         }
@@ -72,9 +77,7 @@ export default function TriggerRulesCard({ triggerRule }: { triggerRule: Trigger
                 </CardTitle>
 
                 <div className="flex items-center gap-1">
-                    <Button variant="ghost" size="icon" className="h-8 w-8">
-                        <Switch checked={triggerRule.enabled} onCheckedChange={toggleStatus} />
-                    </Button>
+                    <Switch checked={triggerRule.enabled} onCheckedChange={toggleStatus} />
 
                     <DropdownMenu>
                         <DropdownMenuTrigger asChild>
@@ -104,12 +107,23 @@ export default function TriggerRulesCard({ triggerRule }: { triggerRule: Trigger
                 <div className="flex flex-col">
                     <div className="flex-row">
                         <div className="flex flex-row items-center gap-2">
-                            <Activity size={15} className="text-gray-400/90" />
-                            <EventTypeBadge type={triggerRule.event_type} />
-                            <Tag size={15} className="text-gray-400/90" />
-                            {triggerRule.labels.map((label) => (
-                                <TriggerRuleLabelBadge key={label.id} name={label.name} />
-                            ))}
+
+                            <>
+                                <Activity size={15} className="text-gray-400/90" />
+                                <span className={`inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-medium border font-mono bg-violet-800/15 text-violet-400 border-violet-700/30`}>
+                                    {triggerRule.event_type}
+                                </span>
+                            </>
+
+                            {triggerRule.labels.length > 0 ? (
+                                <>
+                                    <Tag size={15} className="text-gray-400/90" />
+                                    {triggerRule.labels.map((label) => (
+                                        <TriggerRuleLabelBadge key={label.id} name={label.name} />
+                                    ))}
+                                </>
+                            ) : null}
+
                         </div>
 
                         <Separator className="my-3" />

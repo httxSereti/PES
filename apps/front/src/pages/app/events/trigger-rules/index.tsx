@@ -2,13 +2,12 @@ import type { Route } from ".react-router/types/src/pages/app/admin/+types/dashb
 import { useAppSelector } from "@/store/hooks";
 import { triggerRulesSelectors } from "@/store/slices/triggerRulesSlice";
 import { Link } from "react-router";
-import type { TriggerRule } from "@/types";
 import TriggerRulesCard from "@/components/common/events/trigger-rules/trigger-rules-card";
 
 // eslint-disable-next-line no-empty-pattern
 export function meta({ }: Route.MetaArgs) {
     return [
-        { title: "PES | Trigger Rules" },
+        { title: "PES - Trigger Rules" },
         { name: "description", content: "Trigger rules and actions" },
     ];
 }
@@ -16,17 +15,6 @@ export function meta({ }: Route.MetaArgs) {
 export default function TriggerRulesPage() {
     // const triggerRules = useAppSelector(state => state.triggerRules.entities);
     const triggerRules = useAppSelector(state => triggerRulesSelectors.selectAll(state));
-    console.log(triggerRules)
-
-    const triggerRulesByModule = triggerRules.reduce<Record<string, TriggerRule[]>>((acc, rule) => {
-        const module = rule.event_type.split("_").at(0) ?? "unknown";
-        if (!acc[module])
-            acc[module] = [];
-        acc[module].push(rule);
-        return acc;
-    }, {});
-
-    console.log(triggerRulesByModule)
 
     return (
         <div className="space-y-3 px-5 w-full">

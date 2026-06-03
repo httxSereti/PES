@@ -16,8 +16,8 @@ export type {
     PingMessage,
     PongMessage,
     TriggerRulesInitialMessage
+    TriggerRuleUpdateMessage
 } from './websocket.types';
-
 // Auth types
 export type {
     User,
