@@ -10,6 +10,7 @@ from .trigger_rules import (
     handle_trigger_rule_update,
     handle_trigger_rule_create,
     handle_trigger_rule_edit,
+    handle_trigger_rule_delete,
 )
 
 __all__ = [
@@ -22,4 +23,5 @@ __all__ = [
     "handle_trigger_rule_update",
     "handle_trigger_rule_create",
     "handle_trigger_rule_edit",
+    "handle_trigger_rule_delete",
 ]

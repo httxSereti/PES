@@ -75,6 +75,7 @@ from api.ws.commands import (
     handle_trigger_rule_update,
     handle_trigger_rule_create,
     handle_trigger_rule_edit,
+    handle_trigger_rule_delete,
 )
 
 
@@ -1816,6 +1817,7 @@ HANDLERS = {
     "trigger_rules:update": (handle_trigger_rule_update, Permission.ADMIN),
     "trigger_rules:create": (handle_trigger_rule_create, Permission.ADMIN),
     "trigger_rules:edit": (handle_trigger_rule_edit, Permission.ADMIN),
+    "trigger_rules:delete": (handle_trigger_rule_delete, Permission.ADMIN),
 }
 
 

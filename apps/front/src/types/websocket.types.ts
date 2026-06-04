@@ -161,6 +161,14 @@ export interface TriggerRuleCreateLabelMessage {
     type: 'trigger_rules:create_label';
     payload: TriggerRuleLabel;
 }
+
+export interface TriggerRuleDeleteMessage {
+    id?: string;
+    type: 'trigger_rules:delete';
+    payload: {
+        id: string;
+    };
+}
 export type WebSocketIncomingMessage =
     | ChatMessage
     | UserConnected
@@ -181,6 +189,7 @@ export type WebSocketIncomingMessage =
     | TriggerRuleUpdateMessage
     | TriggerRuleCreateMessage
     | TriggerRuleCreateLabelMessage
+    | TriggerRuleDeleteMessage
     ;
 
 export interface WebSocketConfig {

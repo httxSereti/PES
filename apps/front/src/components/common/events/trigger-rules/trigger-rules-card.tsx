@@ -1,15 +1,17 @@
 import TriggerRulesActions from "@/components/common/events/trigger-rules/actions/trigger-rules-actions";
 import { useWebSocket } from "@/hooks/useWebSocket";
 import { useAppDispatch } from "@/store/hooks";
-import { triggerRuleUpdated } from "@/store/slices/triggerRulesSlice";
+import { triggerRuleUpdated, triggerRuleRemoved } from "@/store/slices/triggerRulesSlice";
 import type { TriggerRule } from "@/types";
 import { Button } from "@pes/ui/components/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@pes/ui/components/card";
 import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuItem } from "@pes/ui/components/dropdown-menu";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@pes/ui/components/dialog";
 import { Separator } from "@pes/ui/components/separator";
 import { Switch } from "@pes/ui/components/switch";
 import { MoreVertical, Edit, Trash2, Activity, Zap, Tag } from "lucide-react";
 import { Link } from "react-router";
+import { useState } from "react";
 import { toast } from "sonner";
 
 
@@ -27,6 +29,33 @@ export function TriggerRuleLabelBadge({ name }: { name: string }) {
 export default function TriggerRulesCard({ triggerRule }: { triggerRule: TriggerRule }) {
     const dispatch = useAppDispatch()
     const { sendCommand } = useWebSocket();
+    const [confirmOpen, setConfirmOpen] = useState(false);
+    const [isDeleting, setIsDeleting] = useState(false);
+
+    const handleDelete = async () => {
+        setIsDeleting(true);
+        try {
+            await sendCommand('trigger_rules:delete', { rule_id: triggerRule.id });
+
+            dispatch(triggerRuleRemoved(triggerRule.id));
+            setConfirmOpen(false);
+
+            toast.success(`Trigger rule '${triggerRule.name}' deleted`, {
+                position: "bottom-right",
+            });
+        } catch (err: unknown) {
+            const error = err as Error;
+
+            toast.error("Can't delete TriggerRule", {
+                description: error.message,
+                position: "top-right",
+            });
+
+            console.error('Failed to delete TriggerRule:', error);
+        } finally {
+            setIsDeleting(false);
+        }
+    };
 
     const toggleStatus = async () => {
         const newStatus = !triggerRule.enabled;
@@ -96,12 +125,46 @@ export default function TriggerRulesCard({ triggerRule }: { triggerRule: Trigger
                                 </Link>
                             </DropdownMenuItem>
                             {/* <DropdownMenuSeparator /> */}
-                            <DropdownMenuItem className="text-red-600">
+                            <DropdownMenuItem
+                                className="text-red-600"
+                                onSelect={(e) => {
+                                    e.preventDefault();
+                                    setConfirmOpen(true);
+                                }}
+                            >
                                 <Trash2 className="mr-2 h-4 w-4" />
                                 <span>Delete</span>
                             </DropdownMenuItem>
                         </DropdownMenuContent>
                     </DropdownMenu>
+
+                    <Dialog open={confirmOpen} onOpenChange={setConfirmOpen}>
+                        <DialogContent className="sm:max-w-sm">
+                            <DialogHeader>
+                                <DialogTitle>Delete trigger rule</DialogTitle>
+                                <DialogDescription>
+                                    Delete <span className="font-mono text-foreground">{triggerRule.name}</span> and its actions? This can&apos;t be undone.
+                                </DialogDescription>
+                            </DialogHeader>
+                            <DialogFooter>
+                                <Button type="button" variant="ghost" onClick={() => setConfirmOpen(false)} disabled={isDeleting}>
+                                    Cancel
+                                </Button>
+                                <Button type="button" variant="destructive" onClick={handleDelete} disabled={isDeleting}>
+                                    {isDeleting ? (
+                                        <>
+                                            <span className="mr-2 h-3.5 w-3.5 animate-spin rounded-full border-2 border-current border-t-transparent" />
+                                            Deleting...
+                                        </>
+                                    ) : (
+                                        <>
+                                            <Trash2 className="mr-2 h-3.5 w-3.5" /> Delete
+                                        </>
+                                    )}
+                                </Button>
+                            </DialogFooter>
+                        </DialogContent>
+                    </Dialog>
                 </div>
 
             </CardHeader>

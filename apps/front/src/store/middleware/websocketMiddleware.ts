@@ -7,7 +7,7 @@ import { setError, setStatus, resetReconnect, incrementReconnect } from '@/store
 import { eventsHistoryLoaded, eventTriggered, type TriggeredEvent } from '@/store/slices/eventsSlice';
 import type { Sensor, TriggerRule, TriggerRuleLabel, UnitSettings, WebSocketConfig, WebSocketIncomingMessage, WebSocketMessage } from '@/types';
 import type { Middleware } from '@reduxjs/toolkit';
-import { triggerRulesInitialized, triggerRuleUpdated, triggerRuleAdded } from '@/store/slices/triggerRulesSlice';
+import { triggerRulesInitialized, triggerRuleUpdated, triggerRuleAdded, triggerRuleRemoved } from '@/store/slices/triggerRulesSlice';
 import { triggerRuleLabelsInitialized, triggerRuleLabelAdded } from '@/store/slices/triggerRuleLabelsSlice';
 
 export function createWebSocketMiddleware(config: WebSocketConfig): Middleware {
@@ -199,6 +199,10 @@ export function createWebSocketMiddleware(config: WebSocketConfig): Middleware {
 
                     case 'trigger_rules:create':
                         dispatch(triggerRuleAdded((message.payload as { rule: TriggerRule }).rule));
+                        break;
+
+                    case 'trigger_rules:delete':
+                        dispatch(triggerRuleRemoved((message.payload as { id: string }).id));
                         break;
 
                     case 'trigger_rules:load_labels':
