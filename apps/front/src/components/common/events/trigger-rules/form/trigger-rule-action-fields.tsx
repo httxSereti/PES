@@ -11,7 +11,7 @@ import { Separator } from "@pes/ui/components/separator";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@pes/ui/components/select";
 
 import { ActionType } from "@/types/events.types";
-import { LEVEL_OPERATIONS, type FormValues } from "./schema";
+import { type FormValues } from "./schema";
 
 export default function TriggerRuleActionFields({
     index,
@@ -119,33 +119,13 @@ export default function TriggerRuleActionFields({
                                 )}
                             />
                             <Controller
-                                name={`actions.${index}.operation`}
-                                control={control}
-                                render={({ field }) => (
-                                    <Field>
-                                        <FieldLabel>Operation</FieldLabel>
-                                        <Select value={field.value} onValueChange={field.onChange}>
-                                            <SelectTrigger>
-                                                <SelectValue placeholder="Select" />
-                                            </SelectTrigger>
-                                            <SelectContent position="item-aligned">
-                                                {LEVEL_OPERATIONS.map((op) => (
-                                                    <SelectItem key={op.label} value={op.value}>
-                                                        {op.label}
-                                                    </SelectItem>
-                                                ))}
-                                            </SelectContent>
-                                        </Select>
-                                    </Field>
-                                )}
-                            />
-                            <Controller
                                 name={`actions.${index}.value`}
                                 control={control}
                                 render={({ field, fieldState }) => (
                                     <Field data-invalid={fieldState.invalid}>
                                         <FieldLabel>Value</FieldLabel>
-                                        <Input {...field} aria-invalid={fieldState.invalid} placeholder="30, [5-10]" autoComplete="off" />
+                                        <FieldDescription>Operator is part of the value: 30, +5, -5, %+5, %-[5-10]</FieldDescription>
+                                        <Input {...field} aria-invalid={fieldState.invalid} placeholder="30, +5, %-[5-10]" autoComplete="off" />
                                         {fieldState.invalid && <FieldError errors={[fieldState.error]} />}
                                     </Field>
                                 )}

@@ -211,6 +211,16 @@ class TriggerRuleRepo:
             await session.commit()
             return result.rowcount > 0
 
+    async def delete_actions_for_rule(self, rule_id: str) -> int:
+        """Delete every action belonging to a rule. Returns the number removed."""
+        async with self._db.session_maker() as session:
+            stmt = delete(TriggerAction).where(
+                TriggerAction.trigger_rule_id == rule_id
+            )
+            result = await session.execute(stmt)
+            await session.commit()
+            return result.rowcount
+
     async def get_all_labels(self) -> List[TriggerRuleLabel]:
         """Get all labels"""
         async with self._db.session_maker() as session:

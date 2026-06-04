@@ -3,7 +3,7 @@ import { useNavigate } from "react-router";
 import { Controller, useFieldArray, useForm, type Resolver } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { toast } from "sonner";
-import { PlusSquare } from "lucide-react";
+import { PlusSquare, Save } from "lucide-react";
 
 import { Button } from "@pes/ui/components/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@pes/ui/components/card";
@@ -17,34 +17,38 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { EVENT_GROUPS } from "@/components/common/events/event-groups";
 import { useWebSocket } from "@/hooks/useWebSocket";
 import { useAppDispatch } from "@/store/hooks";
-import { triggerRuleAdded } from "@/store/slices/triggerRulesSlice";
+import { triggerRuleAdded, triggerRuleUpdated } from "@/store/slices/triggerRulesSlice";
 import { ActionType, type TriggerRule } from "@/types/events.types";
 
 import TriggerRuleActionFields from "./trigger-rule-action-fields";
 import TriggerRuleLabelSelect from "./trigger-rule-label-select";
-import { defaultAction, formSchema, toActionBody, type FormValues } from "./schema";
+import { defaultAction, formSchema, ruleToFormValues, toActionBody, type FormValues } from "./schema";
 
 const BACK_PATH = "/app/events/trigger-rules";
 
-export default function TriggerRuleForm() {
+export default function TriggerRuleForm({ rule }: { rule?: TriggerRule }) {
     const dispatch = useAppDispatch();
     const navigate = useNavigate();
     const { sendCommand } = useWebSocket();
     const [apiError, setApiError] = useState<string | null>(null);
 
+    const isEdit = !!rule;
+
     const form = useForm<FormValues>({
         // coerced number fields make zod's input type differ from its output;
         // cast keeps useForm typed on the output shape (FormValues).
         resolver: zodResolver(formSchema) as unknown as Resolver<FormValues>,
-        defaultValues: {
-            name: "",
-            description: "",
-            event_type: "",
-            priority: 0,
-            enabled: true,
-            labels: [],
-            actions: [defaultAction(ActionType.LEVEL)],
-        },
+        defaultValues: rule
+            ? ruleToFormValues(rule)
+            : {
+                name: "",
+                description: "",
+                event_type: "",
+                priority: 0,
+                enabled: true,
+                labels: [],
+                actions: [defaultAction(ActionType.LEVEL)],
+            },
     });
 
     const { fields, append, remove, update } = useFieldArray({ control: form.control, name: "actions" });
@@ -55,28 +59,34 @@ export default function TriggerRuleForm() {
     async function onSubmit(values: FormValues) {
         setApiError(null);
         try {
-            // Create the rule and all its actions in a single WS command
+            const body = {
+                event_type: values.event_type,
+                name: values.name,
+                description: values.description || null,
+                enabled: values.enabled,
+                priority: values.priority,
+                labels: values.labels,
+                actions: values.actions.map((action, i) => toActionBody(action, i)),
+            };
+
+            // Create or edit the rule (with its actions + labels) in a single WS command
             const result = await sendCommand<unknown, { status: string; message?: string; rule?: TriggerRule }>(
-                "trigger_rules:create",
-                {
-                    event_type: values.event_type,
-                    name: values.name,
-                    description: values.description || null,
-                    enabled: values.enabled,
-                    priority: values.priority,
-                    labels: values.labels,
-                    actions: values.actions.map((action, i) => toActionBody(action, i)),
-                },
+                isEdit ? "trigger_rules:edit" : "trigger_rules:create",
+                isEdit ? { rule_id: rule.id, ...body } : body,
             );
 
             if (result.status !== "ok" || !result.rule) {
-                throw new Error(result.message ?? "Server rejected the trigger rule");
+                throw new Error(result.message ?? `Server rejected the trigger rule`);
             }
 
             // keep the redux list in sync (it is otherwise only filled on WS connect)
-            dispatch(triggerRuleAdded(result.rule));
+            if (isEdit) {
+                dispatch(triggerRuleUpdated({ id: rule.id, changes: result.rule }));
+            } else {
+                dispatch(triggerRuleAdded(result.rule));
+            }
 
-            toast.success(`Trigger rule '${values.name}' created`, {
+            toast.success(`Trigger rule '${values.name}' ${isEdit ? "updated" : "created"}`, {
                 description: `${values.actions.length} action${values.actions.length > 1 ? "s" : ""} on ${values.event_type}`,
                 position: "bottom-right",
             });
@@ -85,7 +95,7 @@ export default function TriggerRuleForm() {
         } catch (err) {
             const message = err instanceof Error ? err.message : "An error has occurred";
             setApiError(message);
-            toast.error("Failed to create trigger rule", { description: message, position: "top-right" });
+            toast.error(`Failed to ${isEdit ? "update" : "create"} trigger rule`, { description: message, position: "top-right" });
         }
     }
 
@@ -93,7 +103,7 @@ export default function TriggerRuleForm() {
         <>
             {apiError && <p className="text-sm text-destructive">{apiError}</p>}
 
-            <form id="form-new-trigger-rule" onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+            <form id="form-trigger-rule" onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
                 {/* Rule details */}
                 <Card>
                     <CardHeader>
@@ -243,7 +253,11 @@ export default function TriggerRuleForm() {
                         {isSubmitting ? (
                             <>
                                 <span className="mr-2 h-3.5 w-3.5 animate-spin rounded-full border-2 border-current border-t-transparent" />
-                                Creating...
+                                {isEdit ? "Saving..." : "Creating..."}
+                            </>
+                        ) : isEdit ? (
+                            <>
+                                <Save className="mr-2 h-3.5 w-3.5" /> Save changes
                             </>
                         ) : (
                             <>

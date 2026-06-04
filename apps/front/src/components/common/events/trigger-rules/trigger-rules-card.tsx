@@ -9,6 +9,7 @@ import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuLab
 import { Separator } from "@pes/ui/components/separator";
 import { Switch } from "@pes/ui/components/switch";
 import { MoreVertical, Edit, Trash2, Activity, Zap, Tag } from "lucide-react";
+import { Link } from "react-router";
 import { toast } from "sonner";
 
 
@@ -88,9 +89,11 @@ export default function TriggerRulesCard({ triggerRule }: { triggerRule: Trigger
                         <DropdownMenuContent align="end" className="w-48">
                             <DropdownMenuLabel>Actions</DropdownMenuLabel>
                             <DropdownMenuSeparator />
-                            <DropdownMenuItem >
-                                <Edit className="mr-2 h-4 w-4" />
-                                <span>Edit</span>
+                            <DropdownMenuItem asChild>
+                                <Link to={`/app/events/trigger-rules/${triggerRule.id}/edit`}>
+                                    <Edit className="mr-2 h-4 w-4" />
+                                    <span>Edit</span>
+                                </Link>
                             </DropdownMenuItem>
                             {/* <DropdownMenuSeparator /> */}
                             <DropdownMenuItem className="text-red-600">

@@ -1,5 +1,5 @@
 import * as z from "zod";
-import { ActionType } from "@/types/events.types";
+import { ActionType, type TriggerAction, type TriggerRule } from "@/types/events.types";
 
 // ───────── Schema ─────────
 
@@ -18,8 +18,8 @@ export const actionSchema = z.discriminatedUnion("action_type", [
         action_type: z.literal(ActionType.LEVEL),
         units: z.string().min(1, "e.g. 123, 12RM, 23RO"),
         channels: z.string().min(1, "e.g. AB, ABRM"),
-        operation: z.string(),
-        value: z.string().min(1, "e.g. 30, +10, %-5"),
+        // the operator is part of the value itself (a MagicNumber): 30, +5, -5, %+5, %-[5-10]
+        value: z.string().min(1, "e.g. 30, +5, %-[5-10]"),
     }),
     baseAction.extend({
         action_type: z.literal(ActionType.MULT),
@@ -47,15 +47,6 @@ export const formSchema = z.object({
 export type FormValues = z.infer<typeof formSchema>;
 export type ActionValues = z.infer<typeof actionSchema>;
 
-// "set" is a UI sentinel — Radix Select forbids empty values; it maps to "" (the backend's set prefix).
-export const LEVEL_OPERATIONS = [
-    { value: "set", label: "set (=)" },
-    { value: "+", label: "add (+)" },
-    { value: "-", label: "subtract (-)" },
-    { value: "%+", label: "add % (%+)" },
-    { value: "%-", label: "subtract % (%-)" },
-] as const;
-
 /** Default payload when adding or switching to an action type. */
 export function defaultAction(action_type: ActionType): ActionValues {
     const base = { duration: -1, cumulative: false };
@@ -63,12 +54,51 @@ export function defaultAction(action_type: ActionType): ActionValues {
         case ActionType.PROFILE:
             return { ...base, action_type, profile: "", level_pct: 100 };
         case ActionType.LEVEL:
-            return { ...base, action_type, units: "", channels: "", operation: "set", value: "" };
+            return { ...base, action_type, units: "", channels: "", value: "" };
         case ActionType.MULT:
             return { ...base, action_type, target: "all", pct: 0, random: false };
         case ActionType.CHASTER_TIME_UPDATE:
             return { ...base, action_type, duration_minutes: 0, only_max: false };
     }
+}
+
+/** Map a persisted action's payload back onto the form's per-type fields. */
+export function actionToFormValues(action: TriggerAction): ActionValues {
+    const p = action.payload ?? {};
+    const base = { duration: action.duration ?? -1, cumulative: action.cumulative ?? false };
+    switch (action.action_type) {
+        case ActionType.PROFILE:
+            return { ...base, action_type: ActionType.PROFILE, profile: String(p["profile"] ?? ""), level_pct: Number(p["level_pct"] ?? 100) };
+        case ActionType.LEVEL:
+            return {
+                ...base,
+                action_type: ActionType.LEVEL,
+                units: String(p["units"] ?? ""),
+                channels: String(p["channels"] ?? ""),
+                value: String(p["value"] ?? ""),
+            };
+        case ActionType.MULT:
+            return { ...base, action_type: ActionType.MULT, target: String(p["target"] ?? "all"), pct: Number(p["pct"] ?? 0), random: Boolean(p["random"] ?? false) };
+        case ActionType.CHASTER_TIME_UPDATE:
+            return { ...base, action_type: ActionType.CHASTER_TIME_UPDATE, duration_minutes: Number(p["duration_minutes"] ?? 0), only_max: Boolean(p["only_max"] ?? false) };
+        default:
+            return defaultAction(ActionType.LEVEL);
+    }
+}
+
+/** Build form defaults from an existing rule (for the edit page). */
+export function ruleToFormValues(rule: TriggerRule): FormValues {
+    return {
+        name: rule.name,
+        description: rule.description ?? "",
+        event_type: rule.event_type,
+        priority: rule.priority,
+        enabled: rule.enabled,
+        labels: rule.labels.map((l) => l.name),
+        actions: rule.actions.length > 0
+            ? [...rule.actions].sort((a, b) => a.sort_order - b.sort_order).map(actionToFormValues)
+            : [defaultAction(ActionType.LEVEL)],
+    };
 }
 
 /** Turn a validated action into the WS { action_type, payload, duration, cumulative, sort_order } body. */
@@ -83,7 +113,6 @@ export function toActionBody(action: ActionValues, sort_order: number) {
             payload = {
                 units: action.units,
                 channels: action.channels,
-                operation: action.operation === "set" ? "" : action.operation,
                 value: action.value,
             };
             break;
