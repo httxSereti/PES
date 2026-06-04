@@ -31,11 +31,13 @@ async def handle_trigger_rule_create(
                 },
                 ...
             ],
+            "labels": [str, ...],  # label names, existing reused / new created
         }
     """
     name = payload.get("name")
     event_type = payload.get("event_type")
     actions = payload.get("actions", [])
+    labels = payload.get("labels", [])
 
     if not name or not event_type:
         return {"status": "error", "message": "Missing name or event_type"}
@@ -71,6 +73,9 @@ async def handle_trigger_rule_create(
                 sort_order=action.get("sort_order", index),
             )
 
+        # Resolve labels by name (reuse existing, create missing) and attach
+        created_labels = await repo.set_labels_for_rule(rule.id, labels)
+
         # Re-fetch with actions + labels eagerly loaded for serialization
         full_rule = await repo.get_rule(rule.id)
         serialized = _serialize_rule(full_rule)
@@ -82,6 +87,17 @@ async def handle_trigger_rule_create(
             event_type=event_type,
         )
         return {"status": "error", "message": "Can't create TriggerRule! (KeyError)"}
+
+    # Broadcast newly created labels so every client's label picker stays in sync
+    for label in created_labels:
+        ws_notifier.notify(
+            "trigger_rules:create_label",
+            {
+                "id": label.id,
+                "name": label.name,
+                "description": label.description,
+            },
+        )
 
     # Broadcast to every client so their lists stay in sync
     ws_notifier.notify("trigger_rules:create", {"rule": serialized})

@@ -219,3 +219,51 @@ class TriggerRuleRepo:
 
             result = await session.execute(stmt)
             return list(result.scalars().all())
+
+    async def set_labels_for_rule(
+        self, rule_id: str, label_names: List[str]
+    ) -> List[TriggerRuleLabel]:
+        """
+        Attach labels (by name) to a rule, creating any that don't exist yet.
+
+        Replaces the rule's current label set with the resolved labels.
+        Returns the labels that were newly created.
+        """
+        async with self._db.session_maker() as session:
+            rule = await session.get(
+                TriggerRule,
+                rule_id,
+                options=[selectinload(TriggerRule.labels)],
+            )
+            if not rule:
+                return []
+
+            labels: List[TriggerRuleLabel] = []
+            created: List[TriggerRuleLabel] = []
+            seen: set[str] = set()
+
+            for raw in label_names:
+                name = raw.strip()
+                if not name or name.lower() in seen:
+                    continue
+                seen.add(name.lower())
+
+                result = await session.execute(
+                    select(TriggerRuleLabel).where(TriggerRuleLabel.name == name)
+                )
+                label = result.scalar_one_or_none()
+
+                if label is None:
+                    label = TriggerRuleLabel(id=generate_id(), name=name)
+                    session.add(label)
+                    created.append(label)
+
+                labels.append(label)
+
+            rule.labels = labels
+            await session.commit()
+
+            for label in created:
+                await session.refresh(label)
+
+            return created

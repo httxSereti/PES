@@ -40,6 +40,7 @@ export const formSchema = z.object({
     event_type: z.string().min(1, "Please select an event."),
     priority: z.coerce.number().int().min(0).max(100),
     enabled: z.boolean(),
+    labels: z.array(z.string().min(1)),
     actions: z.array(actionSchema).min(1, "Add at least one action."),
 });
 

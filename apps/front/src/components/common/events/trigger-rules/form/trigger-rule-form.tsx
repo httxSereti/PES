@@ -21,6 +21,7 @@ import { triggerRuleAdded } from "@/store/slices/triggerRulesSlice";
 import { ActionType, type TriggerRule } from "@/types/events.types";
 
 import TriggerRuleActionFields from "./trigger-rule-action-fields";
+import TriggerRuleLabelSelect from "./trigger-rule-label-select";
 import { defaultAction, formSchema, toActionBody, type FormValues } from "./schema";
 
 const BACK_PATH = "/app/events/trigger-rules";
@@ -41,6 +42,7 @@ export default function TriggerRuleForm() {
             event_type: "",
             priority: 0,
             enabled: true,
+            labels: [],
             actions: [defaultAction(ActionType.LEVEL)],
         },
     });
@@ -62,6 +64,7 @@ export default function TriggerRuleForm() {
                     description: values.description || null,
                     enabled: values.enabled,
                     priority: values.priority,
+                    labels: values.labels,
                     actions: values.actions.map((action, i) => toActionBody(action, i)),
                 },
             );
@@ -179,6 +182,17 @@ export default function TriggerRuleForm() {
                                     )}
                                 />
                             </div>
+                            <Controller
+                                name="labels"
+                                control={form.control}
+                                render={({ field }) => (
+                                    <Field>
+                                        <FieldLabel>Labels</FieldLabel>
+                                        <FieldDescription>Pick existing labels or create new ones</FieldDescription>
+                                        <TriggerRuleLabelSelect value={field.value} onChange={field.onChange} />
+                                    </Field>
+                                )}
+                            />
                         </FieldGroup>
                     </CardContent>
                 </Card>

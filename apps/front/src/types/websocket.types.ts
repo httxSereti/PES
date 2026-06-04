@@ -155,6 +155,12 @@ export interface TriggerRuleCreateMessage {
         rule: TriggerRule;
     };
 }
+
+export interface TriggerRuleCreateLabelMessage {
+    id?: string;
+    type: 'trigger_rules:create_label';
+    payload: TriggerRuleLabel;
+}
 export type WebSocketIncomingMessage =
     | ChatMessage
     | UserConnected
@@ -174,6 +180,7 @@ export type WebSocketIncomingMessage =
     | TriggerRuleLabelsInitialMessage
     | TriggerRuleUpdateMessage
     | TriggerRuleCreateMessage
+    | TriggerRuleCreateLabelMessage
     ;
 
 export interface WebSocketConfig {
