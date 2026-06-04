@@ -182,9 +182,6 @@ with open("configurations/configuration.json") as json_file:
 BOT_LOG_LEVEL = logging.INFO
 BOT_MSG_LEVEL = logging.WARNING
 
-# Others REGEX
-REGEX_LEVEL_FORMAT = r"(%*[\\+,-]*)([1-9]*\d)$"
-
 # Values for arguments checking about power and timing
 CHECK_ARG = {
     "POWER_LEVEL": ("L", "H", "D"),
@@ -697,40 +694,6 @@ class Bot2b3(NextcordBot):
         if ctx:
             await ctx.response.send_message("invalid units argument")
         return ""
-
-    @staticmethod
-    def calc_new_val(newval: str, unit: str, val: str) -> int:
-        """
-        Decode level value
-        Args:
-            newval: new value
-            unit: 2B unit id
-            val: field to change
-
-        Returns:
-            the new value
-        """
-        current = store.get_unit_setting(UnitDict(unit), val, default=0)
-
-        if match := re.match(REGEX_LEVEL_FORMAT, newval):
-            if match.group(1) == "+":
-                new_val = min(current + int(match.group(2)), 99)
-            elif match.group(1) == "-":
-                new_val = max(current - int(match.group(2)), 0)
-            elif match.group(1) == "%+":
-                new_val = min(
-                    current + math.ceil(current * int(match.group(2)) / 100),
-                    99,
-                )
-            elif match.group(1) == "%-":
-                new_val = min(
-                    current - math.ceil(current * int(match.group(2)) / 100),
-                    99,
-                )
-            else:
-                new_val = int(match.group(2))
-            return new_val
-        return current
 
     @staticmethod
     async def check_mode(ctx, mode: str) -> Optional[int]:
