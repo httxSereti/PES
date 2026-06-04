@@ -10,10 +10,11 @@ const triggerRulesSlice = createSlice({
     reducers: {
         triggerRulesInitialized: triggerRulesAdapter.setAll,
         triggerRuleUpdated: triggerRulesAdapter.updateOne,
+        triggerRuleAdded: triggerRulesAdapter.addOne,
     },
 });
 
 export const triggerRulesSelectors: EntitySelectors<TriggerRule, RootState, string> = triggerRulesAdapter.getSelectors((state: RootState) => state.triggerRules);
 
-export const { triggerRulesInitialized, triggerRuleUpdated } = triggerRulesSlice.actions;
+export const { triggerRulesInitialized, triggerRuleUpdated, triggerRuleAdded } = triggerRulesSlice.actions;
 export default triggerRulesSlice.reducer;

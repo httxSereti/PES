@@ -73,6 +73,7 @@ from api.ws.commands import (
     handle_update_adj,
     handle_update_power_mode,
     handle_trigger_rule_update,
+    handle_trigger_rule_create,
 )
 
 
@@ -1812,6 +1813,7 @@ HANDLERS = {
     "units:update_power_mode": (handle_update_power_mode, Permission.WRITE_UNITS),
     "units:update_adj": (handle_update_adj, Permission.WRITE_UNITS),
     "trigger_rules:update": (handle_trigger_rule_update, Permission.ADMIN),
+    "trigger_rules:create": (handle_trigger_rule_create, Permission.ADMIN),
 }
 
 

@@ -6,7 +6,7 @@ from .units import (
     handle_update_adj,
     handle_update_power_mode,
 )
-from .trigger_rules import handle_trigger_rule_update
+from .trigger_rules import handle_trigger_rule_update, handle_trigger_rule_create
 
 __all__ = [
     "handle_stop",
@@ -16,4 +16,5 @@ __all__ = [
     "handle_update_adj",
     "handle_update_power_mode",
     "handle_trigger_rule_update",
+    "handle_trigger_rule_create",
 ]
