@@ -552,7 +552,15 @@ class UnitConnect:
                                             firmware_version=firmware_version,
                                         )
                                         self.settings_target["cnx_ok"] = True
-                                        # TODO: ws notify device is online
+
+                                        ws_notifier.notify(
+                                            "units:update",
+                                            {
+                                                "id": self.name,
+                                                "changes": {"cnx_ok": True},
+                                            },
+                                        )
+
                                         return self.serial_dev
                                     self.logger.info("2B not responding")
                                     self.serial_dev.close()
