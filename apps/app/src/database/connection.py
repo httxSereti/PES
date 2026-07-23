@@ -1,14 +1,16 @@
 from __future__ import annotations
 import pathlib
+import structlog
 import threading
 from typing import AsyncGenerator
 
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sessionmaker
-from sqlalchemy.orm import DeclarativeBase
-from utils import Logger
 
 _DB_PATH = pathlib.Path(__file__).parents[2] / "plunes.db"
 _DATABASE_URL = f"sqlite+aiosqlite:///{_DB_PATH}"
+
+logger = structlog.get_logger("pes")
+
 
 class Database:
     """
@@ -41,7 +43,7 @@ class Database:
             _DATABASE_URL,
             echo=False,
             future=True,
-            connect_args={"check_same_thread": False} # Needed for SQLite
+            connect_args={"check_same_thread": False},  # Needed for SQLite
         )
         self._session_maker = async_sessionmaker(
             self._engine, class_=AsyncSession, expire_on_commit=False
@@ -49,10 +51,10 @@ class Database:
 
     async def init(self) -> None:
         """
-        Ensures the database engine is ready. 
+        Ensures the database engine is ready.
         Note: Table creation is usually handled by Base.metadata.create_all in lifespan or via Migrations.
         """
-        Logger.info("[Database] SQLAlchemy engine initialized")
+        logger.info("[Database] SQLAlchemy engine initialized")
 
     @property
     def session_maker(self) -> async_sessionmaker:
@@ -61,7 +63,7 @@ class Database:
     async def close(self) -> None:
         """Dispose of the engine."""
         await self._engine.dispose()
-        Logger.info("[Database] Engine disposed")
+        logger.info("[Database] Engine disposed")
 
     async def get_session(self) -> AsyncGenerator[AsyncSession, None]:
         """Provides an async session."""

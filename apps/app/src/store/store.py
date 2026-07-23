@@ -118,18 +118,18 @@ class Store:
             unit_id = unit_dict.value
             if unit_id not in self._units_settings:
                 raise KeyError(f"Unit '{unit_id}' doesn't exist")
-                
+
             unit_state = self._units_settings[unit_id]
-            
-            if key == "ch_A" or key == "ch_A_max":
+
+            if key == "ch_A":
                 limit_a = unit_state.get("ch_A_limit", {}).get("max", 100)
                 if int(value) > limit_a:
                     value = limit_a
-            elif key == "ch_B" or key == "ch_B_max":
+            elif key == "ch_B":
                 limit_b = unit_state.get("ch_B_limit", {}).get("max", 100)
                 if int(value) > limit_b:
                     value = limit_b
-                    
+
             unit_state[key] = value
 
     def update_unit_dict(self, unit_dict: UnitDict, changes: Dict):
@@ -137,27 +137,18 @@ class Store:
             unit_id = unit_dict.value
             if unit_id not in self._units_settings:
                 raise KeyError(f"Unit '{unit_id}' doesn't exist")
-                
+
             unit_state = self._units_settings[unit_id]
-            
+
             if "ch_A" in changes:
                 limit_a = unit_state.get("ch_A_limit", {}).get("max", 100)
                 if int(changes["ch_A"]) > limit_a:
                     changes["ch_A"] = limit_a
-            if "ch_A_max" in changes:
-                limit_a = unit_state.get("ch_A_limit", {}).get("max", 100)
-                if int(changes["ch_A_max"]) > limit_a:
-                    changes["ch_A_max"] = limit_a
-                    
             if "ch_B" in changes:
                 limit_b = unit_state.get("ch_B_limit", {}).get("max", 100)
                 if int(changes["ch_B"]) > limit_b:
                     changes["ch_B"] = limit_b
-            if "ch_B_max" in changes:
-                limit_b = unit_state.get("ch_B_limit", {}).get("max", 100)
-                if int(changes["ch_B_max"]) > limit_b:
-                    changes["ch_B_max"] = limit_b
-                    
+
             unit_state.update(changes)
 
     def get_unit_dict(self, unit_dict: UnitDict) -> Dict:

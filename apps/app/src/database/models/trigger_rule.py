@@ -8,6 +8,8 @@ from database.base import Base
 
 if TYPE_CHECKING:
     from .trigger_action import TriggerAction
+    from .trigger_rule_label import TriggerRuleLabel
+
 
 class TriggerRule(Base):
     __tablename__ = "trigger_rules"
@@ -19,9 +21,21 @@ class TriggerRule(Base):
     enabled: Mapped[bool] = mapped_column(Boolean, default=True)
     priority: Mapped[int] = mapped_column(Integer, default=0)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
-    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime, default=datetime.utcnow, onupdate=datetime.utcnow
+    )
 
     # Relationships
     actions: Mapped[List[TriggerAction]] = relationship(
-        "TriggerAction", back_populates="rule", cascade="all, delete-orphan", lazy="selectin"
+        "TriggerAction",
+        back_populates="rule",
+        cascade="all, delete-orphan",
+        lazy="selectin",
+    )
+
+    labels: Mapped[List[TriggerRuleLabel]] = relationship(
+        "TriggerRuleLabel",
+        secondary="trigger_rule_label_map",
+        back_populates="rules",
+        lazy="selectin",
     )

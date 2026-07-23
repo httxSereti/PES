@@ -35,6 +35,7 @@ export interface TriggerRule {
     created_at: Date;
     updated_at: Date;
     actions: TriggerAction[];
+    labels: TriggerRuleLabel[];
 }
 
 export type CreateTriggerRule = Omit<TriggerRule, 'created_at' | 'updated_at' | 'actions'> & {
@@ -43,3 +44,9 @@ export type CreateTriggerRule = Omit<TriggerRule, 'created_at' | 'updated_at' | 
 };
 
 export type UpdateTriggerRule = Partial<Omit<TriggerRule, 'id' | 'created_at' | 'updated_at' | 'actions'>>;
+
+export interface TriggerRuleLabel {
+    id: string;
+    name: string;
+    description: string;
+}

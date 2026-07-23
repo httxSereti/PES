@@ -7,7 +7,6 @@
 # task with 0,5 cycle for calc new value for each channel
 
 import asyncio
-import datetime
 import json
 import logging
 import math
@@ -18,7 +17,6 @@ import random
 import re
 import time
 import traceback
-import uuid
 from functools import partial
 from threading import Thread
 from typing import Optional
@@ -28,7 +26,6 @@ import uvicorn
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 
-import aiohttp
 import bluetooth  # type: ignore
 import dotenv
 import nextcord
@@ -40,6 +37,7 @@ from bleak.exc import BleakDeviceNotFoundError
 from nextcord import Interaction, SlashOption
 from nextcord.ext.commands import Bot as NextcordBot
 from nextcord.ext import tasks
+from datetime import datetime
 
 from pprint import pprint
 
@@ -48,7 +46,7 @@ from constants import DISCORD_GUILD_IDS, BT_UNITS, MODE_2B
 from typings import *
 from typings import Permission, UnitDict
 
-from utils import Logger, calculate_magic_number
+from utils import calculate_magic_number, initialize_logger, get_cogs
 from utils import *
 
 from store import Store
@@ -74,10 +72,60 @@ from api.ws.commands import (
     handle_update_mode,
     handle_update_adj,
     handle_update_power_mode,
+    handle_trigger_rule_update,
+    handle_trigger_rule_create,
+    handle_trigger_rule_edit,
+    handle_trigger_rule_delete,
 )
+
 
 # load env
 dotenv.load_dotenv("config.env")
+
+# Configure logger to make log readable
+start_time = datetime.now()
+session_name = start_time.strftime("%d_%m_%y_%Hh%M")
+logger = initialize_logger(session_name=session_name, level=logging.INFO)
+
+
+# init logging TODO: refactor here
+std_logger = logging.getLogger()
+
+
+# filter
+def filter_Logger(record):
+    # if record.module == 'proactor_events':
+    #   return False
+    return True
+
+
+# File
+logging.basicConfig(
+    level=logging.DEBUG,
+    format="[%(asctime)s] %(threadName)s %(module)s %(message)s",
+    datefmt="%H:%M:%S",
+    filename="log.txt",
+    filemode="w",
+)
+# Console
+console = logging.StreamHandler()
+console.setLevel(logging.INFO)
+console.setFormatter(
+    logging.Formatter("[%(asctime)s] %(threadName)s %(module)s %(message)s")
+)
+console.addFilter(filter_Logger)
+std_logger.addHandler(console)
+# Discord Log
+# debug
+Logger_nextcord = logging.getLogger("nextcord")
+Logger_nextcord.setLevel(logging.INFO)
+handler_nextcord = logging.FileHandler(
+    filename="nextcord.log", encoding="utf-8", mode="w"
+)
+handler_nextcord.setFormatter(
+    logging.Formatter("[%(asctime)s]%(levelname)s:%(name)s: %(message)s")
+)
+Logger_nextcord.addHandler(handler_nextcord)
 
 # DEBUG setting
 ENABLE_MK2BT = True  # Disable mk2bt thread
@@ -137,9 +185,6 @@ with open("configurations/configuration.json") as json_file:
 BOT_LOG_LEVEL = logging.INFO
 BOT_MSG_LEVEL = logging.WARNING
 
-# Others REGEX
-REGEX_LEVEL_FORMAT = r"(%*[\\+,-]*)([1-9]*\d)$"
-
 # Values for arguments checking about power and timing
 CHECK_ARG = {
     "POWER_LEVEL": ("L", "H", "D"),
@@ -166,10 +211,10 @@ FW_2B_CMD = {
 
 # fields used for profile
 PROFILE_FIELDS = [
-    "ch_A_max",
-    "ch_B_max",
-    "adj_1_max",
-    "adj_2_max",
+    "ch_A",
+    "ch_B",
+    "adj_1",
+    "adj_2",
     "adj_3",
     "adj_4",
     "mode",
@@ -188,48 +233,6 @@ PROFILE_FIELDS = [
     "ramp_time",
     "ramp_wave",
 ]
-
-
-# --start---------
-
-# init logging
-logger = logging.getLogger()
-
-
-# filter
-def filter_Logger(record):
-    # if record.module == 'proactor_events':
-    #   return False
-    return True
-
-
-# File
-logging.basicConfig(
-    level=logging.DEBUG,
-    format="[%(asctime)s] %(threadName)s %(module)s %(message)s",
-    datefmt="%H:%M:%S",
-    filename="log.txt",
-    filemode="w",
-)
-# Console
-console = logging.StreamHandler()
-console.setLevel(logging.INFO)
-console.setFormatter(
-    logging.Formatter("[%(asctime)s] %(threadName)s %(module)s %(message)s")
-)
-console.addFilter(filter_Logger)
-logger.addHandler(console)
-# Discord Log
-# debug
-Logger_nextcord = logging.getLogger("nextcord")
-Logger_nextcord.setLevel(logging.INFO)
-handler_nextcord = logging.FileHandler(
-    filename="nextcord.log", encoding="utf-8", mode="w"
-)
-handler_nextcord.setFormatter(
-    logging.Formatter("[%(asctime)s]%(levelname)s:%(name)s: %(message)s")
-)
-Logger_nextcord.addHandler(handler_nextcord)
 
 # init Store
 store = Store()
@@ -441,6 +444,10 @@ class UnitConnect:
         }
         # serial access for the BT connexion
         self.serial_dev = None
+
+        # bind logger to unit for better logging
+        self.logger = logger.bind(unit_name=unit_name)
+
         # start trying to connect the 2B
         self.detect()
 
@@ -455,7 +462,7 @@ class UnitConnect:
         """
         reply = reply_raw.decode().rstrip("\r\n")
 
-        Logger.debug("{} 2B reply : {}".format(self.name, reply))
+        self.logger.debug("Received reply from 2B unit", reply=reply)
 
         if m := re.match(
             r"^(\d+):(\d+):(\d+):(\d+):(\d+):(\d+):([L,H]):(\d+):(\d+):(\d+):(\d+):(\d+):(2\..+)$",
@@ -474,15 +481,8 @@ class UnitConnect:
             self.settings_return["adj_4"] = int(m[11])
             self.settings_return["adj_3"] = int(m[12])
 
-            # ws_notifier.notify(
-            #     "units:update",
-            #     {self.name: {**self.settings_return}},
-            # )
-
             return str(m[13])  # return firmware version
-        Logger.info(
-            "Fail to parse the 2B {} reply {} -> reconnecting".format(self.name, reply)
-        )
+        self.logger.info("Fail to parse the 2B reply -> reconnecting", reply=reply)
         self.detect()
         return None
 
@@ -496,32 +496,36 @@ class UnitConnect:
         # close previous open (lost connexion)
         if self.serial_dev:
             if self.serial_dev.isOpen():
-                Logger.debug("{} close serial port".format(self.name))
+                self.logger.debug("close serial port")
                 self.serial_dev.close()
             else:
-                Logger.debug("{} port already close".format(self.name))
+                self.logger.debug("port already close")
 
         # loop for BT serial connexion until succes
         while True:
-            Logger.info("{} BTscan for devices".format(self.name))
+            self.logger.info("Scanning for device using BT...")
             nearby_devices = bluetooth.discover_devices(
                 duration=1, lookup_names=True, flush_cache=True, lookup_class=False
             )
-            #
+
+            # don't spam
             if len(nearby_devices) == 0:
-                time.sleep(5)  # BT desactivate
+                time.sleep(5)
+
             # Loop on BT device to find the good one
             for addr, name in nearby_devices:
                 if self.name == name:
-                    Logger.debug("{} detected in {}".format(self.name, addr))
+                    self.logger.debug(
+                        "Detected an UNIT associated on machine", address=addr
+                    )
                     com_ports = list(serial.tools.list_ports.comports())
                     addr = addr.replace(":", "")
+
                     # Find the associated COM port
-                    for com, des, hwenu in com_ports:
+                    for com, _des, hwenu in com_ports:
                         if addr in hwenu:
-                            Logger.debug(
-                                "{} serial port detected {}".format(self.name, com)
-                            )
+                            self.logger.debug("Serial port detected", port=com)
+
                             for retry in range(1, SERIAL_RETRY):
                                 try:
                                     self.serial_dev = serial.Serial(
@@ -533,10 +537,8 @@ class UnitConnect:
                                         stopbits=serial.STOPBITS_ONE,
                                     )
                                 except serial.SerialException:
-                                    Logger.debug(
-                                        "{} serial retry open {}".format(
-                                            self.name, retry
-                                        )
+                                    self.logger.debug(
+                                        "Serial retry open", retry_count=retry
                                     )
                                     time.sleep(0.5)
                                 else:
@@ -545,22 +547,25 @@ class UnitConnect:
                                         self.serial_dev.readline()
                                     )
                                     if firmware_version is not None:
-                                        Logger.info(
-                                            f"{self.name} serial access to 2B is OK"
-                                        )
-                                        Logger.debug(
-                                            f"{self.name} version={firmware_version}"
+                                        self.logger.info(
+                                            "Serial access to 2B is OK",
+                                            firmware_version=firmware_version,
                                         )
                                         self.settings_target["cnx_ok"] = True
-                                        return self.serial_dev
-                                    Logger.info(
-                                        "{} 2B not responding".format(self.name)
-                                    )
-                                    self.serial_dev.close()
-                                    Logger.debug(
-                                        "{} serial retry open {}".format(
-                                            self.name, retry
+
+                                        ws_notifier.notify(
+                                            "units:update",
+                                            {
+                                                "id": self.name,
+                                                "changes": {"cnx_ok": True},
+                                            },
                                         )
+
+                                        return self.serial_dev
+                                    self.logger.info("2B not responding")
+                                    self.serial_dev.close()
+                                    self.logger.debug(
+                                        "Serial retry open", retry_count=retry
                                     )
                                     time.sleep(0.5)
 
@@ -597,13 +602,11 @@ class UnitConnect:
         for field in FW_2B_CMD.keys():
             # check if update is needed
             if self.settings_return[field] != self.settings_target[field]:
-                Logger.info(
-                    "[{}] Adjust '{}' {} -> {}".format(
-                        self.name,
-                        field,
-                        self.settings_return[field],
-                        self.settings_target[field],
-                    )
+                self.logger.info(
+                    "Adjust 2B Settings",
+                    field=field,
+                    previous=self.settings_return[field],
+                    new=self.settings_target[field],
                 )
 
                 updated_fields[field] = self.settings_target[field]
@@ -614,7 +617,7 @@ class UnitConnect:
                     cmd = FW_2B_CMD[field].split("-")[int(self.settings_target[field])]
                 # if something to do
                 if cmd != "":
-                    Logger.debug("{} cmd {}".format(self.name, cmd))
+                    self.logger.debug("Sending 2B command", cmd=cmd)
                     # check if target and 2B synchronized on the next call
                     self.settings_target["sync"] = False
                     no_updated = False
@@ -670,10 +673,8 @@ def thread_bt_unit(unit_str: str) -> None:
                 else:
                     time.sleep(0.1)
                     cycle = cycle + 1
-        except Exception as err:
-            Logger.info(
-                f"[BTUnit] Thread error with estim unit {unit_str} : {err=}, {type(err)=}"
-            )
+        except Exception:
+            logger.exception("ThreadError for unit", unit_name=unit_str)
             time.sleep(30)
 
 
@@ -704,40 +705,6 @@ class Bot2b3(NextcordBot):
         if ctx:
             await ctx.response.send_message("invalid units argument")
         return ""
-
-    @staticmethod
-    def calc_new_val(newval: str, unit: str, val: str) -> int:
-        """
-        Decode level value
-        Args:
-            newval: new value
-            unit: 2B unit id
-            val: field to change
-
-        Returns:
-            the new value
-        """
-        current = store.get_unit_setting(UnitDict(unit), val, default=0)
-
-        if match := re.match(REGEX_LEVEL_FORMAT, newval):
-            if match.group(1) == "+":
-                new_val = min(current + int(match.group(2)), 99)
-            elif match.group(1) == "-":
-                new_val = max(current - int(match.group(2)), 0)
-            elif match.group(1) == "%+":
-                new_val = min(
-                    current + math.ceil(current * int(match.group(2)) / 100),
-                    99,
-                )
-            elif match.group(1) == "%-":
-                new_val = min(
-                    current - math.ceil(current * int(match.group(2)) / 100),
-                    99,
-                )
-            else:
-                new_val = int(match.group(2))
-            return new_val
-        return current
 
     @staticmethod
     async def check_mode(ctx, mode: str) -> Optional[int]:
@@ -903,7 +870,8 @@ class Bot2b3(NextcordBot):
         # Event system (set from lifespan after FastAPI starts)
         self._action_queue: ActionQueue | None = None
         self._dispatcher: EventDispatcher | None = None
-        Logger.info("Bot initialized")
+
+        logger.info("Discord bot initalized")
 
         self.previous_2B_sync = False  # previous global 2B sync
 
@@ -1029,7 +997,7 @@ class Bot2b3(NextcordBot):
                         threads_settings[bck_bt_name]["updated"] = True
                         for field in bck_settings[bck_bt_name]:
                             if field in PROFILE_FIELDS:
-                                if field in ("ch_A_max", "ch_B_max"):
+                                if field in ("ch_A", "ch_B"):
                                     threads_settings[bck_bt_name][field] = int(
                                         bck_settings[bck_bt_name][field]
                                         * lvl_prct_arg
@@ -1067,7 +1035,7 @@ class Bot2b3(NextcordBot):
                             "{} chA {}: lvl {} Ramp {}% {}° ".format(
                                 unit_name,
                                 threads_settings[unit_name]["ch_A_use"],
-                                threads_settings[unit_name]["ch_A_max"],
+                                threads_settings[unit_name]["ch_A"],
                                 threads_settings[unit_name]["ch_A_ramp_prct"],
                                 threads_settings[unit_name]["ch_A_ramp_phase"],
                             )
@@ -1076,7 +1044,7 @@ class Bot2b3(NextcordBot):
                             "{} chB {}: lvl {} Ramp {}% {}° ".format(
                                 unit_name,
                                 threads_settings[unit_name]["ch_B_use"],
-                                threads_settings[unit_name]["ch_B_max"],
+                                threads_settings[unit_name]["ch_B"],
                                 threads_settings[unit_name]["ch_B_ramp_prct"],
                                 threads_settings[unit_name]["ch_B_ramp_phase"],
                             )
@@ -1085,7 +1053,7 @@ class Bot2b3(NextcordBot):
                             "{} {}: lvl {} Ramp {}% {}° ".format(
                                 unit_name,
                                 MODE_2B[threads_settings[unit_name]["mode"]]["adj_1"],
-                                threads_settings[unit_name]["adj_1_max"],
+                                threads_settings[unit_name]["adj_1"],
                                 threads_settings[unit_name]["adj_1_ramp_prct"],
                                 threads_settings[unit_name]["adj_1_ramp_phase"],
                             )
@@ -1094,7 +1062,7 @@ class Bot2b3(NextcordBot):
                             "{} {}: lvl {} Ramp {}% {}° ".format(
                                 unit_name,
                                 MODE_2B[threads_settings[unit_name]["mode"]]["adj_2"],
-                                threads_settings[unit_name]["adj_2_max"],
+                                threads_settings[unit_name]["adj_2"],
                                 threads_settings[unit_name]["adj_2_ramp_prct"],
                                 threads_settings[unit_name]["adj_2_ramp_phase"],
                             )
@@ -1120,44 +1088,6 @@ class Bot2b3(NextcordBot):
                         )
                         # end
                     await interaction.response.send_message("\n".join(txt))
-
-        # Event management commands removed — use REST API /api/trigger-groups
-
-        @self.slash_command(name="mode", description="Change Estim mode")
-        async def bot_mode(
-            interaction: Interaction,
-            unit_arg: str = SlashOption(
-                name="unit",
-                description="Estim unit impacted with the new mode",
-                required=True,
-                choices=CHOICE_UNIT,
-            ),
-            mode_arg: str = SlashOption(
-                name="mode",
-                description="New mode for the selected units",
-                required=True,
-                choices=CHOICE_MODE,
-            ),
-        ) -> None:
-            if await check_permission(interaction, "administrator"):
-                mode_id = await self.check_mode(interaction, mode_arg)
-                if mode_id:
-                    for unit_num in await self.check_unit(interaction, unit_arg):
-                        unit = UnitDict(f"UNIT{unit_num}")
-
-                        changes = {"updated": True, "mode": mode_id}
-
-                        # reset adj_2 pour les modes sans adj_2
-                        if MODE_2B[mode_id]["adj_2"] == "":
-                            changes["adj_2"] = store.get_thread_setting(
-                                unit, "adj_1", default=0
-                            )
-
-                        store.update_thread_settings(unit, changes)
-                    await interaction.response.send_message(
-                        "new mode for unit {} is {}".format(unit_arg, mode_arg)
-                    )
-            return None
 
         @self.slash_command(name="usage", description="Change channel usage")
         async def bot_usage(
@@ -1193,257 +1123,6 @@ class Bot2b3(NextcordBot):
                         unit_arg, ch_arg, usage_arg
                     )
                 )
-            return None
-
-        #
-        # ---------Refactoring
-        #
-        @self.slash_command(name="multi", description="manuel multiplier change")
-        async def bot_multi(
-            interaction: Interaction,
-            usage_arg: str = SlashOption(
-                name="usage",
-                description="Estim ouput usage",
-                choices=CHOICE_USAGE_ALL,
-                required=True,
-            ),
-            prct_arg: int = SlashOption(
-                name="prct",
-                description="new percentage for the multiplier",
-                required=True,
-                min_value=-50,
-                default=100,
-                max_value=200,
-            ),
-        ):
-            if await check_permission(interaction, "administrator"):
-                for unit in BT_UNITS:
-                    for ch in ["A", "B"]:
-                        # find channel with this usage
-                        if (
-                            threads_settings[unit][f"ch_{ch}_use"] == usage_arg.lower()
-                            or usage_arg.lower() == "all"
-                        ):
-                            ch_name = f"ch_{ch}_multiplier"
-                            threads_settings[unit]["updated"] = True
-                            threads_settings[unit][ch_name] = prct_arg
-                await interaction.response.send_message("Multiplier updated")
-                return None
-
-        # ----- Quick change
-
-        # --- Quick Level ------
-        @self.slash_command(name="add", description="quick increase level")
-        async def bot_add(
-            interaction: Interaction,
-            usage_arg: str = SlashOption(
-                name="usage",
-                description="Estim ouput usage",
-                choices=CHOICE_USAGE_ALL,
-                required=True,
-            ),
-        ):
-            if await check_permission(interaction, "administrator"):
-                txt = []
-                level_arg = "%+5"
-                for unit in BT_UNITS:
-                    for ch in ["A", "B"]:
-                        # find channel with this usage
-                        if (
-                            threads_settings[unit][f"ch_{ch}_use"] == usage_arg.lower()
-                            or usage_arg.lower() == "all"
-                        ):
-                            ch_name = f"ch_{ch}_max"
-                            level_arg = await self.check_level(interaction, level_arg)
-                            if level_arg:
-                                new_val = self.calc_new_val(level_arg, unit, ch_name)
-                                txt.append(
-                                    ">>new level for unit {} ch {} ({}) change from {} to {}".format(
-                                        unit,
-                                        ch,
-                                        threads_settings[unit][f"ch_{ch}_use"],
-                                        threads_settings[unit][ch_name],
-                                        new_val,
-                                    )
-                                )
-                                threads_settings[unit]["updated"] = True
-                                threads_settings[unit][ch_name] = new_val
-                if len(txt) == 0:
-                    await interaction.response.send_message(
-                        "There are no channel with this usage"
-                    )
-                else:
-                    await interaction.response.send_message("\n".join(txt))
-                return None
-
-        @self.slash_command(name="sub", description="quick decrease level")
-        async def bot_sub(
-            interaction: Interaction,
-            usage_arg: str = SlashOption(
-                name="usage",
-                description="Estim ouput usage",
-                choices=CHOICE_USAGE_ALL,
-                required=True,
-            ),
-        ):
-            txt = []
-            level_arg = "%-5"
-            for unit in BT_UNITS:
-                for ch in ["A", "B"]:
-                    # find channel with this usage
-                    if (
-                        threads_settings[unit][f"ch_{ch}_use"] == usage_arg.lower()
-                        or usage_arg.lower() == "all"
-                    ):
-                        ch_name = f"ch_{ch}_max"
-                        level_arg = await self.check_level(interaction, level_arg)
-                        if level_arg:
-                            new_val = self.calc_new_val(level_arg, unit, ch_name)
-                            txt.append(
-                                ">>new level for unit {} ch {} ({}) change from {} to {}".format(
-                                    unit,
-                                    ch,
-                                    threads_settings[unit][f"ch_{ch}_use"],
-                                    threads_settings[unit][ch_name],
-                                    new_val,
-                                )
-                            )
-                            threads_settings[unit]["updated"] = True
-                            threads_settings[unit][ch_name] = new_val
-            if len(txt) == 0:
-                await interaction.response.send_message(
-                    "There are no channel with this usage"
-                )
-            else:
-                await interaction.response.send_message("\n".join(txt))
-            return None
-
-        # ----- LEVEL SETTINGS -----
-        @self.slash_command(name="level")
-        async def bot_level(interaction: nextcord.Interaction):
-            pass
-
-        @bot_level.subcommand(description="Advanced Estim level change")
-        async def advanced(
-            interaction: Interaction,
-            unit_arg: str = SlashOption(
-                name="unit",
-                description="units impacted",
-                choices=CHOICE_UNIT_RANDOM,
-                required=True,
-            ),
-            dest_arg: str = SlashOption(
-                name="channels",
-                description="channels impacted",
-                choices=CHOICE_CHANNEL_RANDOM,
-                required=True,
-            ),
-            level_op: str = SlashOption(
-                name="operation",
-                description="how the level is changing",
-                choices=CHOICE_LEVEL_ACTION,
-                required=True,
-            ),
-            level_arg_min: int = SlashOption(
-                name="level_start",
-                description="min or fixed level",
-                required=True,
-            ),
-            level_arg_max: int = SlashOption(
-                name="level_max",
-                description="max level",
-                required=False,
-            ),
-        ) -> None:
-            if await check_permission(interaction, "administrator"):
-                level_arg = level_op + str(level_arg_min)
-                if level_arg_max:
-                    level_arg = level_arg + ">" + str(level_arg_max)
-                txt = []
-                for unit in await self.check_unit(interaction, unit_arg):
-                    unit = "UNIT" + str(unit)
-                    for ch in await self.check_ch(interaction, dest_arg):
-                        ch_name = f"ch_{ch}_max"
-                        level_arg_ch = await self.check_level(interaction, level_arg)
-                        if level_arg:
-                            new_val = self.calc_new_val(level_arg_ch, unit, ch_name)
-                            txt.append(
-                                ">>new level for unit {} ch {} ({}) change from {} to {}".format(
-                                    unit,
-                                    ch,
-                                    threads_settings[unit][f"ch_{ch}_use"],
-                                    threads_settings[unit][ch_name],
-                                    new_val,
-                                )
-                            )
-                            threads_settings[unit]["updated"] = True
-                            threads_settings[unit][ch_name] = new_val
-                await interaction.response.send_message("\n".join(txt))
-            return None
-
-        @bot_level.subcommand(description="Estim level change by use")
-        async def usage(
-            interaction: Interaction,
-            usage_arg: str = SlashOption(
-                name="usage",
-                description="Estim ouput usage",
-                choices=CHOICE_USAGE,
-                required=True,
-            ),
-            level_op: str = SlashOption(
-                name="operation",
-                description="how the level is changing",
-                choices=CHOICE_LEVEL_ACTION,
-                required=True,
-            ),
-            level_arg_min: int = SlashOption(
-                name="level_start",
-                description="min or fixed level",
-                required=True,
-            ),
-            level_arg_max: int = SlashOption(
-                name="level_max",
-                description="max level",
-                required=False,
-            ),
-        ) -> None:
-            # only commands for increase level are permitted all the time
-            if (
-                level_op == "+"
-                or level_op == "%+"
-                or await check_permission(interaction, "administrator")
-            ):
-                level_arg = level_op + str(level_arg_min)
-                # when range of level is used
-                if level_arg_max:
-                    level_arg = level_arg + ">" + str(level_arg_max)
-                txt = []
-                for unit in BT_UNITS:
-                    for ch in ["A", "B"]:
-                        # find channel with this usage
-                        if threads_settings[unit][f"ch_{ch}_use"] == usage_arg.lower():
-                            ch_name = f"ch_{ch}_max"
-                            level_arg = await self.check_level(interaction, level_arg)
-                            if level_arg:
-                                new_val = self.calc_new_val(level_arg, unit, ch_name)
-                                txt.append(
-                                    ">>new level for unit {} ch {} ({}) change from {} to {}".format(
-                                        unit,
-                                        ch,
-                                        threads_settings[unit][f"ch_{ch}_use"],
-                                        threads_settings[unit][ch_name],
-                                        new_val,
-                                    )
-                                )
-                                threads_settings[unit]["updated"] = True
-                                threads_settings[unit][ch_name] = new_val
-                                pprint(threads_settings[unit])
-                if len(txt) == 0:
-                    await interaction.response.send_message(
-                        "There are no channel with this usage"
-                    )
-                else:
-                    await interaction.response.send_message("\n".join(txt))
             return None
 
         # ----- UNIT SETTINGS -----
@@ -1521,106 +1200,6 @@ class Bot2b3(NextcordBot):
                 await interaction.response.send_message(
                     "new timer setting for unit {} is {}".format(unit_arg, unit_setting)
                 )
-            return None
-
-        @bot_unit_set.subcommand(description="Estim mode settings (change waveform)")
-        async def mode(
-            interaction: Interaction,
-            unit_arg: str = SlashOption(
-                name="unit",
-                description="Estim unit impacted with the new setting",
-                required=True,
-                choices=CHOICE_UNIT_UNIQ,
-            ),
-            setting_arg: str = SlashOption(
-                name="setting",
-                description="setting impacted",
-                choices=CHOICE_MODE_SETTING,
-                required=True,
-            ),
-            level_op: str = SlashOption(
-                name="operation",
-                description="how the value is changing",
-                choices=CHOICE_LEVEL_ACTION,
-                required=True,
-            ),
-            level_arg_min: int = SlashOption(
-                name="level_start",
-                description="min range or fixed val",
-                required=True,
-            ),
-            level_arg_max: int = SlashOption(
-                name="level_max",
-                description="max range",
-                required=False,
-            ),
-        ) -> None:
-            if await check_permission(interaction, "administrator"):
-                level_arg = level_op + str(level_arg_min)
-                if level_arg_max:
-                    level_arg = level_arg + ">" + str(level_arg_max)
-                txt = []
-                for unit in await self.check_unit(interaction, unit_arg):
-                    unit = "UNIT" + str(unit)
-                    # check if setting is valid
-                    adj_set = ""
-                    for adj in ("adj_1", "adj_2"):
-                        if MODE_2B[threads_settings[unit]["mode"]][adj] == setting_arg:
-                            adj_set = adj
-                    if adj_set == "":
-                        mode = MODE_2B[threads_settings[unit]["mode"]]["id"]
-                        await interaction.response.send_message(
-                            "Invalid setting {} for mode {}".format(
-                                setting_arg.lower(), mode
-                            )
-                        )
-                        return None
-                    new_val = self.calc_new_val(level_arg, unit, adj_set)
-                    txt.append(
-                        ">>new setting for unit {} {} change from {} to {}".format(
-                            unit,
-                            setting_arg,
-                            threads_settings[unit][adj_set + "_max"],
-                            new_val,
-                        )
-                    )
-                    threads_settings[unit]["updated"] = True
-                    threads_settings[unit][adj_set + "_max"] = new_val
-                    # reset to adj_1 for modes without adj_2
-                    if MODE_2B[threads_settings[unit]["mode"]]["adj_2"] == "":
-                        threads_settings[unit]["adj_2_max"] = threads_settings[unit][
-                            "adj_1_max"
-                        ]
-                await interaction.response.send_message("\n".join(txt))
-            return None
-
-        # ----- EVENT MANAGEMENT ----
-        # Event management is now handled via REST API /api/trigger-groups
-        # Use GET /api/events/types to list available event types
-
-        # ----- EMERGENCY STOP ----------
-        @self.slash_command(name="stop", description="Emergency stop")
-        async def bot_stop(interaction: Interaction) -> None:
-            if interaction.user:
-                if interaction.user.id == self.subjectId or await check_permission(
-                    interaction, "administrator"
-                ):
-                    # Cancel all queued actions via new system
-                    if self._action_queue:
-                        await self._action_queue.cancel_all()
-                    for unit_str in BT_UNITS:
-                        unit = UnitDict(unit_str)
-                        store.update_thread_settings(
-                            unit,
-                            {
-                                "updated": True,
-                                "ch_A": 0,
-                                "ch_A_max": 0,
-                                "ch_B": 0,
-                                "ch_B_max": 0,
-                            },
-                        )
-                    await interaction.response.send_message("stop all channels")
             return None
 
         # ----- RAMP COMMANDS ------
@@ -1751,8 +1330,9 @@ class Bot2b3(NextcordBot):
                                 "move": "sensor_move_alarm",
                             }
                             event_type = sensor_event_map.get(value, value)
-                            Logger.warning(
-                                f'[Sensor] Alarm! "{sensor_name}" Sensor fired!'
+
+                            logger.info(
+                                "[Sensors] Sensor alarm fired!", sensor_name=sensor_name
                             )
                             await self._dispatcher.dispatch(
                                 event_type=event_type,
@@ -1767,8 +1347,7 @@ class Bot2b3(NextcordBot):
         except asyncio.CancelledError:
             raise
         except Exception:
-            Logger.warning(f"Task exception bt_sensor_alarm")
-            Logger.debug(traceback.print_exc())
+            logger.exception("[Sensors] Task exception for bt_sensor_alarm")
 
     # Event action queueing (new system)
     @tasks.loop(seconds=1)
@@ -1779,41 +1358,7 @@ class Bot2b3(NextcordBot):
         except asyncio.CancelledError:
             raise
         except Exception:
-            Logger.warning(f"Task exception event_queue_mgmt")
-            Logger.debug(traceback.print_exc())
-
-    # update boot status
-    async def update_status(self):
-        """
-        Update the status in bot status
-        Returns:
-
-        """
-        # text status for the bot
-        msg = "Cnx: "
-        bot_status = nextcord.Status.online
-        for unit in BT_UNITS:
-            if threads_settings[unit]["cnx_ok"]:
-                msg += unit
-            else:
-                bot_status = nextcord.Status.do_not_disturb
-        await self.change_presence(
-            status=bot_status,
-            activity=nextcord.Activity(
-                type=nextcord.ActivityType.listening, state="", name=msg
-            ),
-        )
-
-    # for exception in tasks update_status
-    @tasks.loop(seconds=30)
-    async def rerun_update_status(self):
-        try:
-            await self.update_status()
-        except asyncio.CancelledError:
-            raise
-        except Exception:
-            Logger.warning(f"Task exception update_status")
-            Logger.debug(traceback.print_exc())
+            logger.exception("[Sensors] Task exception for event_queue_mgmt")
 
     # @Bot is Ready
     async def on_ready(self):
@@ -1832,14 +1377,13 @@ class Bot2b3(NextcordBot):
         self._dispatcher = EventDispatcher.get_instance()
 
         # Start all tasks
-        self.rerun_update_status.start()  # bot console
         self.rerun_event_queue_mgmt.start()  # queue management
         self.rerun_bt_sensor_alarm.start()  # Bluetooth sensors
         return True
 
     # cmd arg errors
     async def on_command_error(self, context, exception):
-        Logger.error(str(exception))
+        logger.error(str(exception))
 
 
 def sensor_check_val(sensor_name: str, measure: str, val: int) -> None:
@@ -1964,10 +1508,10 @@ async def sensor_bt(sensor_name: str, address: str, char_uuid: str) -> None:
     current_sensor_settings["sensor_online"] = False
 
     disconnected_event = asyncio.Event()
-    Logger.info(f"[Sensors] Searching sensor '{sensor_name}'...")
+    logger.info("[Sensors] Searching Sensor...", sensor_name=sensor_name)
 
     def disconnected_callback(bt_client):
-        Logger.info(f"[Sensors] {sensor_name} sensor is disconnected")
+        logger.info("[Sensors] Sensor offline", sensor_name=sensor_name)
         current_sensor_settings["sensor_online"] = False
 
         if sensor_name == "sound":
@@ -1987,7 +1531,7 @@ async def sensor_bt(sensor_name: str, address: str, char_uuid: str) -> None:
     async with BleakClient(
         address, disconnected_callback=disconnected_callback
     ) as client:
-        Logger.info(f"[Sensors] {sensor_name} sensor is connected")
+        logger.info("[Sensors] Sensor online", sensor_name=sensor_name)
         current_sensor_settings["sensor_online"] = True
 
         # queue ws update
@@ -2010,7 +1554,7 @@ def thread_sensors_bt(sensor: str, addr: str, service: str) -> None:
     Returns:
 
     """
-    Logger.info(f"[Sensors] Start Sensor '{sensor}' thread")
+    logger.info("[Sensors] Start Sensor thread", sensor_name=sensor)
     while True:
         try:
             # thread isolation
@@ -2021,9 +1565,10 @@ def thread_sensors_bt(sensor: str, addr: str, service: str) -> None:
             loop.close()
         except BleakDeviceNotFoundError:
             time.sleep(30)
-        except Exception as err:
-            Logger.info(
-                f"Thread error in start_sensors_bt {sensor}: {err=}, {type(err)=}"
+        except Exception:
+            logger.exception(
+                f"[Sensors] Thread error in start_sensors_bt {sensor}",
+                sensor_name=sensor,
             )
             time.sleep(30)
 
@@ -2032,7 +1577,7 @@ def thread_sensors_bt(sensor: str, addr: str, service: str) -> None:
 def thread_update_ramp():
     # TODO: REF ramp mechanism
     RAMP_STEP = 2
-    Logger.info(f"Start software ramp thread")
+    logger.info(f"Start software ramp thread")
     while True:
         try:
             time.sleep(RAMP_STEP)
@@ -2094,16 +1639,16 @@ def thread_update_ramp():
                             prct = 200 - prct
                         # ramp
                         delta = (
-                            threads_settings[unit][field + "_max"]
+                            threads_settings[unit][field]
                             * (100 - threads_settings[unit][field + "_ramp_prct"])
                             / 100
                         )
-                        new_val = threads_settings[unit][field + "_max"] - int(
+                        new_val = threads_settings[unit][field] - int(
                             delta * (100 - prct) / 100
                         )
                     else:
                         # no ramp
-                        new_val = threads_settings[unit][field + "_max"]
+                        new_val = threads_settings[unit][field]
                     # add multiplier for level
                     if field in ("ch_A", "ch_B"):
                         new_val = int(
@@ -2124,8 +1669,8 @@ def thread_update_ramp():
                 threads_settings[unit]["ramp_progress"] = (
                     threads_settings[unit]["ramp_progress"] + RAMP_STEP
                 )
-        except Exception as err:
-            Logger.info(f"Thread error in update_ramp {err=}, {type(err)=}")
+        except Exception:
+            logger.exception("Thread error in update_ramp")
             time.sleep(30)
 
 
@@ -2139,13 +1684,11 @@ def mk2b_init():
                 "id": init_bt_name,
                 # Channel A
                 "ch_A": 0,  # ch_A target level for the 2B
-                "ch_A_max": 0,  # ch_A set max value
                 "ch_A_ramp_phase": 0,  # ramp phase
                 "ch_A_ramp_prct": 100,  # ramp % of max for ch A
                 "ch_A_multiplier": 100,  # percentage of level multiplier
                 # Channel B
                 "ch_B": 0,  # ch_B target level for the 2B
-                "ch_B_max": 0,  # ch_B set max value
                 "ch_B_ramp_phase": 0,  # ramp phase
                 "ch_B_ramp_prct": 100,  # ramp % of max for ch B
                 "ch_B_multiplier": 100,  # percentage of level multiplier
@@ -2166,18 +1709,12 @@ def mk2b_init():
                 "adj_1": DEFAULT_USAGE_SETTING[init_bt_name][
                     "adj_1"
                 ],  # 2B adj 1 target setting
-                "adj_1_max": DEFAULT_USAGE_SETTING[init_bt_name][
-                    "adj_1"
-                ],  # 2B adj 1 set max value
                 "adj_1_ramp_phase": 0,  # ramp phase
                 "adj_1_ramp_prct": 100,  # ramp % of max for adj_1
                 # waveform setting 2
                 "adj_2": DEFAULT_USAGE_SETTING[init_bt_name][
                     "adj_2"
                 ],  # 2B adj 2 target setting
-                "adj_2_max": DEFAULT_USAGE_SETTING[init_bt_name][
-                    "adj_2"
-                ],  # 2B adj 2 set max value
                 "adj_2_ramp_phase": 0,  # ramp phase
                 "adj_2_ramp_prct": 100,  # ramp % of max for adj_2
                 # 2B timer adjusts
@@ -2202,13 +1739,11 @@ def mk2b_init():
             "id": init_bt_name,
             # Channel A
             "ch_A": 0,  # ch_A target level for the 2B
-            "ch_A_max": 0,  # ch_A set max value
             "ch_A_ramp_phase": 0,  # ramp phase
             "ch_A_ramp_prct": 100,  # ramp % of max for ch A
             "ch_A_multiplier": 100,  # percentage of level multiplier
             # Channel B
             "ch_B": 0,  # ch_B target level for the 2B
-            "ch_B_max": 0,  # ch_B set max value
             "ch_B_ramp_phase": 0,  # ramp phase
             "ch_B_ramp_prct": 100,  # ramp % of max for ch B
             "ch_B_multiplier": 100,  # percentage of level multiplier
@@ -2229,18 +1764,12 @@ def mk2b_init():
             "adj_1": DEFAULT_USAGE_SETTING[init_bt_name][
                 "adj_1"
             ],  # 2B adj 1 target setting
-            "adj_1_max": DEFAULT_USAGE_SETTING[init_bt_name][
-                "adj_1"
-            ],  # 2B adj 1 set max value
             "adj_1_ramp_phase": 0,  # ramp phase
             "adj_1_ramp_prct": 100,  # ramp % of max for adj_1
             # waveform setting 2
             "adj_2": DEFAULT_USAGE_SETTING[init_bt_name][
                 "adj_2"
             ],  # 2B adj 2 target setting
-            "adj_2_max": DEFAULT_USAGE_SETTING[init_bt_name][
-                "adj_2"
-            ],  # 2B adj 2 set max value
             "adj_2_ramp_phase": 0,  # ramp phase
             "adj_2_ramp_prct": 100,  # ramp % of max for adj_2
             # 2B timer adjusts
@@ -2260,9 +1789,7 @@ def mk2b_init():
             "updated": False,  # values are changed
         }
 
-    Logger.success(
-        f"[UNITS] Initialized 2B initials settings for {len(BT_UNITS)} Units."
-    )
+    logger.info(f"[Units] Initialized 2B initials settings for {len(BT_UNITS)} Units.")
 
 
 bot = Bot2b3()
@@ -2295,6 +1822,10 @@ HANDLERS = {
     "units:update_mode": (handle_update_mode, Permission.WRITE_UNITS),
     "units:update_power_mode": (handle_update_power_mode, Permission.WRITE_UNITS),
     "units:update_adj": (handle_update_adj, Permission.WRITE_UNITS),
+    "trigger_rules:update": (handle_trigger_rule_update, Permission.ADMIN),
+    "trigger_rules:create": (handle_trigger_rule_create, Permission.ADMIN),
+    "trigger_rules:edit": (handle_trigger_rule_edit, Permission.ADMIN),
+    "trigger_rules:delete": (handle_trigger_rule_delete, Permission.ADMIN),
 }
 
 
@@ -2331,6 +1862,9 @@ async def websocket_endpoint(websocket: WebSocket, token: str):
 
         # Replay the last 250 triggered events to the newly connected client
         await ws_notifier.send_history(user_id, store.websocket)
+
+        # Load datas
+        await ws_notifier.load_datas(user_id, store.websocket)
 
         # Heartbeat and Message handling
         while True:
@@ -2389,77 +1923,27 @@ async def websocket_endpoint(websocket: WebSocket, token: str):
                             }
                         )
             except asyncio.TimeoutError:
-                print("💓 Sending heartbeat ping")
+                logger.debug("💓 Sending heartbeat ping")
                 await websocket.send_json({"type": "ping"})
                 continue
 
-    except jwt.PyJWTError as e:
-        print(f"❌ JWT error: {e}")
+    except jwt.PyJWTError:
+        logger.exception("❌ JWT error:")
         await websocket.close(code=4001, reason="Invalid token")
 
     except WebSocketDisconnect:
-        print(f"🔴 Client disconnected: {user_id}")
+        logger.info(f"🔴 Client disconnected: {user_id}", user_id=user_id)
 
-    except Exception as e:
-        print(f"❌ WebSocket error: {e}")
-        import traceback
-
-        traceback.print_exc()
+    except Exception:
+        logger.exception(f"🔴 WebSocket error for {user_id}", user_id=user_id)
 
     finally:
         if user_id:
             store.websocket.disconnect(user_id)
 
 
-# Testings
-def start_mock_units():
-    cached_units: dict = {
-        "UNIT1": {
-            "ch_A": 0,
-            "ch_B": 0,
-        },
-        "UNIT2": {
-            "ch_A": 0,
-            "ch_B": 0,
-        },
-        "UNIT3": {
-            "ch_A": 0,
-            "ch_B": 0,
-        },
-    }
-
-    while True:
-        tick = random.randint(1, 3)
-
-        for unit_id in cached_units.keys():
-            # ch_A = 20 + random.randint(0, 30)
-            # ch_B = 20 + random.randint(0, 30)
-            unit = UnitDict(unit_id)
-            snapshot = store.get_unit_dict(unit)
-            changes = {}
-
-            if (
-                cached_units[unit_id]["ch_A"] != snapshot["ch_A_max"]
-                or cached_units[unit_id]["ch_B"] != snapshot["ch_B_max"]
-            ):
-                cached_units[unit_id]["ch_A"] = snapshot["ch_A_max"]
-                cached_units[unit_id]["ch_B"] = snapshot["ch_B_max"]
-
-                changes["ch_A"] = snapshot["ch_A_max"]
-                changes["ch_B"] = snapshot["ch_B_max"]
-
-                store.update_unit_dict(unit, changes)
-
-                ws_notifier.notify(
-                    payload_type="units:update",
-                    payload={"id": unit_id, "changes": changes},
-                )
-
-        time.sleep(1)
-
-
 if __name__ == "__main__":
-    Logger.info("Starting PlunEStim 1.0.0")
+    logger.info("Starting PlunEStim 1.0.0")
 
     threads = {}
 
@@ -2480,34 +1964,29 @@ if __name__ == "__main__":
     # api
     threads["api"] = Thread(target=start_api)
 
-    # testing
-    # threads["testing"] = Thread(target=start_mock_units)
-
     # start all thread
     for tr in threads.keys():
-        Logger.warning(f"[Main] Starting thread '{tr}'!")
+        logger.info(f"[Main] Starting thread '{tr}'!", thread_name=tr)
         threads[tr].daemon = True
         threads[tr].start()
 
     # start Discord Bot
     while True:
         try:
-            Logger.info("[Discord] Loading Discord cogs...")
+            logger.info("[Discord] Loading Discord cogs...")
 
             # Try to load all the cogs
             for cog in get_cogs():
                 try:
                     bot.load_extension(cog)
-                    Logger.success(f"[Cogs] Successfully loaded '{cog}'!")
-                    # Logger.info("Loaded " + cog)
-                except Exception as e:
-                    Logger.error(e)
-                    print(e)
+                    logger.info("[Cogs] Successfully loaded cog!", cog_name=cog)
+                except Exception:
+                    logger.exception("[Cogs] Failed to load cog", cog_name=cog)
 
-            Logger.info("[Discord] Starting Discord Bot...")
+            logger.info("[Discord] Starting Discord Bot...")
             bot.run(DISCORD_TOKEN)
 
-        except Exception as err:
-            Logger.error(f"Restarting Discord bot after major error {err}")
+        except Exception:
+            logger.exception("Restarting Discord bot after major error")
             time.sleep(1000)
             continue

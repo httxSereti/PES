@@ -18,6 +18,7 @@ import { store } from '@/store';
 import { verifyToken } from '@/store/slices/authSlice';
 import { useAppDispatch } from "@/store/hooks";
 import { WebSocketProvider } from "@/providers/WebSocketProvider";
+import { TooltipProvider } from "@pes/ui/components/tooltip";
 
 function AppInitializer({ children }: { children: React.ReactNode }) {
     const dispatch = useAppDispatch();
@@ -50,16 +51,18 @@ export function Layout({
             </head>
             <body>
                 <ThemeProvider defaultTheme="dark" storageKey="vite-ui-theme">
-                    <Provider store={store}>
-                        <AppInitializer>
-                            <WebSocketProvider>
-                                {children}
-                                <Toaster />
-                            </WebSocketProvider>
-                        </AppInitializer>
-                    </Provider>
-                    <ScrollRestoration />
-                    <Scripts />
+                    <TooltipProvider>
+                        <Provider store={store}>
+                            <AppInitializer>
+                                <WebSocketProvider>
+                                    {children}
+                                    <Toaster />
+                                </WebSocketProvider>
+                            </AppInitializer>
+                        </Provider>
+                        <ScrollRestoration />
+                        <Scripts />
+                    </TooltipProvider>
                 </ThemeProvider>
             </body>
         </html>

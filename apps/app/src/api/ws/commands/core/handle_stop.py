@@ -1,10 +1,12 @@
-from utils import Logger
+import structlog
 from store import Store
 from api.ws.websocket_notifier import WebSocketNotifier
 from typings import UnitDict
 from constants import BT_UNITS
 
+
 store = Store()
+logger = structlog.get_logger("pes")
 
 
 async def handle_stop(_payload: dict, ws_notifier: WebSocketNotifier) -> dict:
@@ -20,14 +22,12 @@ async def handle_stop(_payload: dict, ws_notifier: WebSocketNotifier) -> dict:
             {
                 "updated": True,
                 "ch_A": 0,
-                "ch_A_max": 0,
                 "ch_B": 0,
-                "ch_B_max": 0,
             },
         )
 
     # log
-    Logger.info("[WS|core:stop] Stopped every units & action queue")
+    logger.info("[WS|core:stop] Stopped every units & action queue")
 
     ws_notifier.notify(
         "core:stop", {"status": "ok", "message": "%SYSTEM% shutdown all devices."}

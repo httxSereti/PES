@@ -6,11 +6,13 @@ from typing import TYPE_CHECKING
 
 from .enums import QueueItemStatus
 from .models import QueueItem
-from utils import Logger
+import structlog
 
 if TYPE_CHECKING:
     from .executor import ActionExecutor
     from api.ws.websocket_notifier import WebSocketNotifier
+
+logger = structlog.get_logger("pes")
 
 
 class ActionQueue:
@@ -22,7 +24,9 @@ class ActionQueue:
             raise RuntimeError("ActionQueue not initialized")
         return cls._instance
 
-    def __init__(self, executor: ActionExecutor, ws_notifier: WebSocketNotifier | None = None):
+    def __init__(
+        self, executor: ActionExecutor, ws_notifier: WebSocketNotifier | None = None
+    ):
         ActionQueue._instance = self
         self._executor = executor
         self._ws_notifier = ws_notifier
@@ -44,7 +48,7 @@ class ActionQueue:
             self._items.sort(key=lambda x: (-x.priority, x.created_at))
 
         if items:
-            Logger.info(f"[Queue] Enqueued {len(items)} items")
+            logger.info(f"[Queue] Enqueued {len(items)} items")
             self._notify_update()
 
     async def tick(self) -> None:
@@ -67,8 +71,7 @@ class ActionQueue:
 
         # Step 2: Finalize expired items (duration != -1 and elapsed >= duration)
         expired = [
-            i for i in running_items
-            if i.duration != -1 and i.elapsed >= i.duration
+            i for i in running_items if i.duration != -1 and i.elapsed >= i.duration
         ]
         for item in expired:
             await self._finalize_item(item)
@@ -113,7 +116,7 @@ class ActionQueue:
             self._items = [i for i in self._items if i.id != item_id]
             self._total_cancelled += 1
 
-        Logger.info(f"[Queue] Cancelled item '{item_id}' ({item.origin})")
+        logger.info(f"[Queue] Cancelled item '{item_id}' ({item.origin})")
         self._notify_update()
         return True
 
@@ -132,20 +135,20 @@ class ActionQueue:
             self._total_cancelled += len(self._items)
             self._items.clear()
 
-        Logger.info(f"[Queue] Cancelled all items ({count})")
+        logger.info(f"[Queue] Cancelled all items ({count})")
         self._notify_update()
         return count
 
     def pause(self) -> None:
         """Pause queue processing. Running items continue their elapsed timer."""
         self._paused = True
-        Logger.info("[Queue] Paused")
+        logger.info("[Queue] Paused")
         self._notify_update()
 
     def resume(self) -> None:
         """Resume queue processing."""
         self._paused = False
-        Logger.info("[Queue] Resumed")
+        logger.info("[Queue] Resumed")
         self._notify_update()
 
     @property
@@ -186,15 +189,15 @@ class ActionQueue:
             snapshot = await self._executor.apply(item)
             item.snapshot_data = snapshot
         except Exception as e:
-            Logger.error(f"[Queue] Error applying action '{item.id}': {e}")
+            logger.error(f"[Queue] Error applying action '{item.id}': {e}")
             # Remove failed item
             with self._lock:
                 self._items = [i for i in self._items if i.id != item.id]
             return
 
-        Logger.info(
-            f"[Queue] Started '{item.action_type.value}' from '{item.origin}' "
-            f"(duration={item.duration}s, cumulative={item.cumulative})"
+        logger.info(
+            f"[Queue] Started '{item.action_type.value}' (duration={item.duration}s, cumulative={item.cumulative})",
+            origin=item.origin,
         )
         self._notify_update()
 
@@ -203,7 +206,7 @@ class ActionQueue:
         try:
             await self._executor.reverse(item)
         except Exception as e:
-            Logger.error(f"[Queue] Error reversing action '{item.id}': {e}")
+            logger.error(f"[Queue] Error reversing action '{item.id}': {e}")
 
         with self._lock:
             item.status = QueueItemStatus.DONE
@@ -211,9 +214,9 @@ class ActionQueue:
             self._items = [i for i in self._items if i.id != item.id]
             self._total_done += 1
 
-        Logger.info(
-            f"[Queue] Completed '{item.action_type.value}' from '{item.origin}' "
-            f"after {item.elapsed}s"
+        logger.info(
+            f"[Queue] Completed '{item.action_type.value}' after {item.elapsed}s",
+            origin=item.origin,
         )
         self._notify_update()
 

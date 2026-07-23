@@ -144,7 +144,7 @@ export const UnitGraph: FC<UnitGraphProps> = ({ unitId }) => {
                 {CHANNELS.map(({ key, label, color }) => {
                     const val = key === 'ch_A' ? valA : valB;
                     return (
-                        <div key={key} className="flex items-center justify-between px-4 py-2.5">
+                        <div key={key} className="flex items-center justify-between px-2 py-2.5">
                             <div className="flex flex-col gap-1.5">
                                 <span className="font-mono text-[10px] tracking-widest text-zinc-500 uppercase">
                                     {label}

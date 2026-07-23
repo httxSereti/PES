@@ -2,7 +2,9 @@ from __future__ import annotations
 from database.connection import Database
 
 from database.models import TriggerRule
-from utils import Logger
+import structlog
+
+logger = structlog.get_logger("pes")
 
 
 class EventRegistry:
@@ -13,6 +15,7 @@ class EventRegistry:
 
     def __init__(self, db: Database | None = None):
         from database.repositories.trigger_rule_repo import TriggerRuleRepo
+
         db = db or Database.get_instance()
         self._repo = TriggerRuleRepo(db)
 
@@ -23,6 +26,9 @@ class EventRegistry:
         rules = await self._repo.get_enabled_rules(event_type)
 
         if not rules:
-            Logger.debug(f"[EventRegistry] No enabled rules for event '{event_type}'")
+            logger.warning(
+                f"[EventRegistry] No enabled rules for event '{event_type}'",
+                event_type=event_type,
+            )
 
         return rules

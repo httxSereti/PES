@@ -5,8 +5,10 @@ import { sensorsInitialized, sensorUpdated } from '@/store/slices/sensorsSlice';
 import { unitsInitialized, unitUpdated } from '@/store/slices/unitsSlice';
 import { setError, setStatus, resetReconnect, incrementReconnect } from '@/store/slices/websocketSlice';
 import { eventsHistoryLoaded, eventTriggered, type TriggeredEvent } from '@/store/slices/eventsSlice';
-import type { Sensor, UnitSettings, WebSocketConfig, WebSocketIncomingMessage, WebSocketMessage } from '@/types';
+import type { Sensor, TriggerRule, TriggerRuleLabel, UnitSettings, WebSocketConfig, WebSocketIncomingMessage, WebSocketMessage } from '@/types';
 import type { Middleware } from '@reduxjs/toolkit';
+import { triggerRulesInitialized, triggerRuleUpdated, triggerRuleAdded, triggerRuleRemoved } from '@/store/slices/triggerRulesSlice';
+import { triggerRuleLabelsInitialized, triggerRuleLabelAdded } from '@/store/slices/triggerRuleLabelsSlice';
 
 export function createWebSocketMiddleware(config: WebSocketConfig): Middleware {
     const {
@@ -181,11 +183,41 @@ export function createWebSocketMiddleware(config: WebSocketConfig): Middleware {
                      * @Events
                      */
                     case 'events:history':
-                        dispatch(eventsHistoryLoaded(message.payload as unknown as TriggeredEvent[]));
+                        dispatch(eventsHistoryLoaded(message.payload as TriggeredEvent[]));
                         break;
 
                     case 'events:triggered':
-                        dispatch(eventTriggered(message.payload as unknown as TriggeredEvent));
+                        dispatch(eventTriggered(message.payload as TriggeredEvent));
+                        break;
+
+                    /**
+                    * @TriggerRules
+                    */
+                    case 'trigger_rules:load':
+                        dispatch(triggerRulesInitialized(message.payload as TriggerRule[]));
+                        break;
+
+                    case 'trigger_rules:create':
+                        dispatch(triggerRuleAdded((message.payload as { rule: TriggerRule }).rule));
+                        break;
+
+                    case 'trigger_rules:delete':
+                        dispatch(triggerRuleRemoved((message.payload as { id: string }).id));
+                        break;
+
+                    case 'trigger_rules:load_labels':
+                        dispatch(triggerRuleLabelsInitialized(message.payload as TriggerRuleLabel[]));
+                        break;
+
+                    case 'trigger_rules:create_label':
+                        dispatch(triggerRuleLabelAdded(message.payload as TriggerRuleLabel));
+                        break;
+
+                    case 'trigger_rules:update':
+                        dispatch(triggerRuleUpdated({
+                            id: message.payload.id,
+                            changes: message.payload.changes
+                        }))
                         break;
 
                     case 'notification':

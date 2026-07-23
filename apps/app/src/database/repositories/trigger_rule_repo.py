@@ -1,15 +1,15 @@
 from __future__ import annotations
-import json
 from typing import List, Optional
 from cuid2 import cuid_wrapper
-from sqlalchemy import select, update, delete
+from sqlalchemy import select, delete
 from sqlalchemy.orm import selectinload
 
 from database.connection import Database
-from database.models import TriggerRule, TriggerAction
+from database.models import TriggerRule, TriggerAction, TriggerRuleLabel
 from events.enums import ActionType
 
 generate_id = cuid_wrapper()
+
 
 class TriggerRuleRepo:
     """
@@ -21,15 +21,23 @@ class TriggerRuleRepo:
 
     # ───────── TriggerRule CRUD ─────────
 
-    async def get_all_rules(self, event_type: Optional[str] = None) -> List[TriggerRule]:
+    async def get_all_rules(
+        self, event_type: Optional[str] = None
+    ) -> List[TriggerRule]:
         """Get all rules, optionally filtered by event_type."""
         async with self._db.session_maker() as session:
-            stmt = select(TriggerRule).options(selectinload(TriggerRule.actions))
+            stmt = select(TriggerRule).options(
+                selectinload(TriggerRule.actions), selectinload(TriggerRule.labels)
+            )
             if event_type:
-                stmt = stmt.where(TriggerRule.event_type == event_type).order_by(TriggerRule.priority.desc())
+                stmt = stmt.where(TriggerRule.event_type == event_type).order_by(
+                    TriggerRule.priority.desc()
+                )
             else:
-                stmt = stmt.order_by(TriggerRule.event_type, TriggerRule.priority.desc())
-            
+                stmt = stmt.order_by(
+                    TriggerRule.event_type, TriggerRule.priority.desc()
+                )
+
             result = await session.execute(stmt)
             return list(result.scalars().all())
 
@@ -38,7 +46,9 @@ class TriggerRuleRepo:
         async with self._db.session_maker() as session:
             stmt = (
                 select(TriggerRule)
-                .options(selectinload(TriggerRule.actions))
+                .options(
+                    selectinload(TriggerRule.actions), selectinload(TriggerRule.labels)
+                )
                 .where(TriggerRule.event_type == event_type)
                 .where(TriggerRule.enabled == True)
                 .order_by(TriggerRule.priority.desc())
@@ -49,7 +59,13 @@ class TriggerRuleRepo:
     async def get_rule(self, rule_id: str) -> Optional[TriggerRule]:
         """Get a single rule by ID with its actions."""
         async with self._db.session_maker() as session:
-            stmt = select(TriggerRule).options(selectinload(TriggerRule.actions)).where(TriggerRule.id == rule_id)
+            stmt = (
+                select(TriggerRule)
+                .options(
+                    selectinload(TriggerRule.actions), selectinload(TriggerRule.labels)
+                )
+                .where(TriggerRule.id == rule_id)
+            )
             result = await session.execute(stmt)
             return result.scalar_one_or_none()
 
@@ -90,13 +106,18 @@ class TriggerRuleRepo:
             rule = await session.get(TriggerRule, rule_id)
             if not rule:
                 return None
-            
-            if name is not None: rule.name = name
-            if description is not None: rule.description = description
-            if enabled is not None: rule.enabled = enabled
-            if priority is not None: rule.priority = priority
-            if event_type is not None: rule.event_type = event_type
-            
+
+            if name is not None:
+                rule.name = name
+            if description is not None:
+                rule.description = description
+            if enabled is not None:
+                rule.enabled = enabled
+            if priority is not None:
+                rule.priority = priority
+            if event_type is not None:
+                rule.event_type = event_type
+
             await session.commit()
             await session.refresh(rule)
             # Fetch with actions for consistency
@@ -166,13 +187,18 @@ class TriggerRuleRepo:
             action = await session.get(TriggerAction, action_id)
             if not action:
                 return None
-            
-            if action_type is not None: action.action_type = ActionType(action_type)
-            if payload is not None: action.payload = payload
-            if duration is not None: action.duration = duration
-            if cumulative is not None: action.cumulative = cumulative
-            if sort_order is not None: action.sort_order = sort_order
-            
+
+            if action_type is not None:
+                action.action_type = ActionType(action_type)
+            if payload is not None:
+                action.payload = payload
+            if duration is not None:
+                action.duration = duration
+            if cumulative is not None:
+                action.cumulative = cumulative
+            if sort_order is not None:
+                action.sort_order = sort_order
+
             await session.commit()
             await session.refresh(action)
             return action
@@ -184,3 +210,70 @@ class TriggerRuleRepo:
             result = await session.execute(stmt)
             await session.commit()
             return result.rowcount > 0
+
+    async def delete_actions_for_rule(self, rule_id: str) -> int:
+        """Delete every action belonging to a rule. Returns the number removed."""
+        async with self._db.session_maker() as session:
+            stmt = delete(TriggerAction).where(
+                TriggerAction.trigger_rule_id == rule_id
+            )
+            result = await session.execute(stmt)
+            await session.commit()
+            return result.rowcount
+
+    async def get_all_labels(self) -> List[TriggerRuleLabel]:
+        """Get all labels"""
+        async with self._db.session_maker() as session:
+            stmt = select(TriggerRuleLabel)
+            stmt = stmt.order_by(TriggerRuleLabel.name)
+
+            result = await session.execute(stmt)
+            return list(result.scalars().all())
+
+    async def set_labels_for_rule(
+        self, rule_id: str, label_names: List[str]
+    ) -> List[TriggerRuleLabel]:
+        """
+        Attach labels (by name) to a rule, creating any that don't exist yet.
+
+        Replaces the rule's current label set with the resolved labels.
+        Returns the labels that were newly created.
+        """
+        async with self._db.session_maker() as session:
+            rule = await session.get(
+                TriggerRule,
+                rule_id,
+                options=[selectinload(TriggerRule.labels)],
+            )
+            if not rule:
+                return []
+
+            labels: List[TriggerRuleLabel] = []
+            created: List[TriggerRuleLabel] = []
+            seen: set[str] = set()
+
+            for raw in label_names:
+                name = raw.strip()
+                if not name or name.lower() in seen:
+                    continue
+                seen.add(name.lower())
+
+                result = await session.execute(
+                    select(TriggerRuleLabel).where(TriggerRuleLabel.name == name)
+                )
+                label = result.scalar_one_or_none()
+
+                if label is None:
+                    label = TriggerRuleLabel(id=generate_id(), name=name)
+                    session.add(label)
+                    created.append(label)
+
+                labels.append(label)
+
+            rule.labels = labels
+            await session.commit()
+
+            for label in created:
+                await session.refresh(label)
+
+            return created

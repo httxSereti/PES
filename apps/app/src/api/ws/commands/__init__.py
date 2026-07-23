@@ -1,6 +1,17 @@
 from .core import handle_stop
 from .sensors import handle_sensors_update
-from .units import handle_update_level, handle_update_mode, handle_update_adj, handle_update_power_mode
+from .units import (
+    handle_update_level,
+    handle_update_mode,
+    handle_update_adj,
+    handle_update_power_mode,
+)
+from .trigger_rules import (
+    handle_trigger_rule_update,
+    handle_trigger_rule_create,
+    handle_trigger_rule_edit,
+    handle_trigger_rule_delete,
+)
 
 __all__ = [
     "handle_stop",
@@ -9,4 +20,8 @@ __all__ = [
     "handle_update_mode",
     "handle_update_adj",
     "handle_update_power_mode",
+    "handle_trigger_rule_update",
+    "handle_trigger_rule_create",
+    "handle_trigger_rule_edit",
+    "handle_trigger_rule_delete",
 ]

@@ -1,5 +1,6 @@
 import type { UnitSettings } from "@/types/units.types";
 import type { Sensor } from "@/types/sensor.types";
+import type { TriggerRule, TriggerRuleLabel } from "@/types/events.types";
 
 export type WebSocketStatus = 'connecting' | 'connected' | 'disconnected' | 'error';
 
@@ -126,6 +127,48 @@ export interface EventsTriggeredMessage {
     payload: unknown;
 }
 
+export interface TriggerRulesInitialMessage {
+    id?: string;
+    type: 'trigger_rules:load';
+    payload?: TriggerRule[];
+}
+
+export interface TriggerRuleLabelsInitialMessage {
+    id?: string;
+    type: 'trigger_rules:load_labels';
+    payload?: TriggerRuleLabel[];
+}
+
+export interface TriggerRuleUpdateMessage {
+    id?: string;
+    type: 'trigger_rules:update';
+    payload: {
+        id: string;
+        changes: Partial<TriggerRule>;
+    };
+}
+
+export interface TriggerRuleCreateMessage {
+    id?: string;
+    type: 'trigger_rules:create';
+    payload: {
+        rule: TriggerRule;
+    };
+}
+
+export interface TriggerRuleCreateLabelMessage {
+    id?: string;
+    type: 'trigger_rules:create_label';
+    payload: TriggerRuleLabel;
+}
+
+export interface TriggerRuleDeleteMessage {
+    id?: string;
+    type: 'trigger_rules:delete';
+    payload: {
+        id: string;
+    };
+}
 export type WebSocketIncomingMessage =
     | ChatMessage
     | UserConnected
@@ -141,6 +184,12 @@ export type WebSocketIncomingMessage =
     | CoreStopMessage
     | EventsHistoryMessage
     | EventsTriggeredMessage
+    | TriggerRulesInitialMessage
+    | TriggerRuleLabelsInitialMessage
+    | TriggerRuleUpdateMessage
+    | TriggerRuleCreateMessage
+    | TriggerRuleCreateLabelMessage
+    | TriggerRuleDeleteMessage
     ;
 
 export interface WebSocketConfig {

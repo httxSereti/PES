@@ -1,12 +1,15 @@
-from utils import Logger
+import structlog
 from store import Store
 from api.ws.websocket_notifier import WebSocketNotifier
 from typings import UnitDict
 
+logger = structlog.get_logger("pes")
 store = Store()
 
 
-async def handle_update_power_mode(payload: dict, ws_notifier: WebSocketNotifier) -> dict:
+async def handle_update_power_mode(
+    payload: dict, ws_notifier: WebSocketNotifier
+) -> dict:
     """
     Update the power mode (Low, High, Dynamic) of one or more Units
     """
@@ -18,9 +21,8 @@ async def handle_update_power_mode(payload: dict, ws_notifier: WebSocketNotifier
             continue
 
         unit = UnitDict(unit_id)
-        snapshot = store.get_unit_dict(unit)
 
-        Logger.info(
+        logger.info(
             f"[WS|units:update_power_mode] Updated power mode for {unit_id} to '{power_mode}'"
         )
 

@@ -1,16 +1,17 @@
 import os
 import re
 import secrets
+import structlog
 
 from fastapi import APIRouter, HTTPException, status, Depends, Request
 from fastapi.security import HTTPBasic, HTTPBasicCredentials
 
 from events.dispatcher import EventDispatcher
 from events.enums import TriggerableEvent
-from utils import Logger
 
 router = APIRouter(prefix="/webhooks", tags=["webhooks"])
 security = HTTPBasic()
+logger = structlog.get_logger("pes")
 
 # Dispatcher — set during app startup
 _dispatcher: EventDispatcher | None = None
@@ -64,7 +65,9 @@ async def read_chaster_webhook(
     event: str = data.get("event", "")
     webhook_id: str = data.get("requestId", "")
 
-    Logger.info(f"[Webhook] Received Chaster event='{event}' requestId='{webhook_id}'")
+    logger.info(
+        "[Webhook] Received Chaster Webhook", event_name=event, webhook_id=webhook_id
+    )
 
     if event == "action_log.created":
         action_log: dict = data.get("data", {}).get("actionLog", {})
@@ -105,7 +108,7 @@ async def read_chaster_webhook(
                 # handle logic for profile action
                 if match_profile:
                     wof_code = f"custom:wof_profile_{match_profile.group(1)}"
-                    Logger.info(
+                    logger.info(
                         f"[Webhook] Custom WOF profile action: {match_profile.group(1)}"
                     )
                     await dispatcher.dispatch(
@@ -121,7 +124,7 @@ async def read_chaster_webhook(
                     )
                 elif match_unit_update:
                     wof_code = f"custom:wof_unit_{match_unit_update.group(1)}"
-                    Logger.info(
+                    logger.info(
                         f"[Webhook] Custom WOF update unit action: {match_unit_update.group(1)}"
                     )
                     # TODO: implement unit update logic
@@ -137,7 +140,7 @@ async def read_chaster_webhook(
                         origin=origin,
                     )
                 else:
-                    Logger.info(f"[Webhook] WOF text without action code: '{text}'")
+                    logger.warning(f"[Webhook] WOF text without action code: '{text}'")
 
             # WOF with non-text segment — dispatch generic event
             await dispatcher.dispatch(
@@ -221,6 +224,6 @@ async def read_chaster_webhook(
             )
 
         else:
-            Logger.debug(f"[Webhook] Unhandled action_log type: '{action_type}'")
+            logger.debug("[Webhook] Unhandled Chaster event", action_type=action_type)
 
     return {"status": "ok"}
