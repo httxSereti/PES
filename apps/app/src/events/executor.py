@@ -89,14 +89,14 @@ class ActionExecutor:
         elif action_type == ActionType.MULT:
             self._apply_mult(payload)
             return None
-        elif action_type == ActionType.CHASTER_TIME_ADD:
+        elif action_type == ActionType.CHASTER_TIME_UPDATE:
             await self._apply_chaster_time(payload)
             return None
-
-        logger.info(
-            f"[Executor] Unknown action type: {action_type}", origin=item.origin
-        )
-        return None
+        else:
+            logger.info(
+                f"[Executor] Unknown action type: {action_type}", origin=item.origin
+            )
+            return None
 
     async def reverse(self, item: QueueItem) -> None:
         """

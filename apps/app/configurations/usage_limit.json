@@ -2,12 +2,12 @@
   "nipples": {
     "start": 8,
     "warn": 12,
-    "max": 40
+    "max": 50
   },
   "plug": {
     "start": 20,
     "warn": 30,
-    "max": 45
+    "max": 60
   },
   "cheeks": {
     "start": 10,
