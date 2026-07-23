@@ -17,9 +17,9 @@ export const Sensors: FC = () => {
                     <div className="text-muted-foreground text-xs">Realtime sensors</div>
                 </div>
                 <div className="ml-auto flex items-center gap-2">
-                    <div className="flex items-center gap-2 px-3 py-1.5 rounded-md bg-[#161226] border border-purple-800/40">
-                        <Wifi size={11} className="text-violet-400" />
-                        <span className="font-mono-dm text-[11px] text-violet-400 tracking-[0.06em]">{sensors.filter(s => s.sensor_online).length}/{sensors.length}</span>
+                    <div className="flex items-center gap-2 px-3 py-1.5 rounded-md accent-tile">
+                        <Wifi size={11} className="accent-tile-icon" />
+                        <span className="font-mono-dm text-[11px] accent-tile-icon tracking-[0.06em]">{sensors.filter(s => s.sensor_online).length}/{sensors.length}</span>
                     </div>
                 </div>
             </div>

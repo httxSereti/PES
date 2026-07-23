@@ -2,26 +2,26 @@ import { Zap } from "lucide-react";
 import type { TriggeredRule } from "@/store/slices/eventsSlice";
 
 const EVENT_TYPE_COLORS: Record<string, string> = {
-    chaster_wof_turned: "bg-purple-200/15 text-violet-200 border-violet-200/30",
-    chaster_vote_add: "bg-emerald-500/15 text-emerald-300 border-emerald-500/30",
-    chaster_vote_sub: "bg-rose-500/15 text-rose-300 border-rose-500/30",
-    chaster_time_add: "bg-sky-500/15 text-sky-300 border-sky-500/30",
-    chaster_time_sub: "bg-orange-500/15 text-orange-300 border-orange-500/30",
-    chaster_lock_frozen: "bg-blue-500/15 text-blue-300 border-blue-500/30",
-    chaster_lock_unfrozen: "bg-teal-500/15 text-teal-300 border-teal-500/30",
-    chaster_pillory_vote: "bg-pink-500/15 text-pink-300 border-pink-500/30",
-    chaster_pillory_started: "bg-pink-600/15 text-pink-200 border-pink-600/30",
-    chaster_pillory_ended: "bg-slate-500/15 text-slate-300 border-slate-500/30",
+    chaster_wof_turned: "bg-violet-500/15 text-violet-700 border-violet-500/30 dark:text-violet-200",
+    chaster_vote_add: "bg-emerald-500/15 text-emerald-700 border-emerald-500/30 dark:text-emerald-300",
+    chaster_vote_sub: "bg-rose-500/15 text-rose-700 border-rose-500/30 dark:text-rose-300",
+    chaster_time_add: "bg-sky-500/15 text-sky-700 border-sky-500/30 dark:text-sky-300",
+    chaster_time_sub: "bg-orange-500/15 text-orange-700 border-orange-500/30 dark:text-orange-300",
+    chaster_lock_frozen: "bg-blue-500/15 text-blue-700 border-blue-500/30 dark:text-blue-300",
+    chaster_lock_unfrozen: "bg-teal-500/15 text-teal-700 border-teal-500/30 dark:text-teal-300",
+    chaster_pillory_vote: "bg-pink-500/15 text-pink-700 border-pink-500/30 dark:text-pink-300",
+    chaster_pillory_started: "bg-pink-600/15 text-pink-700 border-pink-600/30 dark:text-pink-200",
+    chaster_pillory_ended: "bg-slate-500/15 text-slate-700 border-slate-500/30 dark:text-slate-300",
 };
 
-const FALLBACK_COLOR = "bg-slate-500/15 text-slate-300 border-slate-500/30";
+const FALLBACK_COLOR = "bg-slate-500/15 text-slate-700 border-slate-500/30 dark:text-slate-300";
 
 export function EventTypeBadge({ type }: { type: string }) {
     let color = EVENT_TYPE_COLORS[type] ?? FALLBACK_COLOR;
 
     // custom color for WOF
     if (type.startsWith("custom:wof_"))
-        color = "bg-violet-500/15 text-violet-300 border-violet-500/30"
+        color = "bg-violet-500/15 text-violet-700 border-violet-500/30 dark:text-violet-300"
 
     return (
         <span className={`inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-medium border font-mono ${color}`}>
@@ -39,11 +39,11 @@ export function TriggeredRulesBadges({ rules }: { rules: TriggeredRule[] }) {
             {rules.map((r, i) => (
                 <span
                     key={r.rule_id ?? i}
-                    className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-medium bg-purple-900/30 border border-purple-700/40 text-purple-200"
+                    className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-medium bg-purple-500/15 border border-purple-500/30 text-purple-700 dark:text-purple-200"
                 >
                     <Zap size={9} className="shrink-0" />
                     {r.rule_name}
-                    <span className="text-purple-400/70">({r.actions.length})</span>
+                    <span className="text-purple-500/70 dark:text-purple-400/70">({r.actions.length})</span>
                 </span>
             ))}
         </div>

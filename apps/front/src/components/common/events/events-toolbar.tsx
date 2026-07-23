@@ -31,13 +31,13 @@ export function EventsToolbar({
                     value={search}
                     onChange={e => onSearchChange(e.target.value)}
                     placeholder="Search events..."
-                    className="w-full pl-8 pr-3 py-1.5 text-xs bg-white/[0.04] border border-white/10 rounded-md text-slate-200 placeholder:text-muted-foreground/40 focus:outline-none focus:border-purple-500/50 focus:ring-1 focus:ring-purple-500/20 transition"
+                    className="w-full pl-8 pr-3 py-1.5 text-xs bg-muted/50 border border-border rounded-md text-foreground placeholder:text-muted-foreground/40 focus:outline-none focus:border-purple-500/50 focus:ring-1 focus:ring-purple-500/20 transition"
                 />
             </div>
 
             {/* Group / type filter */}
             <Select value={selectedFilter} onValueChange={onFilterChange}>
-                <SelectTrigger className="h-[30px] px-3 py-1.5 text-xs bg-white/[0.04] border border-white/10 rounded-md text-slate-200 focus:ring-purple-500/20 focus:border-purple-500/50 transition cursor-pointer font-normal">
+                <SelectTrigger className="h-[30px] px-3 py-1.5 text-xs bg-muted/50 border border-border rounded-md text-foreground focus:ring-purple-500/20 focus:border-purple-500/50 transition cursor-pointer font-normal">
                     <SelectValue placeholder="All events" />
                 </SelectTrigger>
                 <SelectContent>
@@ -73,7 +73,7 @@ export function EventsToolbar({
             {hasFilters && (
                 <button
                     onClick={() => { onSearchChange(""); onFilterChange("all"); }}
-                    className="flex items-center gap-1.5 px-2.5 py-1.5 text-xs text-muted-foreground/70 hover:text-slate-200 bg-white/[0.03] border border-white/10 rounded-md transition"
+                    className="flex items-center gap-1.5 px-2.5 py-1.5 text-xs text-muted-foreground/70 hover:text-foreground bg-muted/50 border border-border rounded-md transition"
                 >
                     <X size={11} />
                     Clear

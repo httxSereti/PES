@@ -72,8 +72,8 @@ export const Sensor: FC<SensorProps> = ({ sensorId }) => {
         <Card className="">
             <CardHeader className="flex flex-row justify-between items-center">
                 <CardTitle className="flex gap-2">
-                    <div className="p-2 rounded-lg bg-[#161226] border border-purple-800/40" >
-                        <Volume2 size={18} className="text-violet-400" />
+                    <div className="p-2 rounded-lg accent-tile" >
+                        <Volume2 size={18} className="accent-tile-icon" />
                     </div>
                     <div className="flex flex-col justify-center">
                         <div className="flex text-sm">

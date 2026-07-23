@@ -24,7 +24,7 @@ export default function TriggerRulesAction({ triggerRule, triggerAction }: { tri
 
     return (
         <div className={`flex gap-2 rounded-lg border px-3 pt-2.5 pb-3 border-border/50 bg-muted/30`}>
-            <span className={`inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-medium border font-mono bg-violet-500/15 text-violet-300 border-violet-500/30`}>
+            <span className={`inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-medium border font-mono bg-violet-500/15 text-violet-700 border-violet-500/30 dark:text-violet-300`}>
                 {triggerAction.action_type}
             </span>
             {triggerAction.action_type === "PROFILE"

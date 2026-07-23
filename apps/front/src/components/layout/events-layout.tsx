@@ -28,19 +28,19 @@ export default function EventsLayout() {
                     <div className="text-muted-foreground text-xs">Realtime event stream &amp; trigger rules</div>
                 </div>
                 <div className="ml-auto flex items-center gap-2">
-                    <div className="flex items-center gap-2 px-3 py-1.5 rounded-md bg-[#161226] border border-purple-800/40 text-xs text-muted-foreground/70">
+                    <div className="flex items-center gap-2 px-3 py-1.5 rounded-md accent-tile text-xs text-muted-foreground/70">
                         <span>{eventsCount}</span>
-                        <Activity size={11} className="text-violet-400" />
+                        <Activity size={11} className="accent-tile-icon" />
                     </div>
-                    <Link to="/app/events/trigger-rules/new" className="flex items-center gap-2 px-3 py-1.5 rounded-md bg-[#161226] border border-purple-800/40 text-xs text-muted-foreground/70">
-                        <Zap size={11} className="text-violet-400" />
+                    <Link to="/app/events/trigger-rules/new" className="flex items-center gap-2 px-3 py-1.5 rounded-md accent-tile text-xs text-muted-foreground/70">
+                        <Zap size={11} className="accent-tile-icon" />
                         <span>New TriggerRule</span>
                     </Link>
                 </div>
             </div>
 
             {/* Tab bar */}
-            <div className="px-5 border-b border-white/8 mt-4">
+            <div className="px-5 border-b border-border mt-4">
                 <nav className="flex items-center gap-1" aria-label="Events navigation">
                     {TABS.map(({ to, label, icon: Icon, end }) => (
                         <NavLink
@@ -50,8 +50,8 @@ export default function EventsLayout() {
                             id={`tab-events-${label.toLowerCase().replace(/\s+/g, "-")}`}
                             className={({ isActive }) =>
                                 `flex items-center gap-2 px-4 py-2.5 text-sm font-medium border-b-2 transition-colors -mb-px select-none ${isActive
-                                    ? "border-violet-500 text-violet-300"
-                                    : "border-transparent text-muted-foreground/60 hover:text-slate-300 hover:border-white/20"
+                                    ? "border-violet-500 text-violet-600 dark:text-violet-300"
+                                    : "border-transparent text-muted-foreground/60 hover:text-foreground hover:border-foreground/25"
                                 }`
                             }
                         >

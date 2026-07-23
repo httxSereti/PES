@@ -43,10 +43,10 @@ export default function EventsTable() {
                 totalCount={events.length}
             />
 
-            <div className="hidden md:block rounded-xl border border-white/8 overflow-hidden">
+            <div className="hidden md:block rounded-xl border border-border overflow-hidden">
                 <table className="w-full text-sm">
                     <thead>
-                        <tr className="border-b border-white/8 bg-white/[0.025]">
+                        <tr className="border-b border-border bg-muted/40">
                             {["Time", "Type", "Origin", "Triggered rules", ""].map((h, i) => (
                                 <th key={i} className="py-2.5 px-2 first:pl-4 last:pr-4 text-left text-[10px] font-semibold uppercase tracking-widest text-muted-foreground/50">
                                     {h}

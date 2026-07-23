@@ -112,7 +112,7 @@ export const CreateTriggerRule: FC = () => {
     return (
         <Dialog open={open} onOpenChange={handleOpenChange}>
             <DialogTrigger asChild>
-                <Button variant="ghost" className="rounded-md bg-[#161226] border border-purple-800/40 text-xs text-muted-foreground/90">
+                <Button variant="ghost" className="rounded-md accent-tile text-xs text-muted-foreground/90">
                     <PlusIcon />New TriggerRule
                 </Button>
             </DialogTrigger>

@@ -29,12 +29,12 @@ interface RuleSummary {
 
 function ActionTypeBadge({ type }: { type: string }) {
     const colors: Record<string, string> = {
-        PROFILE: "bg-violet-500/15 text-violet-300 border-violet-500/30",
-        LEVEL: "bg-sky-500/15 text-sky-300 border-sky-500/30",
-        MULT: "bg-amber-500/15 text-amber-300 border-amber-500/30",
-        CHASTER_TIME_UPDATE: "bg-emerald-500/15 text-emerald-300 border-emerald-500/30",
+        PROFILE: "bg-violet-500/15 text-violet-700 border-violet-500/30 dark:text-violet-300",
+        LEVEL: "bg-sky-500/15 text-sky-700 border-sky-500/30 dark:text-sky-300",
+        MULT: "bg-amber-500/15 text-amber-700 border-amber-500/30 dark:text-amber-300",
+        CHASTER_TIME_UPDATE: "bg-emerald-500/15 text-emerald-700 border-emerald-500/30 dark:text-emerald-300",
     };
-    const c = colors[type] ?? "bg-slate-500/15 text-slate-300 border-slate-500/30";
+    const c = colors[type] ?? "bg-slate-500/15 text-slate-700 border-slate-500/30 dark:text-slate-300";
     return (
         <span className={`inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-medium border font-mono ${c}`}>
             {type}
@@ -56,15 +56,15 @@ function RuleCard({ summary }: { summary: RuleSummary }) {
     }, [summary.last_triggered]);
 
     return (
-        <div className="rounded-xl border border-white/8 overflow-hidden">
+        <div className="rounded-xl border border-border overflow-hidden">
             {/* Rule header */}
             <button
-                className="w-full flex items-center gap-3 px-4 py-3 bg-white/[0.025] hover:bg-white/[0.04] transition-colors text-left"
+                className="w-full flex items-center gap-3 px-4 py-3 bg-muted/40 hover:bg-muted/60 transition-colors text-left"
                 onClick={() => setExpanded(v => !v)}
             >
-                <Zap size={14} className="text-violet-400 shrink-0" />
+                <Zap size={14} className="text-violet-600 dark:text-violet-400 shrink-0" />
                 <div className="flex-1 min-w-0">
-                    <div className="text-sm font-semibold text-slate-200 truncate">
+                    <div className="text-sm font-semibold text-foreground truncate">
                         {summary.rule_name}
                     </div>
                     {summary.rule_id && (
@@ -79,7 +79,7 @@ function RuleCard({ summary }: { summary: RuleSummary }) {
                     </div>
                     {/* Trigger count */}
                     <div className="flex items-center gap-1 text-xs">
-                        <span className="px-2 py-0.5 rounded-full bg-purple-500/20 border border-purple-500/30 text-purple-200 text-[11px] font-semibold">
+                        <span className="px-2 py-0.5 rounded-full bg-purple-500/15 border border-purple-500/30 text-purple-700 dark:text-purple-200 text-[11px] font-semibold">
                             ×{summary.trigger_count}
                         </span>
                     </div>
@@ -99,7 +99,7 @@ function RuleCard({ summary }: { summary: RuleSummary }) {
 
             {/* Actions */}
             {expanded && (
-                <div className="border-t border-white/5 bg-black/10 px-4 py-3">
+                <div className="border-t border-border/60 bg-muted/40 dark:bg-black/10 px-4 py-3">
                     <div className="text-[10px] text-muted-foreground/40 uppercase tracking-widest mb-3">Actions</div>
                     <div className="space-y-2">
                         {actions.length === 0 ? (
@@ -107,18 +107,18 @@ function RuleCard({ summary }: { summary: RuleSummary }) {
                         ) : actions.map((a, i) => (
                             <div
                                 key={i}
-                                className="flex flex-wrap items-center gap-3 px-3 py-2 rounded-lg bg-white/[0.03] border border-white/5"
+                                className="flex flex-wrap items-center gap-3 px-3 py-2 rounded-lg bg-muted/50 border border-border/60"
                             >
                                 <ActionTypeBadge type={a.action_type} />
                                 {a.display_name && (
-                                    <span className="text-xs text-slate-300">{a.display_name}</span>
+                                    <span className="text-xs text-foreground/80">{a.display_name}</span>
                                 )}
                                 <div className="ml-auto flex items-center gap-3 text-xs text-muted-foreground/60">
                                     <span>
                                         {a.duration === -1 ? "∞ permanent" : `${a.duration}s`}
                                     </span>
                                     {a.cumulative && (
-                                        <span className="text-teal-400/70 text-[10px] border border-teal-500/30 px-1.5 rounded">cumulative</span>
+                                        <span className="text-teal-600/80 dark:text-teal-400/70 text-[10px] border border-teal-500/30 px-1.5 rounded">cumulative</span>
                                     )}
                                 </div>
                             </div>

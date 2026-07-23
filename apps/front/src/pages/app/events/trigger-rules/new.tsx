@@ -14,8 +14,8 @@ export default function NewTriggerRulesPage() {
             </Button>
 
             <div className="flex items-center gap-2">
-                <div className="rounded-lg border border-purple-800/40 bg-[#161226] p-2">
-                    <Zap size={14} className="text-violet-400" />
+                <div className="rounded-lg accent-tile p-2">
+                    <Zap size={14} className="accent-tile-icon" />
                 </div>
                 <div>
                     <h1 className="font-mono text-sm">New Trigger Rule</h1>

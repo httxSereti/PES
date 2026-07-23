@@ -22,16 +22,16 @@ export const UnitSelectChannel: FC<UnitSelectChannelProps> = ({ unitId, currentC
                 className={`cursor-pointer bg-muted${currentChannel === "channelA" ? "" : "/40"}`}
                 onClick={() => { setCurrentChannel("channelA") }}
             >
-                <span className="text-zinc-400">A |</span>
-                <span className="text-violet-400 uppercase">{unit?.ch_A_use}</span>
+                <span className="text-muted-foreground">A |</span>
+                <span className="text-violet-600 dark:text-violet-400 uppercase">{unit?.ch_A_use}</span>
             </Button>
             <Button
                 variant="ghost"
                 className={`cursor-pointer bg-muted${currentChannel === "channelB" ? "" : "/40"}`}
                 onClick={() => { setCurrentChannel("channelB") }}
             >
-                <span className="text-zinc-400">B |</span>
-                <span className="text-blue-400 uppercase">{unit?.ch_B_use}</span>
+                <span className="text-muted-foreground">B |</span>
+                <span className="text-blue-600 dark:text-blue-400 uppercase">{unit?.ch_B_use}</span>
             </Button>
         </div>
     )

@@ -34,8 +34,8 @@ export const Unit: FC<UnitProps> = ({ unitId }) => {
         <Card className="">
             <CardHeader className="flex flex-row justify-between items-center">
                 <CardTitle className="flex gap-2">
-                    <div className="p-2 rounded-lg bg-[#161226] border border-purple-800/40" >
-                        <Computer size={18} className="text-violet-400" />
+                    <div className="p-2 rounded-lg accent-tile" >
+                        <Computer size={18} className="accent-tile-icon" />
                     </div>
                     <div className="flex flex-col justify-center">
                         <div className="flex text-sm">
@@ -74,7 +74,7 @@ export const Unit: FC<UnitProps> = ({ unitId }) => {
                     <div className="flex flex-col gap-3.5 px-3 py-3 rounded-lg border border-border/35 bg-muted/20">
                         <p className="font-mono text-[10px] tracking-widest uppercase text-primary/40 border-b pb-2">Unit Settings</p>
 
-                        <div className="grid grid-cols-2 divide-x divide-white/[0.06] py-2 border-b border-white/[0.06]">
+                        <div className="grid grid-cols-2 divide-x divide-border/60 py-2 border-b border-border/60">
                             {(["adj_1", "adj_2"] as const).map((adj_name) => {
                                 const val = adj_name === 'adj_1' ? unit?.adj_1 : unit?.adj_2;
                                 return (

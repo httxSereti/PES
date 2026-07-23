@@ -5,12 +5,12 @@ import { EventTypeBadge, TriggeredRulesBadges } from "./event-badges";
 
 function EventRowDetail({ event }: { event: TriggeredEvent }) {
     return (
-        <tr className="border-b border-white/5 bg-white/[0.015]">
+        <tr className="border-b border-border/60 bg-muted/20">
             <td colSpan={5} className="px-6 pb-4 pt-2">
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
                     <div>
                         <div className="text-[10px] text-muted-foreground/50 uppercase tracking-widest mb-1.5">Event data</div>
-                        <pre className="text-xs text-slate-300 bg-black/30 rounded-lg p-3 overflow-auto max-h-40 font-mono border border-white/5">
+                        <pre className="text-xs text-foreground/80 bg-muted dark:bg-black/30 rounded-lg p-3 overflow-auto max-h-40 font-mono border border-border/60">
                             {JSON.stringify(event.event_data, null, 2)}
                         </pre>
                     </div>
@@ -19,20 +19,20 @@ function EventRowDetail({ event }: { event: TriggeredEvent }) {
                             <div className="text-[10px] text-muted-foreground/50 uppercase tracking-widest mb-1.5">Triggered rules &amp; actions</div>
                             <div className="space-y-2">
                                 {event.triggered_rules.map((rule, i) => (
-                                    <div key={rule.rule_id ?? i} className="bg-black/20 border border-white/5 rounded-lg p-3">
+                                    <div key={rule.rule_id ?? i} className="bg-muted/70 dark:bg-black/20 border border-border/60 rounded-lg p-3">
                                         <div className="flex items-center gap-2 mb-2">
-                                            <Zap size={11} className="text-violet-400" />
-                                            <span className="text-xs font-semibold text-slate-200">{rule.rule_name}</span>
+                                            <Zap size={11} className="text-violet-600 dark:text-violet-400" />
+                                            <span className="text-xs font-semibold text-foreground">{rule.rule_name}</span>
                                             <span className="text-[10px] text-muted-foreground/50 ml-auto">priority {rule.priority}</span>
                                         </div>
                                         <div className="space-y-1.5 pl-4">
                                             {rule.actions.map((a, j) => (
                                                 <div key={a.queue_item_id ?? j} className="flex flex-wrap items-center gap-2 text-[11px]">
-                                                    <span className="text-violet-300/80 font-mono">{a.action_type}</span>
+                                                    <span className="text-violet-700/80 dark:text-violet-300/80 font-mono">{a.action_type}</span>
                                                     <span className="text-muted-foreground/60">{a.display_name}</span>
-                                                    <span className="text-slate-400 ml-auto">
+                                                    <span className="text-muted-foreground ml-auto">
                                                         {a.duration === -1 ? "∞" : `${a.duration}s`}
-                                                        {a.cumulative && <span className="ml-1 text-teal-400/70">cumul</span>}
+                                                        {a.cumulative && <span className="ml-1 text-teal-600/80 dark:text-teal-400/70">cumul</span>}
                                                     </span>
                                                 </div>
                                             ))}
@@ -57,7 +57,7 @@ export function EventRow({ event }: { event: TriggeredEvent }) {
     return (
         <>
             <tr
-                className="border-b border-white/5 hover:bg-white/[0.02] cursor-pointer transition-colors"
+                className="border-b border-border/60 hover:bg-muted/40 cursor-pointer transition-colors"
                 onClick={() => setExpanded(v => !v)}
             >
                 <td className="py-3 pl-4 pr-2 text-xs text-muted-foreground/70 font-mono whitespace-nowrap">{date}</td>
@@ -84,9 +84,9 @@ export function EventCard({ event }: { event: TriggeredEvent }) {
     }), [event.triggered_at]);
 
     return (
-        <div className="rounded-xl border border-white/8 overflow-hidden">
+        <div className="rounded-xl border border-border overflow-hidden">
             <div
-                className="flex items-start justify-between gap-3 px-4 py-3 cursor-pointer hover:bg-white/[0.02] transition-colors"
+                className="flex items-start justify-between gap-3 px-4 py-3 cursor-pointer hover:bg-muted/40 transition-colors"
                 onClick={() => setExpanded(v => !v)}
             >
                 <div className="flex flex-col gap-1.5 min-w-0 flex-1">
@@ -105,11 +105,11 @@ export function EventCard({ event }: { event: TriggeredEvent }) {
             </div>
 
             {expanded && (
-                <div className="border-t border-white/5 bg-white/[0.015] px-4 pb-4 pt-3">
+                <div className="border-t border-border/60 bg-muted/20 px-4 pb-4 pt-3">
                     <div className="flex flex-col gap-3">
                         <div>
                             <div className="text-[10px] text-muted-foreground/50 uppercase tracking-widest mb-1.5">Event data</div>
-                            <pre className="text-xs text-slate-300 bg-black/30 rounded-lg p-3 overflow-auto max-h-40 font-mono border border-white/5">
+                            <pre className="text-xs text-foreground/80 bg-muted dark:bg-black/30 rounded-lg p-3 overflow-auto max-h-40 font-mono border border-border/60">
                                 {JSON.stringify(event.event_data, null, 2)}
                             </pre>
                         </div>
@@ -118,20 +118,20 @@ export function EventCard({ event }: { event: TriggeredEvent }) {
                                 <div className="text-[10px] text-muted-foreground/50 uppercase tracking-widest mb-1.5">Triggered rules &amp; actions</div>
                                 <div className="space-y-2">
                                     {event.triggered_rules.map((rule, i) => (
-                                        <div key={rule.rule_id ?? i} className="bg-black/20 border border-white/5 rounded-lg p-3">
+                                        <div key={rule.rule_id ?? i} className="bg-muted/70 dark:bg-black/20 border border-border/60 rounded-lg p-3">
                                             <div className="flex items-center gap-2 mb-2">
-                                                <Zap size={11} className="text-violet-400" />
-                                                <span className="text-xs font-semibold text-slate-200">{rule.rule_name}</span>
+                                                <Zap size={11} className="text-violet-600 dark:text-violet-400" />
+                                                <span className="text-xs font-semibold text-foreground">{rule.rule_name}</span>
                                                 <span className="text-[10px] text-muted-foreground/50 ml-auto">priority {rule.priority}</span>
                                             </div>
                                             <div className="space-y-1.5 pl-4">
                                                 {rule.actions.map((a, j) => (
                                                     <div key={a.queue_item_id ?? j} className="flex flex-wrap items-center gap-2 text-[11px]">
-                                                        <span className="text-violet-300/80 font-mono">{a.action_type}</span>
+                                                        <span className="text-violet-700/80 dark:text-violet-300/80 font-mono">{a.action_type}</span>
                                                         <span className="text-muted-foreground/60">{a.display_name}</span>
-                                                        <span className="text-slate-400 ml-auto">
+                                                        <span className="text-muted-foreground ml-auto">
                                                             {a.duration === -1 ? "∞" : `${a.duration}s`}
-                                                            {a.cumulative && <span className="ml-1 text-teal-400/70">cumul</span>}
+                                                            {a.cumulative && <span className="ml-1 text-teal-600/80 dark:text-teal-400/70">cumul</span>}
                                                         </span>
                                                     </div>
                                                 ))}

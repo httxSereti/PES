@@ -25,7 +25,7 @@ export default function TriggerRulesPage() {
             ) : (
                 <>
                     <div className="ml-auto justify-between flex items-center">
-                        <div className="flex items-center gap-2 text-xs text-slate-50">
+                        <div className="flex items-center gap-2 text-xs text-foreground">
                             <div className="text-xs text-muted-foreground/50 pb-1">
                                 {triggerRules.length} rule{triggerRules.length > 1 ? "s" : ""} available
                             </div>

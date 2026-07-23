@@ -33,7 +33,9 @@ export const UnitQuickLevel: FC<UnitQuickLevelProps> = ({ unitId, selectedChanne
     if (!unit)
         return null;
 
-    const channelColor: string = selectedChannel === "channelA" ? "text-violet-400" : "text-blue-400"
+    const channelColor: string = selectedChannel === "channelA"
+        ? "text-violet-600 dark:text-violet-400"
+        : "text-blue-600 dark:text-blue-400"
 
     return (
         <div className="flex flex-col gap-2">

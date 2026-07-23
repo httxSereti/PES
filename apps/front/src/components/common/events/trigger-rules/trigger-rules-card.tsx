@@ -16,7 +16,7 @@ import { toast } from "sonner";
 
 
 export function TriggerRuleLabelBadge({ name }: { name: string }) {
-    const color = "bg-violet-500/15 text-violet-300 border-violet-500/30"
+    const color = "bg-violet-500/15 text-violet-700 border-violet-500/30 dark:text-violet-300"
 
     return (
         <span className={`inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-medium border font-mono ${color}`}>
@@ -93,8 +93,8 @@ export default function TriggerRulesCard({ triggerRule }: { triggerRule: Trigger
         <Card className="">
             <CardHeader className="flex flex-row justify-between items-center">
                 <CardTitle className="flex gap-2">
-                    <div className="p-2 rounded-lg bg-[#161226] border border-purple-800/40" >
-                        <Zap size={14} className="text-violet-400" />
+                    <div className="p-2 rounded-lg accent-tile" >
+                        <Zap size={14} className="accent-tile-icon" />
                     </div>
                     <div className="flex flex-col justify-center">
                         <div className="font-mono text-xs">
@@ -175,15 +175,15 @@ export default function TriggerRulesCard({ triggerRule }: { triggerRule: Trigger
                         <div className="flex flex-row items-center gap-2">
 
                             <>
-                                <Activity size={15} className="text-gray-400/90" />
-                                <span className={`inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-medium border font-mono bg-violet-800/15 text-violet-400 border-violet-700/30`}>
+                                <Activity size={15} className="text-muted-foreground" />
+                                <span className={`inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-medium border font-mono bg-violet-500/15 text-violet-700 border-violet-500/30 dark:text-violet-300`}>
                                     {triggerRule.event_type}
                                 </span>
                             </>
 
                             {triggerRule.labels.length > 0 ? (
                                 <>
-                                    <Tag size={15} className="text-gray-400/90" />
+                                    <Tag size={15} className="text-muted-foreground" />
                                     {triggerRule.labels.map((label) => (
                                         <TriggerRuleLabelBadge key={label.id} name={label.name} />
                                     ))}

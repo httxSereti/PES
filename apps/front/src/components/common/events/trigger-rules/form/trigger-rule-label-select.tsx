@@ -107,7 +107,7 @@ export default function TriggerRuleLabelSelect({
                         <Badge
                             key={name}
                             variant="outline"
-                            className="gap-1 border-violet-500/30 bg-violet-500/15 font-mono text-[10px] text-violet-300"
+                            className="gap-1 border-violet-500/30 bg-violet-500/15 font-mono text-[10px] text-violet-700 dark:text-violet-300"
                         >
                             {name}
                             <button
