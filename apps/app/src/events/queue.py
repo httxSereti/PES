@@ -16,6 +16,18 @@ logger = structlog.get_logger("pes")
 
 
 class ActionQueue:
+    """
+    Concurrency model: tick()/cancel()/cancel_all() all run on the API
+    (uvicorn) event loop, while enqueue() may be called from other threads
+    (e.g. the Discord bot's loop via the dispatcher). All state-machine
+    transitions are therefore performed atomically under self._lock as a
+    "claim": the status check, the transition, and the removal from the
+    list happen in one locked section. Only the winning claimant performs
+    the (slow, non-blocking) hardware apply/reverse outside the lock, so a
+    RUNNING item can never be reversed twice and an item cannot be
+    finalized by one caller while another cancels it.
+    """
+
     _instance: ActionQueue | None = None
 
     @classmethod
@@ -33,6 +45,10 @@ class ActionQueue:
         self._items: list[QueueItem] = []
         self._lock = threading.Lock()
         self._paused = False
+        # Ids of items whose apply() is in flight. Such items have no
+        # snapshot yet, so cancel/finalize must not reverse them;
+        # _start_item() undoes the hardware state once apply() completes.
+        self._applying: set[str] = set()
 
         # Stats
         self._total_done = 0
@@ -91,8 +107,8 @@ class ActionQueue:
         if not has_non_cumulative_running:
             for item in waiting:
                 if not item.cumulative:
-                    await self._start_item(item)
-                    break  # Only one non-cumulative at a time
+                    if await self._start_item(item):
+                        break  # Only one non-cumulative at a time
 
         # Start all waiting cumulative items
         for item in waiting:
@@ -101,20 +117,28 @@ class ActionQueue:
 
     async def cancel(self, item_id: str) -> bool:
         """Cancel a specific item. Reverses it if RUNNING."""
+        # Atomic claim: transition + removal under the lock so no other
+        # thread/loop can finalize or cancel the same item concurrently.
         with self._lock:
             item = next((i for i in self._items if i.id == item_id), None)
-
-        if not item:
-            return False
-
-        if item.status == QueueItemStatus.RUNNING:
-            await self._executor.reverse(item)
-
-        with self._lock:
+            if not item:
+                return False
+            # Reverse only if apply() already completed (snapshot exists);
+            # otherwise _start_item() undoes the hardware state instead.
+            needs_reverse = (
+                item.status == QueueItemStatus.RUNNING and item.id not in self._applying
+            )
             item.status = QueueItemStatus.CANCELLED
             item.completed_at = datetime.now()
             self._items = [i for i in self._items if i.id != item_id]
             self._total_cancelled += 1
+
+        # Only the claimant reverses.
+        if needs_reverse:
+            try:
+                await self._executor.reverse(item)
+            except Exception as e:
+                logger.error(f"[Queue] Error reversing action '{item.id}': {e}")
 
         logger.info(f"[Queue] Cancelled item '{item_id}' ({item.origin})")
         self._notify_update()
@@ -122,19 +146,31 @@ class ActionQueue:
 
     async def cancel_all(self) -> int:
         """Cancel all items. Returns count of cancelled items."""
+        # Atomic claim: snapshot, transition, and clear in one locked
+        # section so tick() on the other loop cannot finalize or start
+        # any of these items afterwards.
         with self._lock:
             items_to_cancel = list(self._items)
-
-        count = 0
-        for item in items_to_cancel:
-            if item.status == QueueItemStatus.RUNNING:
-                await self._executor.reverse(item)
-            count += 1
-
-        with self._lock:
-            self._total_cancelled += len(self._items)
+            # Skip items whose apply() is still in flight (see cancel()).
+            running = [
+                i
+                for i in items_to_cancel
+                if i.status == QueueItemStatus.RUNNING and i.id not in self._applying
+            ]
+            for item in items_to_cancel:
+                item.status = QueueItemStatus.CANCELLED
+                item.completed_at = datetime.now()
+            self._total_cancelled += len(items_to_cancel)
             self._items.clear()
 
+        # Only the claimant reverses (see cancel()).
+        for item in running:
+            try:
+                await self._executor.reverse(item)
+            except Exception as e:
+                logger.error(f"[Queue] Error reversing action '{item.id}': {e}")
+
+        count = len(items_to_cancel)
         logger.info(f"[Queue] Cancelled all items ({count})")
         self._notify_update()
         return count
@@ -179,40 +215,76 @@ class ActionQueue:
 
     # ───────── Internal ─────────
 
-    async def _start_item(self, item: QueueItem) -> None:
-        """Start executing an item."""
-        item.status = QueueItemStatus.RUNNING
-        item.started_at = datetime.now()
-        item.elapsed = 0
+    async def _start_item(self, item: QueueItem) -> bool:
+        """Start executing an item. Returns True if it was actually started."""
+        # Atomic claim: only start if still WAITING and still queued (it may
+        # have been cancelled by the other loop since the tick snapshot).
+        with self._lock:
+            if item.status != QueueItemStatus.WAITING or not self._is_queued(item):
+                return False
+            item.status = QueueItemStatus.RUNNING
+            item.started_at = datetime.now()
+            item.elapsed = 0
+            self._applying.add(item.id)
 
         try:
             snapshot = await self._executor.apply(item)
-            item.snapshot_data = snapshot
         except Exception as e:
             logger.error(f"[Queue] Error applying action '{item.id}': {e}")
             # Remove failed item
             with self._lock:
+                self._applying.discard(item.id)
                 self._items = [i for i in self._items if i.id != item.id]
-            return
+            return False
+
+        with self._lock:
+            self._applying.discard(item.id)
+            still_queued = self._is_queued(item)
+            if still_queued:
+                item.snapshot_data = snapshot
+
+        if not still_queued:
+            # Cancelled/finalized while apply() was in flight: undo the
+            # hardware state now, since the claimant could not reverse it.
+            item.snapshot_data = snapshot
+            try:
+                await self._executor.reverse(item)
+            except Exception as e:
+                logger.error(f"[Queue] Error reversing action '{item.id}': {e}")
+            return False
 
         logger.info(
             f"[Queue] Started '{item.action_type.value}' (duration={item.duration}s, cumulative={item.cumulative})",
             origin=item.origin,
         )
         self._notify_update()
+        return True
+
+    def _is_queued(self, item: QueueItem) -> bool:
+        """Identity check for queue membership. Caller must hold the lock."""
+        return any(i is item for i in self._items)
 
     async def _finalize_item(self, item: QueueItem) -> None:
         """Finalize an expired item: reverse and remove."""
-        try:
-            await self._executor.reverse(item)
-        except Exception as e:
-            logger.error(f"[Queue] Error reversing action '{item.id}': {e}")
-
+        # Atomic claim: skip if the other loop already cancelled or
+        # finalized this item since the tick snapshot.
         with self._lock:
+            if item.status != QueueItemStatus.RUNNING or not self._is_queued(item):
+                return
+            # If apply() is still in flight there is no snapshot yet;
+            # _start_item() undoes the hardware state once apply() completes.
+            needs_reverse = item.id not in self._applying
             item.status = QueueItemStatus.DONE
             item.completed_at = datetime.now()
             self._items = [i for i in self._items if i.id != item.id]
             self._total_done += 1
+
+        # Only the claimant reverses.
+        if needs_reverse:
+            try:
+                await self._executor.reverse(item)
+            except Exception as e:
+                logger.error(f"[Queue] Error reversing action '{item.id}': {e}")
 
         logger.info(
             f"[Queue] Completed '{item.action_type.value}' after {item.elapsed}s",

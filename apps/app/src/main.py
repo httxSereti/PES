@@ -241,12 +241,27 @@ SECRET_KEY = os.getenv("JWT_SECRET_KEY")
 ALGORITHM = "HS256"
 
 
+async def queue_tick_loop():
+    """Tick the event action queue once per second (owned by the API loop)."""
+    while True:
+        try:
+            await action_queue.tick()
+        except asyncio.CancelledError:
+            raise
+        except Exception:
+            logger.exception("[Queue] Task exception for queue tick")
+        await asyncio.sleep(1)
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # startup
     loop = asyncio.get_event_loop()
     ws_notifier.setup(loop)
     asyncio.create_task(ws_notifier.consume(store.websocket))
+
+    # Per-second action queue tick (independent of the Discord bot)
+    queue_task = asyncio.create_task(queue_tick_loop())
 
     # Initialize database and seed data
     await db.init()
@@ -268,6 +283,7 @@ async def lifespan(app: FastAPI):
     yield
 
     # shutdown
+    queue_task.cancel()
     await db.close()
 
 
@@ -692,7 +708,6 @@ class Bot2b3(NextcordBot):
         self.statusChannel: nextcord.abc.GuildChannel | None = None
 
         # Event system (set from lifespan after FastAPI starts)
-        self._action_queue: ActionQueue | None = None
         self._dispatcher: EventDispatcher | None = None
 
         logger.info("Discord bot initalized")
@@ -750,17 +765,6 @@ class Bot2b3(NextcordBot):
         except Exception:
             logger.exception("[Sensors] Task exception for bt_sensor_alarm")
 
-    # Event action queueing (new system)
-    @tasks.loop(seconds=1)
-    async def rerun_event_queue_mgmt(self):
-        try:
-            if self._action_queue:
-                await self._action_queue.tick()
-        except asyncio.CancelledError:
-            raise
-        except Exception:
-            logger.exception("[Sensors] Task exception for event_queue_mgmt")
-
     # @Bot is Ready
     async def on_ready(self):
         # Find and save usefull channels
@@ -774,11 +778,9 @@ class Bot2b3(NextcordBot):
         )
 
         # Get event system references via singletons
-        self._action_queue = ActionQueue.get_instance()
         self._dispatcher = EventDispatcher.get_instance()
 
         # Start all tasks
-        self.rerun_event_queue_mgmt.start()  # queue management
         self.rerun_bt_sensor_alarm.start()  # Bluetooth sensors
         return True
 
@@ -1112,8 +1114,7 @@ async def websocket_endpoint(websocket: WebSocket, token: str):
 
                 # TODO: remove after trigger rule/events update
                 if msg_type == "core:stop":
-                    if bot._action_queue:
-                        await bot._action_queue.cancel_all()
+                    await ActionQueue.get_instance().cancel_all()
 
                 # fetch command to use
                 handler_tuple = HANDLERS.get(msg_type)

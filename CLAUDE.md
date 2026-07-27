@@ -49,11 +49,11 @@ No test suite exists in this repo. There is no migration tooling: tables are cre
 
 `main.py` is a deliberate monolith that runs the entire backend in one process. At import time it instantiates the core singletons in order (`main.py` ~160–244): `Database()` → `Store()` → `EventRegistry(db)` → `ActionExecutor(store, ws_notifier)` → `ActionQueue(executor, ws_notifier)` → `EventDispatcher(registry, action_queue, ws_notifier)`.
 
-The `__main__` block starts **daemon threads** for: each BT sensor (if `ENABLE_BT_SENSORS`), each 2B unit (if `ENABLE_MK2BT`), the software ramp loop, and the API (`uvicorn` on `0.0.0.0:8000`). The **Discord bot (`Bot2b3`, nextcord) runs on the main thread** inside a restart loop. The bot instance grabs `ActionQueue.get_instance()` / `EventDispatcher.get_instance()` and drives the **per-second queue tick** (`await self._action_queue.tick()`).
+The `__main__` block starts **daemon threads** for: each BT sensor (if `ENABLE_BT_SENSORS`), each 2B unit (if `ENABLE_MK2BT`), the software ramp loop, and the API (`uvicorn` on `0.0.0.0:8000`). The **Discord bot (`Bot2b3`, nextcord) runs on the main thread** inside a restart loop; it only grabs `EventDispatcher.get_instance()` for sensor alarms. The **per-second queue tick** (`queue_tick_loop`) is an asyncio task started in the FastAPI `lifespan`, so it runs on the API loop and does not depend on Discord.
 
-So when reasoning about a flow: hardware and the web server live on background threads; the event loop ticking the action queue is owned by the Discord bot on the main thread; cross-thread → asyncio handoff goes through `WebSocketNotifier` (`call_soon_threadsafe`).
+So when reasoning about a flow: hardware and the web server live on background threads; the event loop ticking the action queue (and serving `cancel`/`cancel_all`) is the uvicorn API loop; cross-thread → asyncio handoff goes through `WebSocketNotifier` (`call_soon_threadsafe`).
 
-FastAPI `lifespan` (not `__main__`) handles async startup: `ws_notifier.setup(loop)`, start `ws_notifier.consume`, `db.init()`, create tables, `seed_from_json(db)`, and inject the dispatcher into the Chaster webhook router via `chaster_webhooks.setup(dispatcher)`. CORS is open to all origins. Toggle hardware with `ENABLE_MK2BT` / `ENABLE_BT_SENSORS` flags near the top of `main.py`. Config is loaded from `apps/app/config.env` via `dotenv`.
+FastAPI `lifespan` (not `__main__`) handles async startup: `ws_notifier.setup(loop)`, start `ws_notifier.consume`, start `queue_tick_loop` (the per-second `ActionQueue.tick()` driver), `db.init()`, create tables, `seed_from_json(db)`, and inject the dispatcher into the Chaster webhook router via `chaster_webhooks.setup(dispatcher)`. CORS is open to all origins. Toggle hardware with `ENABLE_MK2BT` / `ENABLE_BT_SENSORS` flags near the top of `main.py`. Config is loaded from `apps/app/config.env` via `dotenv`.
 
 ## Event → Action pipeline (`src/events/`)
 
