@@ -44,16 +44,6 @@ _PROFILE_FIELDS = [
     "level_d",
     "power_bias",
     "level_map",
-    "ch_A_ramp_phase",
-    "ch_A_ramp_prct",
-    "ch_B_ramp_phase",
-    "ch_B_ramp_prct",
-    "adj_1_ramp_phase",
-    "adj_1_ramp_prct",
-    "adj_2_ramp_phase",
-    "adj_2_ramp_prct",
-    "ramp_time",
-    "ramp_wave",
 ]
 
 logger = structlog.get_logger("pes")
@@ -205,7 +195,7 @@ class ActionExecutor:
 
         for unit_name, unit_profile in bck_settings.items():
             unit = UnitDict(unit_name)
-            changes = {"sync": False, "updated": True, "ramp_progress": 0}
+            changes = {"sync": False, "updated": True}
 
             for field, value in unit_profile.items():
                 if field not in _PROFILE_FIELDS:

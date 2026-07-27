@@ -222,16 +222,6 @@ PROFILE_FIELDS = [
     "level_d",
     "power_bias",
     "level_map",
-    "ch_A_ramp_phase",
-    "ch_A_ramp_prct",
-    "ch_B_ramp_phase",
-    "ch_B_ramp_prct",
-    "adj_1_ramp_phase",
-    "adj_1_ramp_prct",
-    "adj_2_ramp_phase",
-    "adj_2_ramp_prct",
-    "ramp_time",
-    "ramp_wave",
 ]
 
 # init Store
@@ -296,10 +286,6 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
-
-# init multi threading
-# global threads_settings
-threads_settings = {}
 
 # Slash_Command constantes
 PROFILE_RANDOM = "ABCDEFGHIJ"
@@ -988,107 +974,6 @@ def thread_sensors_bt(sensor: str, addr: str, service: str) -> None:
             time.sleep(30)
 
 
-# Software ramp
-def thread_update_ramp():
-    # TODO: REF ramp mechanism
-    RAMP_STEP = 2
-    logger.info(f"Start software ramp thread")
-    while True:
-        try:
-            time.sleep(RAMP_STEP)
-            for unit in BT_UNITS:
-                # determine percentage
-                prct_progress = 0
-                # ramp disable
-                if threads_settings[unit]["ramp_time"] == 0:
-                    prct_progress = 100
-                # ramp enable
-                else:
-                    # check if ramp is over
-                    if (
-                        threads_settings[unit]["ramp_progress"]
-                        > threads_settings[unit]["ramp_time"]
-                    ):
-                        threads_settings[unit]["ramp_progress"] = 0
-                        prct_progress = 0
-                    else:
-                        # in wave mode we do up and down in the same cycle so 2 times faster
-                        if threads_settings[unit]["ramp_wave"]:
-                            # wave decreasing
-                            if (
-                                threads_settings[unit]["ramp_progress"]
-                                > threads_settings[unit]["ramp_time"] / 2
-                            ):
-                                prct_progress = 200 - int(
-                                    threads_settings[unit]["ramp_progress"]
-                                    / threads_settings[unit]["ramp_time"]
-                                    * 200
-                                )
-                            # wave increasing
-                            else:
-                                prct_progress = int(
-                                    threads_settings[unit]["ramp_progress"]
-                                    / threads_settings[unit]["ramp_time"]
-                                    * 200
-                                )
-                        else:
-                            prct_progress = int(
-                                threads_settings[unit]["ramp_progress"]
-                                / threads_settings[unit]["ramp_time"]
-                                * 100
-                            )
-                # calc ramp for each value
-                update_need = False
-                for field in ("ch_A", "ch_B", "adj_1", "adj_2"):
-                    # ramp active ?
-                    if (
-                        threads_settings[unit][field + "_ramp_prct"] < 100
-                        and threads_settings[unit]["ramp_time"] > 0
-                    ):
-                        # add phase to progress
-                        prct = (
-                            prct_progress
-                            + threads_settings[unit][field + "_ramp_phase"] / 180 * 100
-                        )
-                        if prct > 100:
-                            prct = 200 - prct
-                        # ramp
-                        delta = (
-                            threads_settings[unit][field]
-                            * (100 - threads_settings[unit][field + "_ramp_prct"])
-                            / 100
-                        )
-                        new_val = threads_settings[unit][field] - int(
-                            delta * (100 - prct) / 100
-                        )
-                    else:
-                        # no ramp
-                        new_val = threads_settings[unit][field]
-                    # add multiplier for level
-                    if field in ("ch_A", "ch_B"):
-                        new_val = int(
-                            new_val
-                            * threads_settings[unit][field + "_multiplier"]
-                            / 100
-                        )
-                    # check if update needed
-                    if threads_settings[unit][field] != new_val:
-                        threads_settings[unit][field] = new_val
-                        update_need = True
-
-                # update the console
-                if update_need:
-                    threads_settings[unit]["sync"] = False
-                    threads_settings[unit]["updated"] = True
-                # ramp progress
-                threads_settings[unit]["ramp_progress"] = (
-                    threads_settings[unit]["ramp_progress"] + RAMP_STEP
-                )
-        except Exception:
-            logger.exception("Thread error in update_ramp")
-            time.sleep(30)
-
-
 def mk2b_init():
     # Init 2B threads settings
     for init_bt_name in BT_UNITS:
@@ -1099,18 +984,10 @@ def mk2b_init():
                 "id": init_bt_name,
                 # Channel A
                 "ch_A": 0,  # ch_A target level for the 2B
-                "ch_A_ramp_phase": 0,  # ramp phase
-                "ch_A_ramp_prct": 100,  # ramp % of max for ch A
                 "ch_A_multiplier": 100,  # percentage of level multiplier
                 # Channel B
                 "ch_B": 0,  # ch_B target level for the 2B
-                "ch_B_ramp_phase": 0,  # ramp phase
-                "ch_B_ramp_prct": 100,  # ramp % of max for ch B
                 "ch_B_multiplier": 100,  # percentage of level multiplier
-                # Soft ramp
-                "ramp_time": 120,  # ramp duration
-                "ramp_wave": False,  # ramp decrease after max also reset to min
-                "ramp_progress": 0,  # progress in ramp cycle
                 # Channels usage
                 "ch_A_use": DEFAULT_USAGE[init_bt_name]["A"],  # ch_A usage
                 "ch_B_use": DEFAULT_USAGE[init_bt_name]["B"],  # ch_B usage
@@ -1124,14 +1001,10 @@ def mk2b_init():
                 "adj_1": DEFAULT_USAGE_SETTING[init_bt_name][
                     "adj_1"
                 ],  # 2B adj 1 target setting
-                "adj_1_ramp_phase": 0,  # ramp phase
-                "adj_1_ramp_prct": 100,  # ramp % of max for adj_1
                 # waveform setting 2
                 "adj_2": DEFAULT_USAGE_SETTING[init_bt_name][
                     "adj_2"
                 ],  # 2B adj 2 target setting
-                "adj_2_ramp_phase": 0,  # ramp phase
-                "adj_2_ramp_prct": 100,  # ramp % of max for adj_2
                 # 2B timer adjusts
                 "adj_3": DEFAULT_USAGE_SETTING[init_bt_name]["adj_3"],  # ramp speed
                 "adj_4": DEFAULT_USAGE_SETTING[init_bt_name]["adj_4"],  # wrap factor
@@ -1149,61 +1022,6 @@ def mk2b_init():
                 "updated": False,  # values are changed
             },
         )
-
-        threads_settings[init_bt_name] = {
-            "id": init_bt_name,
-            # Channel A
-            "ch_A": 0,  # ch_A target level for the 2B
-            "ch_A_ramp_phase": 0,  # ramp phase
-            "ch_A_ramp_prct": 100,  # ramp % of max for ch A
-            "ch_A_multiplier": 100,  # percentage of level multiplier
-            # Channel B
-            "ch_B": 0,  # ch_B target level for the 2B
-            "ch_B_ramp_phase": 0,  # ramp phase
-            "ch_B_ramp_prct": 100,  # ramp % of max for ch B
-            "ch_B_multiplier": 100,  # percentage of level multiplier
-            # Soft ramp
-            "ramp_time": 120,  # ramp duration
-            "ramp_wave": False,  # ramp decrease after max also reset to min
-            "ramp_progress": 0,  # progress in ramp cycle
-            # Channels usage
-            "ch_A_use": DEFAULT_USAGE[init_bt_name]["A"],  # ch_A usage
-            "ch_B_use": DEFAULT_USAGE[init_bt_name]["B"],  # ch_B usage
-            "ch_A_limit": USAGE_LIMIT.get(
-                DEFAULT_USAGE[init_bt_name]["A"], USAGE_LIMIT["default"]
-            ),
-            "ch_B_limit": USAGE_LIMIT.get(
-                DEFAULT_USAGE[init_bt_name]["B"], USAGE_LIMIT["default"]
-            ),
-            # waveform setting 1
-            "adj_1": DEFAULT_USAGE_SETTING[init_bt_name][
-                "adj_1"
-            ],  # 2B adj 1 target setting
-            "adj_1_ramp_phase": 0,  # ramp phase
-            "adj_1_ramp_prct": 100,  # ramp % of max for adj_1
-            # waveform setting 2
-            "adj_2": DEFAULT_USAGE_SETTING[init_bt_name][
-                "adj_2"
-            ],  # 2B adj 2 target setting
-            "adj_2_ramp_phase": 0,  # ramp phase
-            "adj_2_ramp_prct": 100,  # ramp % of max for adj_2
-            # 2B timer adjusts
-            "adj_3": DEFAULT_USAGE_SETTING[init_bt_name]["adj_3"],  # ramp speed
-            "adj_4": DEFAULT_USAGE_SETTING[init_bt_name]["adj_4"],  # wrap factor
-            # power config
-            "ch_link": False,  # link between ch A and B (not used)
-            "level_d": False,  # Dynamic power mode
-            "level_h": DEFAULT_USAGE_SETTING[init_bt_name]["level_h"],  # L/H c
-            "level_map": 0,  # power map used
-            "power_bias": 0,  # power bias usage
-            # mode
-            "mode": DEFAULT_USAGE_SETTING[init_bt_name]["mode"],  # mode
-            # status
-            "cnx_ok": False,  # 2B connexion status
-            "sync": False,  # 2B settings are synchronized
-            "updated": False,  # values are changed
-        }
-
     logger.info(f"[Units] Initialized 2B initials settings for {len(BT_UNITS)} Units.")
 
 
@@ -1362,9 +1180,6 @@ if __name__ == "__main__":
     if ENABLE_MK2BT:
         for bt_name in BT_UNITS:
             threads[bt_name] = Thread(target=thread_bt_unit, args=(bt_name,))
-
-    # init threads for software ramp
-    threads["ramp"] = Thread(target=thread_update_ramp)
 
     # api
     threads["api"] = Thread(target=start_api)
