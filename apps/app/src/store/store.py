@@ -286,7 +286,7 @@ class Store:
     def check_permission(self, user_id: str, permission: Permission) -> bool:
         with self._users_lock:
             user = self._users.get(user_id)
-            return user.has_permission(permission)
+            return user is not None and user.has_permission(permission)
 
     def get_user_permissions(self, user_id: str) -> Set[Permission]:
         with self._users_lock:
