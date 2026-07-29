@@ -11,17 +11,18 @@ from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 
 from api.helpers.jwt_helpers import ALGORITHM, SECRET_KEY
 from api.ws.commands import (
-    handle_stop,
     handle_sensors_update,
+    handle_stop,
+    handle_trigger_rule_create,
+    handle_trigger_rule_delete,
+    handle_trigger_rule_edit,
+    handle_trigger_rule_update,
+    handle_update_adj,
     handle_update_level,
     handle_update_mode,
-    handle_update_adj,
     handle_update_power_mode,
-    handle_trigger_rule_update,
-    handle_trigger_rule_create,
-    handle_trigger_rule_edit,
-    handle_trigger_rule_delete,
 )
+from api.ws.schema import WS_SCHEMA_VERSION
 from api.ws.websocket_notifier import ws_notifier
 from events.queue import ActionQueue
 from store import Store
@@ -66,6 +67,7 @@ async def websocket_endpoint(websocket: WebSocket, token: str):
                 "payload": {
                     "message": "WebSocket connected successfully",
                     "userId": user_id,
+                    "schemaVersion": WS_SCHEMA_VERSION,
                 },
             }
         )
@@ -139,7 +141,7 @@ async def websocket_endpoint(websocket: WebSocket, token: str):
                                 },
                             }
                         )
-            except asyncio.TimeoutError:
+            except TimeoutError:
                 logger.debug("💓 Sending heartbeat ping")
                 await websocket.send_json({"type": "ping"})
                 continue

@@ -4,8 +4,8 @@ import { logout } from '@/store/slices/authSlice';
 import { sensorsInitialized, sensorUpdated } from '@/store/slices/sensorsSlice';
 import { unitsInitialized, unitUpdated } from '@/store/slices/unitsSlice';
 import { setError, setStatus, resetReconnect, incrementReconnect } from '@/store/slices/websocketSlice';
-import { eventsHistoryLoaded, eventTriggered, type TriggeredEvent } from '@/store/slices/eventsSlice';
-import type { Sensor, TriggerRule, TriggerRuleLabel, UnitSettings, WebSocketConfig, WebSocketIncomingMessage, WebSocketMessage } from '@/types';
+import { eventsHistoryLoaded, eventTriggered } from '@/store/slices/eventsSlice';
+import type { WebSocketConfig, WebSocketIncomingMessage, WebSocketMessage } from '@/types';
 import type { Middleware } from '@reduxjs/toolkit';
 import { triggerRulesInitialized, triggerRuleUpdated, triggerRuleAdded, triggerRuleRemoved } from '@/store/slices/triggerRulesSlice';
 import { triggerRuleLabelsInitialized, triggerRuleLabelAdded } from '@/store/slices/triggerRuleLabelsSlice';
@@ -122,19 +122,14 @@ export function createWebSocketMiddleware(config: WebSocketConfig): Middleware {
 
                 console.log('WS MESSAGE RECEIVED:', message);
 
-                // Catch Auth errors
-                if (message.type === 'auth:error' || message.type === 'error:unauthorized') {
-                    dispatch(setError('Authentication error'));
-                    dispatch(logout());
-                    ws?.close(4001, 'Unauthorized');
-                    return;
-                }
+                // ping/pong carry no payload
+                const payload = 'payload' in message ? message.payload : undefined;
 
                 // Catch command responses
                 if (message.id) {
                     // console.log('🎯 Dispatching command-response event for ID:', message.id);
                     const commandEvent = new CustomEvent('websocket:command-response', {
-                        detail: { id: message.id, payload: message.payload },
+                        detail: { id: message.id, payload },
                     });
                     window.dispatchEvent(commandEvent);
                     // console.log('✅ Event dispatched');
@@ -142,7 +137,7 @@ export function createWebSocketMiddleware(config: WebSocketConfig): Middleware {
 
                 // dispatch to listener of events
                 const customEvent = new CustomEvent(`websocket:${message.type}`, {
-                    detail: message.payload,
+                    detail: payload,
                 });
                 window.dispatchEvent(customEvent);
 
@@ -152,11 +147,8 @@ export function createWebSocketMiddleware(config: WebSocketConfig): Middleware {
                      * @Sensors 
                      * */
                     case 'sensors:init':
-                        {
-                            const sensors: Record<string, Sensor> = message.payload as unknown as Record<string, Sensor>
-                            dispatch(sensorsInitialized(sensors))
-                            break;
-                        }
+                        dispatch(sensorsInitialized(message.payload))
+                        break;
                     case 'sensors:update':
                         dispatch(sensorUpdated({
                             id: message.payload.id,
@@ -167,11 +159,8 @@ export function createWebSocketMiddleware(config: WebSocketConfig): Middleware {
                      * @Units 
                      * */
                     case 'units:init':
-                        {
-                            const units: Record<string, UnitSettings> = message.payload as unknown as Record<string, UnitSettings>
-                            dispatch(unitsInitialized(units))
-                            break;
-                        }
+                        dispatch(unitsInitialized(message.payload))
+                        break;
                     case 'units:update':
                         dispatch(unitUpdated({
                             id: message.payload.id,
@@ -183,34 +172,34 @@ export function createWebSocketMiddleware(config: WebSocketConfig): Middleware {
                      * @Events
                      */
                     case 'events:history':
-                        dispatch(eventsHistoryLoaded(message.payload as TriggeredEvent[]));
+                        dispatch(eventsHistoryLoaded(message.payload));
                         break;
 
                     case 'events:triggered':
-                        dispatch(eventTriggered(message.payload as TriggeredEvent));
+                        dispatch(eventTriggered(message.payload));
                         break;
 
                     /**
                     * @TriggerRules
                     */
                     case 'trigger_rules:load':
-                        dispatch(triggerRulesInitialized(message.payload as TriggerRule[]));
+                        dispatch(triggerRulesInitialized(message.payload));
                         break;
 
                     case 'trigger_rules:create':
-                        dispatch(triggerRuleAdded((message.payload as { rule: TriggerRule }).rule));
+                        dispatch(triggerRuleAdded(message.payload.rule));
                         break;
 
                     case 'trigger_rules:delete':
-                        dispatch(triggerRuleRemoved((message.payload as { id: string }).id));
+                        dispatch(triggerRuleRemoved(message.payload.id));
                         break;
 
                     case 'trigger_rules:load_labels':
-                        dispatch(triggerRuleLabelsInitialized(message.payload as TriggerRuleLabel[]));
+                        dispatch(triggerRuleLabelsInitialized(message.payload));
                         break;
 
                     case 'trigger_rules:create_label':
-                        dispatch(triggerRuleLabelAdded(message.payload as TriggerRuleLabel));
+                        dispatch(triggerRuleLabelAdded(message.payload));
                         break;
 
                     case 'trigger_rules:update':
@@ -219,20 +208,6 @@ export function createWebSocketMiddleware(config: WebSocketConfig): Middleware {
                             changes: message.payload.changes
                         }))
                         break;
-
-                    case 'notification':
-                    case 'chat:message':
-                        // dispatch(addMessage({ type: message.type, data: message.payload }));
-                        break;
-
-                    case 'user:connected':
-                    case 'user:disconnected':
-                        break;
-
-                    //   default:
-                    //     if (message.type.includes('message') || message.type.includes('notification')) {
-                    //       dispatch(addMessage({ type: message.type, data: message.payload }));
-                    //     }
                 }
             } catch (err) {
                 console.error('Failed to parse WebSocket message:', err);

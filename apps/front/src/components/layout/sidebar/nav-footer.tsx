@@ -1,5 +1,5 @@
 import { useWebSocket } from "@/hooks/useWebSocket"
-import type { CoreStopMessage } from "@/types"
+import type { CommandResult } from "@/types"
 import { SidebarGroup, SidebarGroupContent, SidebarMenu, SidebarMenuButton, SidebarMenuItem } from "@pes/ui/components/sidebar"
 import { CirclePower, type LucideIcon } from "lucide-react"
 import * as React from "react"
@@ -20,7 +20,7 @@ export function NavFooter({
 
     const stopApplication = async () => {
         try {
-            const data: CoreStopMessage = await sendCommand('core:stop');
+            const data = await sendCommand<unknown, CommandResult>('core:stop');
 
             if (data.status === "ok") {
                 toast.success("Emergency stop", {

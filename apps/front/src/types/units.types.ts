@@ -1,35 +1,6 @@
-export interface UnitSettings {
-    // identifier
-    id: string;
-    // Channel A
-    ch_A: number;
-    ch_A_multiplier: number;
-    // Channel B
-    ch_B: number;
-    ch_B_multiplier: number;
-    // Channels usage
-    ch_A_use: string;
-    ch_B_use: string;
-    // Waveform setting 1
-    adj_1: number;
-    // Waveform setting 2
-    adj_2: number;
-    // 2B timer adjusts
-    adj_3: number;
-    adj_4: number;
-    // Power config
-    ch_link: boolean;
-    level_d: boolean;
-    level_h: boolean;
-    level_map: number;
-    power_bias: number;
-    // Mode
-    mode: number;
-    // Status
-    cnx_ok: boolean;
-    sync: boolean;
-    updated: boolean;
-}
+import type { UnitSettings } from './websocket.generated';
+
+export type { UnitSettings } from './websocket.generated';
 
 export interface UnitsState {
     ids: string[];
