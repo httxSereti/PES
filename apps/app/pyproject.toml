@@ -1,21 +1,18 @@
 [project]
 name = "pes-bot"
 version = "1.0.1"
-description = "Discord Bot to manage your EStim devices and sessions."
+description = "Manage your EStim devices and sessions over the internet."
 requires-python = "==3.12.6"
 authors = [{ name = "graviky" }, { name = "Sereti" }]
 dependencies = [
-    "nextcord==3.1.0",
     "pyttsx3",
     "python-dotenv",
     "requests",
     "pybluez",
     "bleak",
     "pyserial",
-    "discord-handler",
     "poetryup",
     "kaleido==0.2.1",
-    "discord-webhook",
     "playsound3>=3.2.3,<4",
     "mypy>=1.16.0,<2",
     "fastapi>=0.121.2,<0.122",

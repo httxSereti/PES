@@ -19,7 +19,7 @@ class ActionQueue:
     """
     Concurrency model: tick()/cancel()/cancel_all() all run on the API
     (uvicorn) event loop, while enqueue() may be called from other threads
-    (e.g. the Discord bot's loop via the dispatcher). All state-machine
+    (e.g. the BT sensor threads via the dispatcher). All state-machine
     transitions are therefore performed atomically under self._lock as a
     "claim": the status check, the transition, and the removal from the
     list happen in one locked section. Only the winning claimant performs

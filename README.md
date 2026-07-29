@@ -11,11 +11,11 @@ Randomness and Surprise is a real funny thing, having random actions done over y
 
 ## ˚.✨⋆ How its work
 
-You can control units (mode, level, waveforms, etc...), sensors (alarms, sensitivities...), chaster lock, over Internet, manually, by defining **Trigger Rules** launching **Actions** based on **Events** received from 3rd party integrations (like Chaster, Discord or from a Viewer) or from **Sensors** (motion, sound), you can also create and apply preset **Profiles**.
+You can control units (mode, level, waveforms, etc...), sensors (alarms, sensitivities...), chaster lock, over Internet, manually, by defining **Trigger Rules** launching **Actions** based on **Events** received from 3rd party integrations (like Chaster or from a Viewer) or from **Sensors** (motion, sound), you can also create and apply preset **Profiles**.
 
 ### ˚.✨⋆ Events
 
-Events are things that happens, can be triggered by 3rd party integrations (like Chaster, Discord or from a Viewer) or from the **Sensors** (motion, position,sound).
+Events are things that happens, can be triggered by 3rd party integrations (like Chaster or from a Viewer) or from the **Sensors** (motion, position,sound).
 Available Events:
 - Chaster : Pillory (vote, start, end), Time Events, Tasks, Wheel of Fortune, Freeze/Unfreeze, SharedLink votes
 - Sensors : Motion, Position, Sound

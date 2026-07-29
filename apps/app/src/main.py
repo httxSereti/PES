@@ -1,12 +1,10 @@
 """
 PlunEStim composition root: wire the core singletons, then start the hardware
-threads, the FastAPI server, and the Discord bot.
+threads and the FastAPI server.
 """
 
 import json
 import logging
-import os
-import time
 from datetime import datetime
 from threading import Thread
 
@@ -17,7 +15,6 @@ from api.app import app
 from api.ws.websocket_notifier import ws_notifier
 from constants import BT_UNITS
 from database.connection import Database
-from discord.bot import Bot2b3
 from events.dispatcher import EventDispatcher
 from events.executor import ActionExecutor
 from events.queue import ActionQueue
@@ -25,7 +22,8 @@ from events.registry import EventRegistry
 from hardware.sensors import thread_sensors_bt
 from hardware.units import mk2b_init, thread_bt_unit
 from store import Store
-from utils import get_cogs, initialize_logger
+from utils import initialize_logger
+from utils.users.generate_root_access import generate_root_access
 
 # load env
 dotenv.load_dotenv("config.env")
@@ -62,24 +60,10 @@ console.setFormatter(
 )
 console.addFilter(filter_Logger)
 std_logger.addHandler(console)
-# Discord Log
-# debug
-Logger_nextcord = logging.getLogger("nextcord")
-Logger_nextcord.setLevel(logging.INFO)
-handler_nextcord = logging.FileHandler(
-    filename="nextcord.log", encoding="utf-8", mode="w"
-)
-handler_nextcord.setFormatter(
-    logging.Formatter("[%(asctime)s]%(levelname)s:%(name)s: %(message)s")
-)
-Logger_nextcord.addHandler(handler_nextcord)
 
 # DEBUG setting
 ENABLE_MK2BT = True  # Disable mk2bt thread
 ENABLE_BT_SENSORS = True  # Disable BT sensors thread
-
-# Bot config
-DISCORD_TOKEN = os.getenv("DISCORD_TOKEN")
 
 # Bluetooth sensors type/mac/service_id
 with open("configurations/bt_sensors.json") as json_file:
@@ -92,8 +76,6 @@ registry = EventRegistry(db)
 executor = ActionExecutor(store, ws_notifier=ws_notifier)
 action_queue = ActionQueue(executor, ws_notifier=ws_notifier)
 dispatcher = EventDispatcher(registry, action_queue, ws_notifier=ws_notifier)
-
-bot = Bot2b3()
 
 
 # REST API
@@ -117,32 +99,14 @@ if __name__ == "__main__":
         for bt_name in BT_UNITS:
             threads[bt_name] = Thread(target=thread_bt_unit, args=(bt_name,))
 
-    # api
-    threads["api"] = Thread(target=start_api)
-
     # start all thread
     for tr in threads.keys():
         logger.info(f"[Main] Starting thread '{tr}'!", thread_name=tr)
         threads[tr].daemon = True
         threads[tr].start()
 
-    # start Discord Bot
-    while True:
-        try:
-            logger.info("[Discord] Loading Discord cogs...")
+    # create the root user and print its magic link
+    generate_root_access()
 
-            # Try to load all the cogs
-            for cog in get_cogs():
-                try:
-                    bot.load_extension(cog)
-                    logger.info("[Cogs] Successfully loaded cog!", cog_name=cog)
-                except Exception:
-                    logger.exception("[Cogs] Failed to load cog", cog_name=cog)
-
-            logger.info("[Discord] Starting Discord Bot...")
-            bot.run(DISCORD_TOKEN)
-
-        except Exception:
-            logger.exception("Restarting Discord bot after major error")
-            time.sleep(1000)
-            continue
+    # run the API on the main thread (blocking)
+    start_api()

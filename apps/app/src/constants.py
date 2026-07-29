@@ -1,6 +1,3 @@
-# Discord Servers
-DISCORD_GUILD_IDS = [1419784212516704476]
-
 # Chaster Api URL
 CHASTER_API_URL = "https://api.chaster.app"
 

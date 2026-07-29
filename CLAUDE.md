@@ -4,13 +4,13 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What this is
 
-PlunEStim (PES) drives EStim sessions over the internet. It controls hardware **units** (2B DIY boards, up to 6 channels / 3 units over Bluetooth or Serial) and **sensors** (2 motion, 1 sound), integrates with **Chaster** (lock control via webhooks: Pillory, Wheel of Fortune, time/vote events, freeze), and runs a Discord bot. Core mechanic: external **Events** resolve to **Trigger Rules**, which enqueue **Actions** that mutate units, apply profiles, or change the Chaster lock. `README.md` and `apps/app/README.md` document the domain language — MagicNumber operators (`+5`, `-5`, `[5-10]`, `%+5`, `%-[5-10]`) and random selectors for units (`123RO`, `123RM`) and channels (`ABRO`, `ABRM`).
+PlunEStim (PES) drives EStim sessions over the internet. It controls hardware **units** (2B DIY boards, up to 6 channels / 3 units over Bluetooth or Serial) and **sensors** (2 motion, 1 sound), and integrates with **Chaster** (lock control via webhooks: Pillory, Wheel of Fortune, time/vote events, freeze). Core mechanic: external **Events** resolve to **Trigger Rules**, which enqueue **Actions** that mutate units, apply profiles, or change the Chaster lock. `README.md` and `apps/app/README.md` document the domain language — MagicNumber operators (`+5`, `-5`, `[5-10]`, `%+5`, `%-[5-10]`) and random selectors for units (`123RO`, `123RM`) and channels (`ABRO`, `ABRM`).
 
 ## Monorepo layout
 
 pnpm + Turborepo workspace (`pnpm-workspace.yaml`: `apps/*`, `packages/*`).
 
-- `apps/app` — Python backend (FastAPI + Discord bot + hardware I/O). Managed by **uv**, not pnpm.
+- `apps/app` — Python backend (FastAPI + hardware I/O). Managed by **uv**, not pnpm.
 - `apps/front` — React Router 7 SPA (`ssr: false`, `appDirectory: src`) + Redux Toolkit + Tailwind v4.
 - `packages/ui` — shared **shadcn/ui** component library `@pes/ui` (includes `niko-table`).
 - `packages/eslint-config`, `packages/typescript-config` — shared `@pes/*` configs.
@@ -45,20 +45,19 @@ pnpm build
 
 No test suite exists in this repo. There is no migration tooling: tables are created at startup via `Base.metadata.create_all`.
 
-## Backend process model (`apps/app/src/main.py`, ~150-line composition root)
+## Backend process model (`apps/app/src/main.py`, ~110-line composition root)
 
 `main.py` runs the entire backend in one process but holds no feature code — it only wires singletons and starts threads. At import time it instantiates the core singletons in order: `Database()` → `Store()` → `EventRegistry(db)` → `ActionExecutor(store, ws_notifier)` → `ActionQueue(executor, ws_notifier)` → `EventDispatcher(registry, action_queue, ws_notifier)`. Feature code lives in:
 
 - `src/hardware/units.py` — `UnitConnect` (serial-over-BT link to a 2B), `thread_bt_unit`, `mk2b_init`, the `FW_2B_CMD` map, and the `usage_limit`/`default_usage`/`init_settings` JSON configs.
 - `src/hardware/sensors.py` — BLE sensor threads, alarm threshold checks (`sensor_*`), and `sensor_alarm_check` (dispatches fired alarms as events).
 - `src/hardware/ramp.py` — home of the (currently removed) software ramp; design notes only.
-- `src/discord/bot.py` — `Bot2b3` (nextcord), intents, and `configuration.json`; slash commands are cogs under `src/commands/`. The bot is lifecycle-only — it no longer dispatches sensor alarms.
 - `src/api/app.py` — FastAPI assembly: `lifespan`, routers, CORS, `GET /`.
 - `src/api/ws/endpoint.py` — the `/ws` WebSocket endpoint (an `APIRouter`) and the `HANDLERS` command/permission map.
 
-The `__main__` block starts **daemon threads** for: each BT sensor (if `ENABLE_BT_SENSORS`), each 2B unit (if `ENABLE_MK2BT`), and the API (`uvicorn` on `0.0.0.0:8000`). The **Discord bot (`Bot2b3`, nextcord) runs on the main thread** inside a restart loop and does no periodic work. The **per-second queue tick** (`queue_tick_loop`) and the **per-second sensor alarm check** (`sensor_alarm_loop`, which dispatches fired sensor alarms via `EventDispatcher`) are asyncio tasks started in the FastAPI `lifespan`, so they run on the API loop and do not depend on Discord.
+The `__main__` block starts **daemon threads** for each BT sensor (if `ENABLE_BT_SENSORS`) and each 2B unit (if `ENABLE_MK2BT`), creates the ROOT user (`generate_root_access`, magic link printed to console), then runs the API (`uvicorn` on `0.0.0.0:8000`) on the main thread. The **per-second queue tick** (`queue_tick_loop`) and the **per-second sensor alarm check** (`sensor_alarm_loop`, which dispatches fired sensor alarms via `EventDispatcher`) are asyncio tasks started in the FastAPI `lifespan`, so they run on the API loop.
 
-So when reasoning about a flow: hardware and the web server live on background threads; the event loop ticking the action queue (and serving `cancel`/`cancel_all`) is the uvicorn API loop; cross-thread → asyncio handoff goes through `WebSocketNotifier` (`call_soon_threadsafe`).
+So when reasoning about a flow: hardware lives on background threads while the web server runs on the main thread; the event loop ticking the action queue (and serving `cancel`/`cancel_all`) is the uvicorn API loop; cross-thread → asyncio handoff goes through `WebSocketNotifier` (`call_soon_threadsafe`).
 
 FastAPI `lifespan` (`src/api/app.py`, not `__main__`) handles async startup: `ws_notifier.setup(loop)`, start `ws_notifier.consume`, start `queue_tick_loop` (the per-second `ActionQueue.tick()` driver), start `sensor_alarm_loop` (the per-second `sensor_alarm_check()` driver), `db.init()`, create tables, `seed_from_json(db)`, and inject the dispatcher into the Chaster webhook router via `chaster_webhooks.setup(EventDispatcher.get_instance())`. Both per-second tasks are cancelled on shutdown. CORS is open to all origins. Toggle hardware with `ENABLE_MK2BT` / `ENABLE_BT_SENSORS` flags near the top of `main.py`. Config is loaded from `apps/app/config.env` via `dotenv`.
 

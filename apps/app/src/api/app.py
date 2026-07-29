@@ -59,10 +59,10 @@ async def lifespan(app: FastAPI):
     ws_notifier.setup(loop)
     asyncio.create_task(ws_notifier.consume(store.websocket))
 
-    # Per-second action queue tick (independent of the Discord bot)
+    # Per-second action queue tick
     queue_task = asyncio.create_task(queue_tick_loop())
 
-    # Per-second sensor alarm check (independent of the Discord bot)
+    # Per-second sensor alarm check
     alarm_task = asyncio.create_task(sensor_alarm_loop())
 
     # Initialize database and seed data
