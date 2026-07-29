@@ -1,3 +1,5 @@
+import json
+import pathlib
 import threading
 from typing import Dict, Optional, Set
 
@@ -6,6 +8,8 @@ from models.User import User
 from api.ws.websocket_manager import WebSocketManager
 from typings import UnitDict, Role, Permission
 from api.ws.websocket_notifier import ws_notifier
+
+HARDWARE_CONFIG_PATH = pathlib.Path("configurations/hardware.json")
 
 
 class Store:
@@ -48,6 +52,10 @@ class Store:
                 self._units_lock = threading.RLock()
                 self._sensors_lock = threading.RLock()
                 self._users_lock = threading.RLock()
+                self._hardware_lock = threading.RLock()
+
+                # Hardware enable flags + rescan counters (persisted)
+                self._init_hardware()
 
                 self._initialized = True
 
@@ -240,6 +248,73 @@ class Store:
     def clear_sensors_settings(self):
         with self._sensors_lock:
             self._sensors_settings.clear()
+
+    """
+        Hardware Functions (per-device enable flags + rescan, persisted)
+    """
+
+    def _init_hardware(self) -> None:
+        """
+        Initialize per-device enable flags (units + sensors) with default True,
+        overlaid with the persisted values from configurations/hardware.json.
+        """
+        self._hardware_enabled: Dict[str, bool] = {
+            name: True for name in (*self._units_settings.keys(), *self._sensors_settings.keys())
+        }
+        self._hardware_rescan: Dict[str, int] = {
+            name: 0 for name in self._hardware_enabled
+        }
+
+        if HARDWARE_CONFIG_PATH.exists():
+            try:
+                with open(HARDWARE_CONFIG_PATH, "r") as json_file:
+                    saved = json.load(json_file)
+                for name, enabled in saved.items():
+                    if name in self._hardware_enabled:
+                        self._hardware_enabled[name] = bool(enabled)
+            except (json.JSONDecodeError, OSError) as e:
+                print(f"[Store] Can't read {HARDWARE_CONFIG_PATH}: {e}")
+        else:
+            self._save_hardware_settings()
+
+    def _save_hardware_settings(self) -> None:
+        try:
+            HARDWARE_CONFIG_PATH.parent.mkdir(parents=True, exist_ok=True)
+            with open(HARDWARE_CONFIG_PATH, "w") as json_file:
+                json.dump(self._hardware_enabled, json_file, indent=2)
+        except OSError as e:
+            print(f"[Store] Can't write {HARDWARE_CONFIG_PATH}: {e}")
+
+    def get_hardware_settings(self) -> Dict[str, bool]:
+        with self._hardware_lock:
+            return self._hardware_enabled.copy()
+
+    def is_hardware_enabled(self, name: str) -> bool:
+        with self._hardware_lock:
+            return self._hardware_enabled.get(name, True)
+
+    def set_hardware_enabled(self, name: str, enabled: bool):
+        with self._hardware_lock:
+            if name not in self._hardware_enabled:
+                raise KeyError(f"Hardware device '{name}' doesn't exist")
+            self._hardware_enabled[name] = enabled
+            self._save_hardware_settings()
+
+        # broadcast change
+        ws_notifier.notify(
+            payload_type="hardware:update",
+            payload=self.get_hardware_settings(),
+        )
+
+    def get_hardware_rescan(self, name: str) -> int:
+        with self._hardware_lock:
+            return self._hardware_rescan.get(name, 0)
+
+    def request_hardware_rescan(self, name: str):
+        with self._hardware_lock:
+            if name not in self._hardware_rescan:
+                raise KeyError(f"Hardware device '{name}' doesn't exist")
+            self._hardware_rescan[name] += 1
 
     """
         User Functions

@@ -1,4 +1,10 @@
 from .core import handle_stop
+from .hardware import (
+    handle_mk2bt_update,
+    handle_bt_sensors_update,
+    handle_mk2bt_rescan,
+    handle_bt_sensors_rescan,
+)
 from .sensors import handle_sensors_update
 from .units import (
     handle_update_level,
@@ -15,6 +21,10 @@ from .trigger_rules import (
 
 __all__ = [
     "handle_stop",
+    "handle_mk2bt_update",
+    "handle_bt_sensors_update",
+    "handle_mk2bt_rescan",
+    "handle_bt_sensors_rescan",
     "handle_sensors_update",
     "handle_update_level",
     "handle_update_mode",

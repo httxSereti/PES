@@ -176,7 +176,21 @@ async def sensor_bt(sensor_name: str, address: str, char_uuid: str) -> None:
         )
 
         await client.start_notify(char_uuid, partial(sensor_notification, sensor_name))
-        await disconnected_event.wait()
+
+        # wait until the sensor disconnects, is disabled, or a rescan is requested
+        last_rescan = store.get_hardware_rescan(sensor_name)
+        while not disconnected_event.is_set():
+            if not store.is_hardware_enabled(sensor_name):
+                logger.info(
+                    "[Sensors] Sensor disabled, disconnecting", sensor_name=sensor_name
+                )
+                break
+            if store.get_hardware_rescan(sensor_name) != last_rescan:
+                logger.info(
+                    "[Sensors] Rescan requested, reconnecting", sensor_name=sensor_name
+                )
+                break
+            await asyncio.sleep(0.5)
 
 
 def thread_sensors_bt(sensor: str, addr: str, service: str) -> None:
@@ -191,6 +205,12 @@ def thread_sensors_bt(sensor: str, addr: str, service: str) -> None:
     """
     logger.info("[Sensors] Start Sensor thread", sensor_name=sensor)
     while True:
+        # sensor disabled at runtime: mark it offline (once) and wait
+        if not store.is_hardware_enabled(sensor):
+            if store.get_sensor_setting(sensor)["sensor_online"]:
+                store.update_sensor_field(sensor, "sensor_online", False)
+            time.sleep(1)
+            continue
         try:
             # thread isolation
             loop = asyncio.new_event_loop()
@@ -199,13 +219,16 @@ def thread_sensors_bt(sensor: str, addr: str, service: str) -> None:
             loop.run_until_complete(sensor_bt(sensor, addr, service))
             loop.close()
         except BleakDeviceNotFoundError:
-            time.sleep(30)
+            # backoff in 1s steps to stay responsive to disable/rescan
+            for _ in range(30):
+                time.sleep(1)
         except Exception:
             logger.exception(
                 f"[Sensors] Thread error in start_sensors_bt {sensor}",
                 sensor_name=sensor,
             )
-            time.sleep(30)
+            for _ in range(30):
+                time.sleep(1)
 
 
 async def sensor_alarm_check() -> None:

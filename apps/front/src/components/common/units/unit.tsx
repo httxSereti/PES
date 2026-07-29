@@ -24,11 +24,14 @@ type UnitProps = {
 export const Unit: FC<UnitProps> = ({ unitId }) => {
     const [currentChannel, setCurrentChannel] = useState<"channelA" | "channelB">("channelA");
     const unit = useAppSelector(state => unitsSelectors.selectById(state, unitId));
+    const enabled = useAppSelector(state => state.hardware[unitId] ?? true);
 
     const dotColor =
-        unit?.cnx_ok === true
-            ? "bg-green-500"
-            : "bg-red-500";
+        enabled !== true
+            ? "bg-gray-400"
+            : unit?.cnx_ok === true
+                ? "bg-green-500"
+                : "bg-red-500";
 
     return (
         <Card className="">

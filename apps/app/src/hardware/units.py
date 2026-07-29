@@ -21,6 +21,12 @@ logger = structlog.get_logger("pes")
 
 store = Store()
 
+
+class HardwareDisabled(Exception):
+    """Raised when the unit is disabled at runtime while a blocking scan/connect
+    is in progress, so the hardware thread can abort it immediately."""
+
+
 # BT serial configuration for 2B
 SERIAL_BAUDRATE = 9600
 SERIAL_RETRY = 5
@@ -152,6 +158,10 @@ class UnitConnect:
 
         # loop for BT serial connexion until succes
         while True:
+            # abort the scan as soon as the unit is disabled at runtime
+            if not store.is_hardware_enabled(self.name):
+                raise HardwareDisabled(self.name)
+
             self.logger.info("Scanning for device using BT...")
             nearby_devices = bluetooth.discover_devices(
                 duration=1, lookup_names=True, flush_cache=True, lookup_class=False
@@ -294,12 +304,35 @@ def thread_bt_unit(unit_str: str) -> None:
     unit = UnitDict(unit_str)
 
     while True:
+        # unit disabled at runtime: mark it offline (once) and wait
+        if not store.is_hardware_enabled(unit_str):
+            if store.get_unit_setting(unit, "cnx_ok"):
+                store.update_unit_dict(unit, {"cnx_ok": False, "sync": False})
+                ws_notifier.notify(
+                    "units:update",
+                    {"id": unit_str, "changes": {"cnx_ok": False, "sync": False}},
+                )
+            time.sleep(1)
+            continue
         try:
             # create bt object inside a thread
             bt = UnitConnect(unit_str, store.get_unit_dict(unit))
+            last_rescan = store.get_hardware_rescan(unit_str)
 
             cycle = 0  # for the keepalive
             while True:
+                # disabled while running: drop the connexion, back to idle loop
+                if not store.is_hardware_enabled(unit_str):
+                    if bt.serial_dev and bt.serial_dev.isOpen():
+                        bt.serial_dev.close()
+                    break
+
+                # rescan requested from the dashboard: restart the search
+                rescan = store.get_hardware_rescan(unit_str)
+                if rescan != last_rescan:
+                    last_rescan = rescan
+                    bt.detect()
+
                 # fetch unit data with lock and make set it as updated
                 snapshot = store.consume_unit_update(unit)
 
@@ -322,9 +355,14 @@ def thread_bt_unit(unit_str: str) -> None:
                 else:
                     time.sleep(0.1)
                     cycle = cycle + 1
+        except HardwareDisabled:
+            # disabled during a blocking scan/connect: back to the idle loop
+            continue
         except Exception:
             logger.exception("ThreadError for unit", unit_name=unit_str)
-            time.sleep(30)
+            # backoff in 1s steps to stay responsive to disable/rescan
+            for _ in range(30):
+                time.sleep(1)
 
 
 def mk2b_init():

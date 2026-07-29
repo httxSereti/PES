@@ -3,6 +3,7 @@ import type { AppDispatch, RootState } from '@/store';
 import { logout } from '@/store/slices/authSlice';
 import { sensorsInitialized, sensorUpdated } from '@/store/slices/sensorsSlice';
 import { unitsInitialized, unitUpdated } from '@/store/slices/unitsSlice';
+import { hardwareInitialized, hardwareUpdated } from '@/store/slices/hardwareSlice';
 import { setError, setStatus, resetReconnect, incrementReconnect } from '@/store/slices/websocketSlice';
 import { eventsHistoryLoaded, eventTriggered } from '@/store/slices/eventsSlice';
 import type { WebSocketConfig, WebSocketIncomingMessage, WebSocketMessage } from '@/types';
@@ -166,6 +167,16 @@ export function createWebSocketMiddleware(config: WebSocketConfig): Middleware {
                             id: message.payload.id,
                             changes: message.payload.changes
                         }))
+                        break;
+
+                    /**
+                     * @Hardware
+                     * */
+                    case 'hardware:init':
+                        dispatch(hardwareInitialized(message.payload))
+                        break;
+                    case 'hardware:update':
+                        dispatch(hardwareUpdated(message.payload))
                         break;
 
                     /**

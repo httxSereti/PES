@@ -62,8 +62,9 @@ console.addFilter(filter_Logger)
 std_logger.addHandler(console)
 
 # DEBUG setting
-ENABLE_MK2BT = True  # Disable mk2bt thread
-ENABLE_BT_SENSORS = True  # Disable BT sensors thread
+# Hardware connexion search is toggled at runtime per device (persisted in
+# configurations/hardware.json) via the WS `hardware:*` commands; hardware
+# threads always run and idle while their device is disabled in the Store.
 
 # Bluetooth sensors type/mac/service_id
 with open("configurations/bt_sensors.json") as json_file:
@@ -89,15 +90,13 @@ if __name__ == "__main__":
     threads = {}
 
     # init thread for BT sensors
-    if ENABLE_BT_SENSORS:
-        for name, addr, service in BT_SENSORS:
-            threads[name] = Thread(target=thread_sensors_bt, args=(name, addr, service))
+    for name, addr, service in BT_SENSORS:
+        threads[name] = Thread(target=thread_sensors_bt, args=(name, addr, service))
 
     mk2b_init()
     # init threads for each mk2b unit
-    if ENABLE_MK2BT:
-        for bt_name in BT_UNITS:
-            threads[bt_name] = Thread(target=thread_bt_unit, args=(bt_name,))
+    for bt_name in BT_UNITS:
+        threads[bt_name] = Thread(target=thread_bt_unit, args=(bt_name,))
 
     # start all thread
     for tr in threads.keys():

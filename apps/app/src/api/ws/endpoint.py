@@ -11,6 +11,10 @@ from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 
 from api.helpers.jwt_helpers import ALGORITHM, SECRET_KEY
 from api.ws.commands import (
+    handle_bt_sensors_rescan,
+    handle_bt_sensors_update,
+    handle_mk2bt_rescan,
+    handle_mk2bt_update,
     handle_sensors_update,
     handle_stop,
     handle_trigger_rule_create,
@@ -36,6 +40,10 @@ router = APIRouter()
 
 HANDLERS = {
     "core:stop": (handle_stop, Permission.WRITE_UNITS),
+    "hardware:update_mk2bt": (handle_mk2bt_update, Permission.WRITE_UNITS),
+    "hardware:rescan_mk2bt": (handle_mk2bt_rescan, Permission.WRITE_UNITS),
+    "hardware:update_bt_sensors": (handle_bt_sensors_update, Permission.WRITE_SENSORS),
+    "hardware:rescan_bt_sensors": (handle_bt_sensors_rescan, Permission.WRITE_SENSORS),
     "sensors:update": (handle_sensors_update, Permission.WRITE_SENSORS),
     "units:update_level": (handle_update_level, Permission.WRITE_UNITS),
     "units:update_mode": (handle_update_mode, Permission.WRITE_UNITS),
@@ -78,6 +86,10 @@ async def websocket_endpoint(websocket: WebSocket, token: str):
 
         await websocket.send_json(
             {"type": "units:init", "payload": store.get_all_units_settings()}
+        )
+
+        await websocket.send_json(
+            {"type": "hardware:init", "payload": store.get_hardware_settings()}
         )
 
         # Replay the last 250 triggered events to the newly connected client

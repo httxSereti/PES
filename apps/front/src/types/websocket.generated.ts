@@ -60,6 +60,24 @@ export interface TriggerRuleDeletePayload {
     rule_id: string;
 }
 
+export interface HardwareMk2btUpdatePayload {
+    id: 'UNIT1' | 'UNIT2' | 'UNIT3';
+    enabled: boolean;
+}
+
+export interface HardwareMk2btRescanPayload {
+    id: 'UNIT1' | 'UNIT2' | 'UNIT3';
+}
+
+export interface HardwareSensorUpdatePayload {
+    id: 'sound' | 'motion1' | 'motion2';
+    enabled: boolean;
+}
+
+export interface HardwareSensorRescanPayload {
+    id: 'sound' | 'motion1' | 'motion2';
+}
+
 export interface ConnectedPayload {
     message: string;
     userId: string;
@@ -298,6 +316,30 @@ export interface TriggerRulesDeleteCommand {
     payload: TriggerRuleDeletePayload;
 }
 
+export interface HardwareUpdateMk2btCommand {
+    id?: string;
+    type: 'hardware:update_mk2bt';
+    payload: HardwareMk2btUpdatePayload;
+}
+
+export interface HardwareRescanMk2btCommand {
+    id?: string;
+    type: 'hardware:rescan_mk2bt';
+    payload: HardwareMk2btRescanPayload;
+}
+
+export interface HardwareUpdateBtSensorsCommand {
+    id?: string;
+    type: 'hardware:update_bt_sensors';
+    payload: HardwareSensorUpdatePayload;
+}
+
+export interface HardwareRescanBtSensorsCommand {
+    id?: string;
+    type: 'hardware:rescan_bt_sensors';
+    payload: HardwareSensorRescanPayload;
+}
+
 export interface ConnectedMessage {
     id?: string;
     type: 'connected';
@@ -342,6 +384,18 @@ export interface UnitsUpdateMessage {
     id?: string;
     type: 'units:update';
     payload: UnitUpdatePayload;
+}
+
+export interface HardwareInitMessage {
+    id?: string;
+    type: 'hardware:init';
+    payload: Record<string, boolean>;
+}
+
+export interface HardwareUpdateMessage {
+    id?: string;
+    type: 'hardware:update';
+    payload: Record<string, boolean>;
 }
 
 export interface CoreStopMessage {
@@ -417,7 +471,11 @@ export type WebSocketClientMessage =
     | TriggerRulesUpdateCommand
     | TriggerRulesCreateCommand
     | TriggerRulesEditCommand
-    | TriggerRulesDeleteCommand;
+    | TriggerRulesDeleteCommand
+    | HardwareUpdateMk2btCommand
+    | HardwareRescanMk2btCommand
+    | HardwareUpdateBtSensorsCommand
+    | HardwareRescanBtSensorsCommand;
 
 export type WebSocketServerMessage =
     | ConnectedMessage
@@ -428,6 +486,8 @@ export type WebSocketServerMessage =
     | SensorsUpdateMessage
     | UnitsInitMessage
     | UnitsUpdateMessage
+    | HardwareInitMessage
+    | HardwareUpdateMessage
     | CoreStopMessage
     | EventsHistoryMessage
     | EventsTriggeredMessage

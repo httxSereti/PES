@@ -322,6 +322,44 @@ class TriggerRulesDeleteCommand(ClientMessage):
     payload: TriggerRuleDeletePayload
 
 
+class HardwareMk2btUpdatePayload(WireModel):
+    id: Literal["UNIT1", "UNIT2", "UNIT3"]
+    enabled: bool
+
+
+class HardwareUpdateMk2btCommand(ClientMessage):
+    type: Literal["hardware:update_mk2bt"] = "hardware:update_mk2bt"
+    payload: HardwareMk2btUpdatePayload
+
+
+class HardwareMk2btRescanPayload(WireModel):
+    id: Literal["UNIT1", "UNIT2", "UNIT3"]
+
+
+class HardwareRescanMk2btCommand(ClientMessage):
+    type: Literal["hardware:rescan_mk2bt"] = "hardware:rescan_mk2bt"
+    payload: HardwareMk2btRescanPayload
+
+
+class HardwareSensorUpdatePayload(WireModel):
+    id: Literal["sound", "motion1", "motion2"]
+    enabled: bool
+
+
+class HardwareUpdateBtSensorsCommand(ClientMessage):
+    type: Literal["hardware:update_bt_sensors"] = "hardware:update_bt_sensors"
+    payload: HardwareSensorUpdatePayload
+
+
+class HardwareSensorRescanPayload(WireModel):
+    id: Literal["sound", "motion1", "motion2"]
+
+
+class HardwareRescanBtSensorsCommand(ClientMessage):
+    type: Literal["hardware:rescan_bt_sensors"] = "hardware:rescan_bt_sensors"
+    payload: HardwareSensorRescanPayload
+
+
 # ───────────────────────── Server → client messages ─────────────────────────
 
 
@@ -384,6 +422,18 @@ class UnitUpdatePayload(WireModel):
 class UnitsUpdateMessage(ServerMessage):
     type: Literal["units:update"] = "units:update"
     payload: UnitUpdatePayload
+
+
+class HardwareInitMessage(ServerMessage):
+    """Per-device hardware enable flags (`{"UNIT1": true, "sound": false, ...}`)."""
+
+    type: Literal["hardware:init"] = "hardware:init"
+    payload: dict[str, bool]
+
+
+class HardwareUpdateMessage(ServerMessage):
+    type: Literal["hardware:update"] = "hardware:update"
+    payload: dict[str, bool]
 
 
 class CoreStopMessage(ServerMessage):
@@ -463,6 +513,10 @@ CLIENT_MESSAGE_MODELS = [
     TriggerRulesCreateCommand,
     TriggerRulesEditCommand,
     TriggerRulesDeleteCommand,
+    HardwareUpdateMk2btCommand,
+    HardwareRescanMk2btCommand,
+    HardwareUpdateBtSensorsCommand,
+    HardwareRescanBtSensorsCommand,
 ]
 
 SERVER_MESSAGE_MODELS = [
@@ -474,6 +528,8 @@ SERVER_MESSAGE_MODELS = [
     SensorsUpdateMessage,
     UnitsInitMessage,
     UnitsUpdateMessage,
+    HardwareInitMessage,
+    HardwareUpdateMessage,
     CoreStopMessage,
     EventsHistoryMessage,
     EventsTriggeredMessage,
