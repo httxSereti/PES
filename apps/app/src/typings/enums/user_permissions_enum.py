@@ -8,6 +8,7 @@ class Permission(Enum):
     READ_SENSORS = "read_sensors"
     READ_PROFILES = "read_profiles"
     READ_USERS = "read_users"
+    READ_EVENTS = "read_events"
     
     WRITE_UNITS = "write_units"
     WRITE_SENSORS = "write_sensors"

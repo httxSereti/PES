@@ -70,10 +70,9 @@ export default function TriggerRuleForm({ rule }: { rule?: TriggerRule }) {
             };
 
             // Create or edit the rule (with its actions + labels) in a single WS command
-            const result = await sendCommand<unknown, { status: string; message?: string; rule?: TriggerRule }>(
-                isEdit ? "trigger_rules:edit" : "trigger_rules:create",
-                isEdit ? { rule_id: rule.id, ...body } : body,
-            );
+            const result = isEdit
+                ? await sendCommand("trigger_rules:edit", { rule_id: rule.id, ...body })
+                : await sendCommand("trigger_rules:create", body);
 
             if (result.status !== "ok" || !result.rule) {
                 throw new Error(result.message ?? `Server rejected the trigger rule`);

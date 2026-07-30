@@ -1,3 +1,1 @@
-from .handle_stop import handle_stop
-
-__all__ = ["handle_stop"]
+"""Auto-discovered command package (see api.ws.registry.load_commands)."""

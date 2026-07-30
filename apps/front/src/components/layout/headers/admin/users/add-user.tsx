@@ -11,15 +11,17 @@ import * as z from "zod"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@pes/ui/components/select";
 import { Separator } from "@pes/ui/components/separator";
 import { useAppSelector } from "@/store/hooks";
+import { Role } from "@/types";
 
 const API_URL = import.meta.env.VITE_API_URL;
 
+// Invitable roles (ROOT is never assignable from the UI)
 const availableRoles = [
-    { label: "Guest", value: "guest" },
-    { label: "User", value: "user" },
-    { label: "Operator", value: "operator" },
-    { label: "Trusted", value: "trusted" },
-    { label: "Admin", value: "admin" },
+    { label: "Guest", value: Role.GUEST },
+    { label: "User", value: Role.USER },
+    { label: "Operator", value: Role.OPERATOR },
+    { label: "Trusted", value: Role.TRUSTED },
+    { label: "Admin", value: Role.ADMIN },
 ] as const
 
 const addUserSchema = z.object({

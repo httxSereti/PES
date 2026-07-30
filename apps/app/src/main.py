@@ -23,7 +23,6 @@ from hardware.sensors import thread_sensors_bt
 from hardware.units import mk2b_init, thread_bt_unit
 from store import Store
 from utils import initialize_logger
-from utils.users.generate_root_access import generate_root_access
 
 # load env
 dotenv.load_dotenv("config.env")
@@ -104,8 +103,6 @@ if __name__ == "__main__":
         threads[tr].daemon = True
         threads[tr].start()
 
-    # create the root user and print its magic link
-    generate_root_access()
-
-    # run the API on the main thread (blocking)
+    # run the API on the main thread (blocking). User loading + ROOT
+    # bootstrap happen in the FastAPI lifespan (async, DB-backed).
     start_api()

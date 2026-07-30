@@ -1,9 +1,11 @@
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 
+from api.helpers import get_current_user, require_permission
 from database.repositories.trigger_rule_repo import TriggerRuleRepo
 from events.enums import ActionType, TriggerableEvent
 from events.queue import ActionQueue
+from typings import Permission
 
 router = APIRouter(prefix="/api", tags=["trigger-rules"])
 
@@ -78,7 +80,9 @@ def _serialize_queue_item(item) -> dict:
 
 
 @router.get("/queue")
-async def get_queue():
+async def get_queue(
+    current_user: dict = Depends(require_permission(Permission.ADMIN)),
+):
     """Get current queue state."""
     queue = _get_queue()
     items = queue.get_items()
@@ -89,7 +93,10 @@ async def get_queue():
 
 
 @router.post("/queue/cancel/{item_id}")
-async def cancel_queue_item(item_id: str):
+async def cancel_queue_item(
+    item_id: str,
+    current_user: dict = Depends(require_permission(Permission.WRITE_UNITS)),
+):
     """Cancel a specific item in the queue."""
     queue = _get_queue()
     success = await queue.cancel(item_id)
@@ -99,7 +106,9 @@ async def cancel_queue_item(item_id: str):
 
 
 @router.post("/queue/cancel-all")
-async def cancel_all_queue():
+async def cancel_all_queue(
+    current_user: dict = Depends(require_permission(Permission.WRITE_UNITS)),
+):
     """Cancel all items in the queue."""
     queue = _get_queue()
     count = await queue.cancel_all()
@@ -107,7 +116,9 @@ async def cancel_all_queue():
 
 
 @router.post("/queue/pause")
-async def pause_queue():
+async def pause_queue(
+    current_user: dict = Depends(require_permission(Permission.ADMIN)),
+):
     """Pause queue processing."""
     queue = _get_queue()
     queue.pause()
@@ -115,7 +126,9 @@ async def pause_queue():
 
 
 @router.post("/queue/resume")
-async def resume_queue():
+async def resume_queue(
+    current_user: dict = Depends(require_permission(Permission.ADMIN)),
+):
     """Resume queue processing."""
     queue = _get_queue()
     queue.resume()
@@ -126,13 +139,13 @@ async def resume_queue():
 
 
 @router.get("/events/types")
-async def list_event_types():
+async def list_event_types(current_user: dict = Depends(get_current_user)):
     """List all available triggerable event types."""
     return [{"value": e.value, "name": e.name} for e in TriggerableEvent]
 
 
 @router.get("/events/action-types")
-async def list_action_types():
+async def list_action_types(current_user: dict = Depends(get_current_user)):
     """List all action types with their expected payload schemas."""
     schemas = {
         ActionType.PROFILE: {

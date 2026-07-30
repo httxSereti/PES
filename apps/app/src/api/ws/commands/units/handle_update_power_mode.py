@@ -1,21 +1,24 @@
 import structlog
 from store import Store
-from api.ws.websocket_notifier import WebSocketNotifier
-from typings import UnitDict
+from api.ws.context import CommandContext
+from api.ws.registry import command
+from api.ws.schema import CommandResult, UnitsUpdatePowerModeCommand
+from typings import Permission, UnitDict
 
 logger = structlog.get_logger("pes")
 store = Store()
 
 
+@command(UnitsUpdatePowerModeCommand, Permission.WRITE_UNITS)
 async def handle_update_power_mode(
-    payload: dict, ws_notifier: WebSocketNotifier
-) -> dict:
+    msg: UnitsUpdatePowerModeCommand, ctx: CommandContext
+) -> CommandResult:
     """
     Update the power mode (Low, High, Dynamic) of one or more Units
     """
 
-    for unit_id, unit_changes in payload.items():
-        power_mode = unit_changes.get("power_mode")
+    for unit_id, unit_changes in msg.payload.items():
+        power_mode = unit_changes.power_mode
 
         if power_mode not in ["L", "H", "D"]:
             continue
@@ -40,7 +43,7 @@ async def handle_update_power_mode(
         # save changes
         store.update_unit_dict(unit, changes)
 
-        ws_notifier.notify(
+        ctx.notifier.notify(
             "units:update",
             {
                 "id": unit_id,
@@ -48,4 +51,4 @@ async def handle_update_power_mode(
             },
         )
 
-    return {"status": "ok"}
+    return CommandResult(status="ok")

@@ -2,7 +2,7 @@
 // by apps/app/scripts/generate_ws_types.py — DO NOT EDIT.
 // Regenerate with: pnpm codegen:ws
 
-export const WS_SCHEMA_VERSION = 1;
+export const WS_SCHEMA_VERSION = 2;
 
 export enum ActionType {
     PROFILE = "PROFILE",
@@ -12,36 +12,36 @@ export enum ActionType {
 }
 
 export interface UnitLevelChanges {
-    ch_A?: string;
-    ch_B?: string;
+    ch_A?: string | null;
+    ch_B?: string | null;
 }
 
 export interface UnitModeChange {
-    mode?: number;
+    mode?: number | null;
 }
 
 export interface UnitPowerModeChange {
-    power_mode?: 'L' | 'H' | 'D';
+    power_mode?: 'L' | 'H' | 'D' | null;
 }
 
 export interface UnitAdjChange {
-    adj_1?: number;
-    adj_2?: number;
+    adj_1?: number | null;
+    adj_2?: number | null;
 }
 
 export interface TriggerRuleUpdatePayload {
     rule_id: string;
-    name?: string;
-    description?: string;
-    event_type?: string;
-    enabled?: boolean;
-    priority?: number;
+    name?: string | null;
+    description?: string | null;
+    event_type?: string | null;
+    enabled?: boolean | null;
+    priority?: number | null;
 }
 
 export interface TriggerRuleDraft {
     name: string;
     event_type: string;
-    description?: string;
+    description?: string | null;
     enabled: boolean;
     priority: number;
     actions: TriggerActionDraft[];
@@ -86,7 +86,35 @@ export interface ConnectedPayload {
 
 export interface CommandResult {
     status: string;
-    message?: string;
+    message?: string | null;
+    rule?: TriggerRule | null;
+}
+
+export interface TriggerRule {
+    id: string;
+    event_type: string;
+    name: string;
+    description: string | null;
+    enabled: boolean;
+    priority: number;
+    actions: TriggerAction[];
+    labels: TriggerRuleLabel[];
+}
+
+export interface TriggerAction {
+    id: string;
+    trigger_rule_id: string;
+    action_type: ActionType;
+    payload: Record<string, unknown>;
+    duration: number;
+    cumulative: boolean;
+    sort_order: number;
+}
+
+export interface TriggerRuleLabel {
+    id: string;
+    name: string;
+    description: string;
 }
 
 export interface BaseSensor {
@@ -98,7 +126,7 @@ export interface BaseSensor {
 export interface SensorUpdatePayload {
     id: string;
     changes: Partial<Sensor>;
-    partial?: boolean;
+    partial?: boolean | null;
 }
 
 export interface UnitSettings {
@@ -177,33 +205,6 @@ export interface QueueStatus {
     total_cancelled: number;
 }
 
-export interface TriggerRule {
-    id: string;
-    event_type: string;
-    name: string;
-    description: string | null;
-    enabled: boolean;
-    priority: number;
-    actions: TriggerAction[];
-    labels: TriggerRuleLabel[];
-}
-
-export interface TriggerAction {
-    id: string;
-    trigger_rule_id: string;
-    action_type: ActionType;
-    payload: Record<string, unknown>;
-    duration: number;
-    cumulative: boolean;
-    sort_order: number;
-}
-
-export interface TriggerRuleLabel {
-    id: string;
-    name: string;
-    description: string;
-}
-
 export interface TriggerRuleBroadcastPayload {
     id: string;
     changes: Partial<TriggerRule>;
@@ -252,208 +253,213 @@ export interface SoundSensor extends BaseSensor {
 }
 
 export interface PingCommand {
-    id?: string;
+    id?: string | null;
     type: 'ping';
 }
 
 export interface CoreStopCommand {
-    id?: string;
+    id?: string | null;
     type: 'core:stop';
-    payload?: Record<string, unknown>;
+    payload?: Record<string, unknown> | null;
 }
 
 export interface SensorsUpdateCommand {
-    id?: string;
+    id?: string | null;
     type: 'sensors:update';
     payload: Record<string, Partial<Sensor>>;
 }
 
 export interface UnitsUpdateLevelCommand {
-    id?: string;
+    id?: string | null;
     type: 'units:update_level';
     payload: Record<string, UnitLevelChanges>;
 }
 
 export interface UnitsUpdateModeCommand {
-    id?: string;
+    id?: string | null;
     type: 'units:update_mode';
     payload: Record<string, UnitModeChange>;
 }
 
 export interface UnitsUpdatePowerModeCommand {
-    id?: string;
+    id?: string | null;
     type: 'units:update_power_mode';
     payload: Record<string, UnitPowerModeChange>;
 }
 
 export interface UnitsUpdateAdjCommand {
-    id?: string;
+    id?: string | null;
     type: 'units:update_adj';
     payload: Record<string, UnitAdjChange>;
 }
 
 export interface TriggerRulesUpdateCommand {
-    id?: string;
+    id?: string | null;
     type: 'trigger_rules:update';
     payload: TriggerRuleUpdatePayload;
 }
 
 export interface TriggerRulesCreateCommand {
-    id?: string;
+    id?: string | null;
     type: 'trigger_rules:create';
     payload: TriggerRuleDraft;
 }
 
 export interface TriggerRulesEditCommand {
-    id?: string;
+    id?: string | null;
     type: 'trigger_rules:edit';
     payload: TriggerRuleEditDraft;
 }
 
 export interface TriggerRulesDeleteCommand {
-    id?: string;
+    id?: string | null;
     type: 'trigger_rules:delete';
     payload: TriggerRuleDeletePayload;
 }
 
 export interface HardwareUpdateMk2btCommand {
-    id?: string;
+    id?: string | null;
     type: 'hardware:update_mk2bt';
     payload: HardwareMk2btUpdatePayload;
 }
 
 export interface HardwareRescanMk2btCommand {
-    id?: string;
+    id?: string | null;
     type: 'hardware:rescan_mk2bt';
     payload: HardwareMk2btRescanPayload;
 }
 
 export interface HardwareUpdateBtSensorsCommand {
-    id?: string;
+    id?: string | null;
     type: 'hardware:update_bt_sensors';
     payload: HardwareSensorUpdatePayload;
 }
 
 export interface HardwareRescanBtSensorsCommand {
-    id?: string;
+    id?: string | null;
     type: 'hardware:rescan_bt_sensors';
     payload: HardwareSensorRescanPayload;
 }
 
 export interface ConnectedMessage {
-    id?: string;
+    id?: string | null;
     type: 'connected';
     payload: ConnectedPayload;
 }
 
 export interface PingMessage {
-    id?: string;
+    id?: string | null;
     type: 'ping';
 }
 
 export interface PongMessage {
-    id?: string;
+    id?: string | null;
     type: 'pong';
 }
 
+export interface AuthRefreshMessage {
+    id?: string | null;
+    type: 'auth:refresh';
+}
+
 export interface CommandMessage {
-    id?: string;
+    id?: string | null;
     type: 'command';
     payload: CommandResult;
 }
 
 export interface SensorsInitMessage {
-    id?: string;
+    id?: string | null;
     type: 'sensors:init';
     payload: Record<string, Sensor>;
 }
 
 export interface SensorsUpdateMessage {
-    id?: string;
+    id?: string | null;
     type: 'sensors:update';
     payload: SensorUpdatePayload;
 }
 
 export interface UnitsInitMessage {
-    id?: string;
+    id?: string | null;
     type: 'units:init';
     payload: Record<string, UnitSettings>;
 }
 
 export interface UnitsUpdateMessage {
-    id?: string;
+    id?: string | null;
     type: 'units:update';
     payload: UnitUpdatePayload;
 }
 
 export interface HardwareInitMessage {
-    id?: string;
+    id?: string | null;
     type: 'hardware:init';
     payload: Record<string, boolean>;
 }
 
 export interface HardwareUpdateMessage {
-    id?: string;
+    id?: string | null;
     type: 'hardware:update';
     payload: Record<string, boolean>;
 }
 
 export interface CoreStopMessage {
-    id?: string;
+    id?: string | null;
     type: 'core:stop';
     payload: StatusMessage;
 }
 
 export interface EventsHistoryMessage {
-    id?: string;
+    id?: string | null;
     type: 'events:history';
     payload: TriggeredEvent[];
 }
 
 export interface EventsTriggeredMessage {
-    id?: string;
+    id?: string | null;
     type: 'events:triggered';
     payload: TriggeredEvent;
 }
 
 export interface QueueUpdateMessage {
-    id?: string;
+    id?: string | null;
     type: 'queue:update';
     payload: QueueStatus;
 }
 
 export interface TriggerRulesLoadMessage {
-    id?: string;
+    id?: string | null;
     type: 'trigger_rules:load';
     payload: TriggerRule[];
 }
 
 export interface TriggerRulesLoadLabelsMessage {
-    id?: string;
+    id?: string | null;
     type: 'trigger_rules:load_labels';
     payload: TriggerRuleLabel[];
 }
 
 export interface TriggerRulesUpdateMessage {
-    id?: string;
+    id?: string | null;
     type: 'trigger_rules:update';
     payload: TriggerRuleBroadcastPayload;
 }
 
 export interface TriggerRulesCreateMessage {
-    id?: string;
+    id?: string | null;
     type: 'trigger_rules:create';
     payload: TriggerRuleCreatedPayload;
 }
 
 export interface TriggerRulesCreateLabelMessage {
-    id?: string;
+    id?: string | null;
     type: 'trigger_rules:create_label';
     payload: TriggerRuleLabel;
 }
 
 export interface TriggerRulesDeleteMessage {
-    id?: string;
+    id?: string | null;
     type: 'trigger_rules:delete';
     payload: TriggerRuleDeletedPayload;
 }
@@ -481,6 +487,7 @@ export type WebSocketServerMessage =
     | ConnectedMessage
     | PingMessage
     | PongMessage
+    | AuthRefreshMessage
     | CommandMessage
     | SensorsInitMessage
     | SensorsUpdateMessage

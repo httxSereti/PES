@@ -1,7 +1,10 @@
 import structlog
 from store import Store
-from api.ws.websocket_notifier import WebSocketNotifier
-from typings import UnitDict
+from api.ws.context import CommandContext
+from api.ws.registry import command
+from api.ws.schema import CommandResult, CoreStopCommand
+from events.queue import ActionQueue
+from typings import Permission, UnitDict
 from constants import BT_UNITS
 
 
@@ -9,10 +12,15 @@ store = Store()
 logger = structlog.get_logger("pes")
 
 
-async def handle_stop(_payload: dict, ws_notifier: WebSocketNotifier) -> dict:
+@command(CoreStopCommand, Permission.WRITE_UNITS)
+async def handle_stop(msg: CoreStopCommand, ctx: CommandContext) -> CommandResult:
     """
     Emergency shutdown all units
     """
+
+    # cancel every queued/running action (absorbed from the legacy endpoint,
+    # which did this before dispatching core:stop)
+    await ActionQueue.get_instance().cancel_all()
 
     # loop over units and stop it
     for unit_str in BT_UNITS:
@@ -29,8 +37,8 @@ async def handle_stop(_payload: dict, ws_notifier: WebSocketNotifier) -> dict:
     # log
     logger.info("[WS|core:stop] Stopped every units & action queue")
 
-    ws_notifier.notify(
+    ctx.notifier.notify(
         "core:stop", {"status": "ok", "message": "%SYSTEM% shutdown all devices."}
     )
 
-    return {"status": "ok", "message": "%SYSTEM% stopped all devices."}
+    return CommandResult(status="ok", message="%SYSTEM% stopped all devices.")

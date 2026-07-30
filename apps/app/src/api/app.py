@@ -19,6 +19,7 @@ from database.seed import seed_from_json
 from events.dispatcher import EventDispatcher
 from events.queue import ActionQueue
 from hardware.sensors import sensor_alarm_check
+from services.users import user_service
 from store import Store
 
 logger = structlog.get_logger("pes")
@@ -73,11 +74,17 @@ async def lifespan(app: FastAPI):
     from database.models.triggered_event import (
         TriggeredEvent,
     )  # ensure table is registered
+    from database.models.magic_token import MagicTokenModel  # noqa: F401
+    from database.models.user import UserModel  # noqa: F401
 
     async with db._engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
 
     await seed_from_json(db)
+
+    # Load persisted users into the Store cache, then bootstrap ROOT if needed
+    await user_service.load_from_db()
+    await user_service.ensure_root_bootstrap()
 
     # Inject into routers
     chaster_webhooks.setup(EventDispatcher.get_instance())

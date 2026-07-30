@@ -1,6 +1,9 @@
 import asyncio
 import structlog
 from typing import Optional
+
+from api.ws.schema import MESSAGE_AUDIENCE
+
 from .websocket_manager import WebSocketManager
 from api.ws.loaders import trigger_rules_loader
 
@@ -17,11 +20,26 @@ class WebSocketNotifier:
         self._queue = asyncio.Queue()
 
     def notify(self, payload_type: str, payload: dict):
+        """
+        Queue a broadcast. The audience (required Permission, or None for
+        public) is resolved from MESSAGE_AUDIENCE and applied by `consume`.
+        Safe to call from any thread.
+        """
         if self._loop is None or self._queue is None:
             logger.warning("WSNotifier not ready, dropping event")
             return
 
-        message = {"type": payload_type, "payload": payload}
+        if payload_type not in MESSAGE_AUDIENCE:
+            logger.warning(
+                f"[WSNotifier] No audience declared for '{payload_type}', "
+                "broadcasting publicly"
+            )
+
+        message = {
+            "type": payload_type,
+            "payload": payload,
+            "_audience": MESSAGE_AUDIENCE.get(payload_type),
+        }
         self._loop.call_soon_threadsafe(self._queue.put_nowait, message)
 
     async def send_history(
@@ -64,7 +82,8 @@ class WebSocketNotifier:
         while True:
             try:
                 message = await self._queue.get()
-                await ws_manager.broadcast(message)
+                audience = message.pop("_audience", None)
+                await ws_manager.broadcast(message, audience=audience)
             except Exception:
                 logger.exception("WSNotifier consume error")
 

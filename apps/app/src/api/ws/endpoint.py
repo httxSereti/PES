@@ -1,5 +1,6 @@
 """
-WebSocket endpoint (`/ws`) and the command handler registry.
+WebSocket endpoint (`/ws`): JWT auth, audience-gated init sequence, and
+runtime-validated command dispatch through the @command registry.
 """
 
 import asyncio
@@ -8,27 +9,18 @@ import json
 import jwt
 import structlog
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
+from pydantic import TypeAdapter, ValidationError
 
 from api.helpers.jwt_helpers import ALGORITHM, SECRET_KEY
-from api.ws.commands import (
-    handle_bt_sensors_rescan,
-    handle_bt_sensors_update,
-    handle_mk2bt_rescan,
-    handle_mk2bt_update,
-    handle_sensors_update,
-    handle_stop,
-    handle_trigger_rule_create,
-    handle_trigger_rule_delete,
-    handle_trigger_rule_edit,
-    handle_trigger_rule_update,
-    handle_update_adj,
-    handle_update_level,
-    handle_update_mode,
-    handle_update_power_mode,
+from api.ws.context import CommandContext
+from api.ws.registry import COMMAND_SPECS_BY_TYPE, load_commands
+from api.ws.schema import (
+    MESSAGE_AUDIENCE,
+    WS_SCHEMA_VERSION,
+    CommandResult,
+    InboundMessage,
 )
-from api.ws.schema import WS_SCHEMA_VERSION
 from api.ws.websocket_notifier import ws_notifier
-from events.queue import ActionQueue
 from store import Store
 from typings import Permission
 
@@ -38,121 +30,136 @@ store = Store()
 
 router = APIRouter()
 
-HANDLERS = {
-    "core:stop": (handle_stop, Permission.WRITE_UNITS),
-    "hardware:update_mk2bt": (handle_mk2bt_update, Permission.WRITE_UNITS),
-    "hardware:rescan_mk2bt": (handle_mk2bt_rescan, Permission.WRITE_UNITS),
-    "hardware:update_bt_sensors": (handle_bt_sensors_update, Permission.WRITE_SENSORS),
-    "hardware:rescan_bt_sensors": (handle_bt_sensors_rescan, Permission.WRITE_SENSORS),
-    "sensors:update": (handle_sensors_update, Permission.WRITE_SENSORS),
-    "units:update_level": (handle_update_level, Permission.WRITE_UNITS),
-    "units:update_mode": (handle_update_mode, Permission.WRITE_UNITS),
-    "units:update_power_mode": (handle_update_power_mode, Permission.WRITE_UNITS),
-    "units:update_adj": (handle_update_adj, Permission.WRITE_UNITS),
-    "trigger_rules:update": (handle_trigger_rule_update, Permission.ADMIN),
-    "trigger_rules:create": (handle_trigger_rule_create, Permission.ADMIN),
-    "trigger_rules:edit": (handle_trigger_rule_edit, Permission.ADMIN),
-    "trigger_rules:delete": (handle_trigger_rule_delete, Permission.ADMIN),
-}
+# Auto-discover handlers and fill COMMAND_SPECS_BY_TYPE at import time.
+load_commands()
+
+_inbound_adapter = TypeAdapter(InboundMessage)
 
 
-# WebSocket API
-@router.websocket("/ws")
-async def websocket_endpoint(websocket: WebSocket, token: str):
-    user_id = None
+async def _send_init_sequence(websocket: WebSocket, user) -> None:
+    """Connect handshake + state dump, each piece gated by its audience."""
+    perms = user.get_permissions()
 
-    try:
-        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
-        user_id = payload.get("sub")
-
-        # connect User to WebSocket
-        await store.websocket.connect(user_id, websocket)
-
-        # Send initial connection message
-        await websocket.send_json(
-            {
-                "type": "connected",
-                "payload": {
-                    "message": "WebSocket connected successfully",
-                    "userId": user_id,
-                    "schemaVersion": WS_SCHEMA_VERSION,
-                },
-            }
+    def allowed(msg_type: str) -> bool:
+        audience = MESSAGE_AUDIENCE.get(msg_type)
+        return (
+            audience is None
+            or Permission.ROOT in perms
+            or audience in perms
         )
 
+    await websocket.send_json(
+        {
+            "type": "connected",
+            "payload": {
+                "message": "WebSocket connected successfully",
+                "userId": user.id,
+                "schemaVersion": WS_SCHEMA_VERSION,
+            },
+        }
+    )
+
+    if allowed("sensors:init"):
         await websocket.send_json(
             {"type": "sensors:init", "payload": store.get_all_sensors_settings()}
         )
 
+    if allowed("units:init"):
         await websocket.send_json(
             {"type": "units:init", "payload": store.get_all_units_settings()}
         )
 
+    if allowed("hardware:init"):
         await websocket.send_json(
             {"type": "hardware:init", "payload": store.get_hardware_settings()}
         )
 
-        # Replay the last 250 triggered events to the newly connected client
-        await ws_notifier.send_history(user_id, store.websocket)
+    # Replay the last 250 triggered events (members only)
+    if allowed("events:history"):
+        await ws_notifier.send_history(user.id, store.websocket)
 
-        # Load datas
-        await ws_notifier.load_datas(user_id, store.websocket)
+    # Load trigger rules + labels (admins only)
+    if allowed("trigger_rules:load"):
+        await ws_notifier.load_datas(user.id, store.websocket)
 
-        # Heartbeat and Message handling
+
+async def _reply_error(websocket: WebSocket, msg_id: str | None, message: str):
+    await websocket.send_json(
+        {
+            "id": msg_id,
+            "type": "command",
+            "payload": CommandResult(status="error", message=message).model_dump(
+                exclude_none=True
+            ),
+        }
+    )
+
+
+@router.websocket("/ws")
+async def websocket_endpoint(websocket: WebSocket, token: str):
+    user = None
+
+    try:
+        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        user_id = payload.get("sub")
+        user = store.get_user(user_id) if user_id else None
+
+        if user is None or not user.is_active:
+            await websocket.close(code=4001, reason="Unknown or inactive user")
+            return
+
+        # Register the connection with the user's effective permissions
+        await store.websocket.connect(user.id, websocket, user.get_permissions())
+
+        await _send_init_sequence(websocket, user)
+
+        # Heartbeat and command handling
         while True:
             try:
-                # Wait for messages from client with timeout
                 text = await asyncio.wait_for(websocket.receive_text(), timeout=60)
 
-                message = json.loads(text)
-                if message.get("type") != "ping":
-                    print(f"📨 Received: {json.dumps(message, indent=2)}")
+                try:
+                    message = _inbound_adapter.validate_python(json.loads(text))
+                except (json.JSONDecodeError, ValidationError) as e:
+                    logger.warning(
+                        "[WS] Rejected malformed inbound message",
+                        user_id=user.id,
+                        error=str(e),
+                    )
+                    await _reply_error(websocket, None, "Malformed message")
+                    continue
 
-                msg_id = message.get("id")
-                msg_type = message.get("type")
-                msg_payload = message.get("payload")
-
-                """
-                    Reply to ping for keepalive
-                """
-                if msg_type == "ping":
+                # Keepalive
+                if message.type == "ping":
                     await websocket.send_json({"type": "pong"})
                     continue
 
-                # TODO: remove after trigger rule/events update
-                if msg_type == "core:stop":
-                    await ActionQueue.get_instance().cancel_all()
+                spec = COMMAND_SPECS_BY_TYPE.get(message.type)
+                if spec is None:
+                    await _reply_error(
+                        websocket, message.id, f"Unknown command: {message.type}"
+                    )
+                    continue
 
-                # fetch command to use
-                handler_tuple = HANDLERS.get(msg_type)
+                if not user.has_permission(spec.permission):
+                    await _reply_error(
+                        websocket,
+                        message.id,
+                        f"Missing permission: {spec.permission.name}",
+                    )
+                    continue
 
-                # has registered command
-                if handler_tuple:
-                    handler_fn, required_permission = handler_tuple
+                ctx = CommandContext(user=user, msg_id=message.id, notifier=ws_notifier)
+                result = await spec.handler(message, ctx)
 
-                    # user has permission to execute command
-                    if store.check_permission(user_id, required_permission):
-                        result = await handler_fn(msg_payload, ws_notifier)
+                await websocket.send_json(
+                    {
+                        "id": message.id,
+                        "type": "command",
+                        "payload": result.model_dump(exclude_none=True),
+                    }
+                )
 
-                        # answer command ok/error
-                        await websocket.send_json(
-                            {
-                                "id": msg_id,
-                                "type": "command",
-                                "payload": result,
-                            }
-                        )
-                    else:
-                        await websocket.send_json(
-                            {
-                                "id": msg_id,
-                                "type": "command",
-                                "payload": {
-                                    "status": "error",
-                                    "message": f"Missing permission: {required_permission.name}",
-                                },
-                            }
-                        )
             except TimeoutError:
                 logger.debug("💓 Sending heartbeat ping")
                 await websocket.send_json({"type": "ping"})
@@ -163,11 +170,11 @@ async def websocket_endpoint(websocket: WebSocket, token: str):
         await websocket.close(code=4001, reason="Invalid token")
 
     except WebSocketDisconnect:
-        logger.info(f"🔴 Client disconnected: {user_id}", user_id=user_id)
+        logger.info(f"🔴 Client disconnected: {user and user.id}")
 
     except Exception:
-        logger.exception(f"🔴 WebSocket error for {user_id}", user_id=user_id)
+        logger.exception(f"🔴 WebSocket error for {user and user.id}")
 
     finally:
-        if user_id:
-            store.websocket.disconnect(user_id)
+        if user:
+            store.websocket.disconnect(user.id)

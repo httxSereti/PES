@@ -3,6 +3,7 @@ import { Button } from "@pes/ui/components/button"
 import { useAppSelector } from "@/store/hooks"
 import { unitsSelectors } from "@/store/slices/unitsSlice"
 import { useWebSocket } from "@/hooks/useWebSocket"
+import type { HardwareUnitId } from "@/types"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@pes/ui/components/dropdown-menu"
 import { Link, MoreVertical, PowerOff, RefreshCw, Wifi, WifiOff } from "lucide-react"
 import { toast } from "sonner"
@@ -10,6 +11,9 @@ import { toast } from "sonner"
 type UnitDropdownProps = {
     unitId: string;
 };
+
+/** unitId arrives as a route-level string; hardware commands need the literal id. */
+const asHardwareUnitId = (id: string): HardwareUnitId => id as HardwareUnitId;
 
 export const UnitDropdown: FC<UnitDropdownProps> = ({ unitId }) => {
     const unit = useAppSelector(state => unitsSelectors.selectById(state, unitId));
@@ -21,7 +25,7 @@ export const UnitDropdown: FC<UnitDropdownProps> = ({ unitId }) => {
 
     const toggleConnection = async () => {
         try {
-            await sendCommand('hardware:update_mk2bt', { id: unitId, enabled: !enabled });
+            await sendCommand('hardware:update_mk2bt', { id: asHardwareUnitId(unitId), enabled: !enabled });
         } catch (err: unknown) {
             const error: Error = err as Error;
 
@@ -34,7 +38,7 @@ export const UnitDropdown: FC<UnitDropdownProps> = ({ unitId }) => {
 
     const rescan = async () => {
         try {
-            await sendCommand('hardware:rescan_mk2bt', { id: unitId });
+            await sendCommand('hardware:rescan_mk2bt', { id: asHardwareUnitId(unitId) });
         } catch (err: unknown) {
             const error: Error = err as Error;
 

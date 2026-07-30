@@ -1,12 +1,14 @@
 #!/usr/bin/env python3
 """
-Generate the TypeScript WebSocket contract from the pydantic schema.
+Generate the TypeScript contracts from the pydantic schema + shared enums.
 
-Source of truth: apps/app/src/api/ws/schema.py
-Output:          apps/front/src/types/websocket.generated.ts
+Source of truth: apps/app/src/api/ws/schema.py (+ src/typings Role/Permission)
+Outputs:
+    apps/front/src/types/websocket.generated.ts  (WS message contract)
+    apps/front/src/types/auth.generated.ts       (Role/Permission + audiences)
 
 Usage (from apps/app):
-    uv run python scripts/generate_ws_types.py           # write the file
+    uv run python scripts/generate_ws_types.py           # write the files
     uv run python scripts/generate_ws_types.py --check   # fail if stale
 """
 
@@ -28,8 +30,10 @@ sys.path.insert(0, str(APP_DIR / "src"))
 from pydantic import BaseModel
 
 from api.ws import schema
+from typings import Permission, Role
 
 OUTPUT = APP_DIR.parents[0] / "front" / "src" / "types" / "websocket.generated.ts"
+AUTH_OUTPUT = APP_DIR.parents[0] / "front" / "src" / "types" / "auth.generated.ts"
 INDENT = "    "
 
 # Bases whose fields are inlined into each message instead of `extends`.
@@ -166,7 +170,8 @@ def emit_model(model: type[BaseModel], aliases_out: set[str]) -> str:
         if optional and required:
             lines.append(f"{INDENT}{name}: {ts} | null;")
         elif optional:
-            lines.append(f"{INDENT}{name}?: {ts};")
+            # Optional with a default: the backend accepts an explicit null
+            lines.append(f"{INDENT}{name}?: {ts} | null;")
         else:
             lines.append(f"{INDENT}{name}: {ts};")
     lines.append("}")
@@ -219,6 +224,39 @@ def collect_enums(models: list[type[BaseModel]]) -> list[type[Enum]]:
     return list(found.values())
 
 
+def emit_audience_map() -> str:
+    """SERVER_MESSAGE_AUDIENCE const: message type -> Permission | null."""
+    lines = [
+        (
+            "export const SERVER_MESSAGE_AUDIENCE: "
+            "Record<WebSocketServerMessage['type'], Permission | null> = {"
+        ),
+    ]
+    for model in schema.SERVER_MESSAGE_MODELS:
+        msg_type = model.model_fields["type"].default
+        audience = schema.MESSAGE_AUDIENCE[msg_type]
+        value = "null" if audience is None else f"Permission.{audience.name}"
+        lines.append(f"{INDENT}'{msg_type}': {value},")
+    lines.append("};")
+    return "\n".join(lines)
+
+
+def build_auth_output() -> str:
+    """auth.generated.ts: Role/Permission enums + the audience matrix."""
+    header = (
+        "// AUTO-GENERATED from apps/app/src/api/ws/schema.py + apps/app/src/typings\n"
+        "// by apps/app/scripts/generate_ws_types.py — DO NOT EDIT.\n"
+        "// Regenerate with: pnpm codegen:ws\n\n"
+        "import type { WebSocketServerMessage } from './websocket.generated';"
+    )
+    chunks = [
+        emit_enum(Role),
+        emit_enum(Permission),
+        emit_audience_map(),
+    ]
+    return header + "\n\n" + "\n\n".join(chunks) + "\n"
+
+
 def main() -> int:
     check = "--check" in sys.argv
 
@@ -264,19 +302,28 @@ def main() -> int:
         f"export const WS_SCHEMA_VERSION = {schema.WS_SCHEMA_VERSION};"
     )
     output = header + "\n\n" + "\n\n".join(chunks) + "\n"
+    auth_output = build_auth_output()
+
+    targets = [(OUTPUT, output), (AUTH_OUTPUT, auth_output)]
 
     if check:
-        if not OUTPUT.exists() or OUTPUT.read_text(encoding="utf-8") != output:
+        stale = [
+            str(path)
+            for path, content in targets
+            if not path.exists() or path.read_text(encoding="utf-8") != content
+        ]
+        if stale:
             print(
-                f"error: {OUTPUT} is stale — run `pnpm codegen:ws`",
+                f"error: {', '.join(stale)} is stale — run `pnpm codegen:ws`",
                 file=sys.stderr,
             )
             return 1
-        print(f"ok: {OUTPUT} is up to date")
+        print(f"ok: {OUTPUT.name} and {AUTH_OUTPUT.name} are up to date")
         return 0
 
-    OUTPUT.write_text(output, encoding="utf-8", newline="\n")
-    print(f"wrote {OUTPUT}")
+    for path, content in targets:
+        path.write_text(content, encoding="utf-8", newline="\n")
+        print(f"wrote {path}")
     return 0
 
 

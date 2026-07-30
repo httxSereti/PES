@@ -9,6 +9,7 @@ from datetime import datetime, timedelta
 from typing import Optional
 
 from store import Store
+from typings import Role
 
 dotenv.load_dotenv("config.env")
 
@@ -34,6 +35,11 @@ def create_access_token(data: dict, expires_delta: Optional[timedelta] = None):
 
 
 def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(security)):
+    """
+    Resolve the JWT bearer token to the current user's profile.
+    `permissions` holds the *effective* permission values (role ∪ custom),
+    so REST routes and the frontend share the same authorization view.
+    """
     token = credentials.credentials
 
     try:
@@ -48,11 +54,15 @@ def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(securit
         if user is None:
             raise HTTPException(status_code=401, detail="User not found")
 
+        if not user.is_active:
+            raise HTTPException(status_code=401, detail="User disabled")
+
         return {
-            "id": userId,
-            "role": user.role,
-            "permissions": user.custom_permissions,
+            "id": user.id,
             "display_name": user.display_name,
+            "role": user.role.value,
+            "permissions": [p.value for p in user.get_permissions()],
+            "is_guest": user.role == Role.GUEST,
         }
 
     except jwt.ExpiredSignatureError:

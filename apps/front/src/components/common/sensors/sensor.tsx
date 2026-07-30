@@ -3,7 +3,7 @@ import { SensorSound } from "@/components/common/sensors/sound/sensor-sound";
 import { useWebSocket } from "@/hooks/useWebSocket";
 import { useAppSelector } from "@/store/hooks";
 import { sensorsSelectors } from "@/store/slices/sensorsSlice";
-import type { MotionSensor, SoundSensor } from "@/types";
+import type { HardwareSensorId, MotionSensor, SoundSensor } from "@/types";
 import { Button } from "@pes/ui/components/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@pes/ui/components/card";
 import {
@@ -20,7 +20,7 @@ import type { FC } from "react";
 import { toast } from "sonner";
 
 type SensorProps = {
-    sensorId: string;
+    sensorId: HardwareSensorId;
 };
 
 export const Sensor: FC<SensorProps> = ({ sensorId }) => {

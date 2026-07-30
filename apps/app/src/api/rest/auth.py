@@ -1,41 +1,49 @@
 from fastapi import APIRouter, HTTPException, Depends
-from cuid2 import Cuid
 from datetime import timedelta
+from pydantic import BaseModel
 
-from store import Store
 from api.helpers import (
     create_access_token,
     TokenResponse,
     get_current_user,
 )
+from models import User
+from services.users import user_service
 
 ACCESS_TOKEN_EXPIRE_MINUTES = 60 * 24
-CUID_GENERATOR: Cuid = Cuid(length=7)
 
 router = APIRouter(prefix="/auth", tags=["auth"])
-store = Store()
+
+
+class LoginBody(BaseModel):
+    magic_token: str
+
+
+def _issue_token(user: User) -> dict:
+    access_token = create_access_token(
+        data={"sub": user.id, "role": user.role.value},
+        expires_delta=timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES),
+    )
+    return {
+        "access_token": access_token,
+        "token_type": "bearer",
+        "user": {"id": user.id, "role": user.role.value},
+    }
 
 
 @router.post("/login", response_model=TokenResponse)
-async def login(magic_token: str):
-    if magic_token is None:
+async def login(body: LoginBody):
+    """Exchange a magic token (body, never query params) for a JWT."""
+    user = await user_service.authenticate_magic_token(body.magic_token)
+    if user is None:
         raise HTTPException(status_code=401, detail="Invalid credentials")
+    return _issue_token(user)
 
-    # explore User dict
-    for id, user in store.get_all_users().items():
-        if user.magic_token == magic_token:
-            access_token = create_access_token(
-                data={"sub": user.id, "role": user.role.value},
-                expires_delta=timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES),
-            )
 
-            return {
-                "access_token": access_token,
-                "token_type": "bearer",
-                "user": {"id": user.id, "role": user.role},
-            }
-
-    raise HTTPException(status_code=401, detail="Invalid credentials")
+@router.post("/guest", response_model=TokenResponse)
+async def guest_login():
+    """Issue a JWT for the ephemeral, read-only guest identity."""
+    return _issue_token(user_service.get_or_create_guest())
 
 
 @router.get("/me")

@@ -1,6 +1,6 @@
 
 import type { AppDispatch, RootState } from '@/store';
-import { logout } from '@/store/slices/authSlice';
+import { logout, verifyToken } from '@/store/slices/authSlice';
 import { sensorsInitialized, sensorUpdated } from '@/store/slices/sensorsSlice';
 import { unitsInitialized, unitUpdated } from '@/store/slices/unitsSlice';
 import { hardwareInitialized, hardwareUpdated } from '@/store/slices/hardwareSlice';
@@ -145,7 +145,14 @@ export function createWebSocketMiddleware(config: WebSocketConfig): Middleware {
                 // dispatch messages to redux stores
                 switch (message.type) {
                     /**
-                     * @Sensors 
+                     * @Auth — profile/permissions changed server-side
+                     */
+                    case 'auth:refresh':
+                        dispatch(verifyToken());
+                        break;
+
+                    /**
+                     * @Sensors
                      * */
                     case 'sensors:init':
                         dispatch(sensorsInitialized(message.payload))

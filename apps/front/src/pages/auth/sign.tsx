@@ -49,7 +49,7 @@ export default function Login() {
     const handleGuestLogin = async () => {
         try {
             await dispatch(guestLogin()).unwrap();
-            navigate('/dashboard');
+            navigate('/app');
             // eslint-disable-next-line @typescript-eslint/no-unused-vars
         } catch (err) {
             // Error is handled by Redux state

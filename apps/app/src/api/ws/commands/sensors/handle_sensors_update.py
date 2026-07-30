@@ -1,21 +1,29 @@
 import structlog
 from store import Store
-from api.ws.websocket_notifier import WebSocketNotifier
+from api.ws.context import CommandContext
+from api.ws.registry import command
+from api.ws.schema import CommandResult, SensorsUpdateCommand
+from typings import Permission
 
 store = Store()
 logger = structlog.get_logger("pes")
 
 
-async def handle_sensors_update(payload: dict, ws_notifier: WebSocketNotifier) -> dict:
+@command(SensorsUpdateCommand, Permission.WRITE_SENSORS)
+async def handle_sensors_update(
+    msg: SensorsUpdateCommand, ctx: CommandContext
+) -> CommandResult:
     """
     Handle sensor update
     """
     try:
-        for sensorName, value in payload.items():
+        for sensorName, value in msg.payload.items():
             store.update_sensor_fields(sensorName, value)
     except KeyError:
-        return {"status": "error", "message": "Can't update Sensor! (KeyError)"}
+        return CommandResult(
+            status="error", message="Can't update Sensor! (KeyError)"
+        )
 
-    logger.info("[WS|sensors:update] Updated Sensors", sensors=payload.keys())
+    logger.info("[WS|sensors:update] Updated Sensors", sensors=msg.payload.keys())
 
-    return {"status": "ok"}
+    return CommandResult(status="ok")

@@ -1,55 +1,53 @@
 import os
 from fastapi import APIRouter, HTTPException, status, Depends
-from cuid2 import Cuid
 
-from typings import Permission
-from store import Store
-
-from typings import Role
-from models import User
-from api.helpers import (
-    generate_magic_token,
-    get_current_user,
-)
+from typings import Permission, Role
+from api.helpers import require_permission
+from services.users import user_service
 
 FRONT_URL: str = os.getenv("FRONT_URL")
-CUID_GENERATOR: Cuid = Cuid(length=7)
 
 router = APIRouter(prefix="/admin", tags=["admin"])
-store = Store()
 
 
 @router.post("/generateMagicLink", tags=["admin"])
 async def generate_magic_link(
-    role: str, display_name: str, current_user: dict = Depends(get_current_user)
+    role: str,
+    display_name: str,
+    current_user: dict = Depends(require_permission(Permission.MANAGE_USERS)),
 ):
-    if not store.check_permission(current_user["id"], Permission.ADMIN):
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Missing permission: Admin",
-        )
-
-    # fetch role
+    """Create a persisted user and return its one-shot magic login link."""
     try:
-        userRole = Role(role)
+        user_role = Role(role)
     except ValueError:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Incorrect Role selected",
         )
 
-    magic_token = generate_magic_token()
+    _, raw_token = await user_service.create_user(user_role, display_name)
 
-    user = User(
-        id=CUID_GENERATOR.generate(),
-        display_name=display_name,
-        magic_token=magic_token,
-        is_online=False,
-        role=userRole,
-    )
+    return {"magic_link": f"{FRONT_URL}/auth?magic_token={raw_token}"}
 
-    store.add_user(user)
 
-    magic_link = f"{FRONT_URL}/auth?magic_token={magic_token}"
+@router.post("/users/{user_id}/role", tags=["admin"])
+async def set_user_role(
+    user_id: str,
+    role: str,
+    current_user: dict = Depends(require_permission(Permission.MANAGE_USERS)),
+):
+    """Change a user's role (write-through; live WS sessions are refreshed)."""
+    try:
+        user_role = Role(role)
+    except ValueError:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Incorrect Role selected",
+        )
 
-    return {"magic_link": magic_link}
+    if not await user_service.set_user_role(user_id, user_role):
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="User not found",
+        )
+    return {"status": "ok"}

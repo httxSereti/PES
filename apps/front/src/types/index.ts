@@ -11,7 +11,8 @@ export type {
     AuthState,
 } from './auth.types';
 
-export { UserRole } from './auth.types';
+// Role/Permission enums + audience matrix (generated from the backend)
+export { Role, Permission, SERVER_MESSAGE_AUDIENCE } from './auth.generated';
 
 // API types
 export type {
