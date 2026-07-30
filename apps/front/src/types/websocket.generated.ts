@@ -114,7 +114,7 @@ export interface TriggerAction {
 export interface TriggerRuleLabel {
     id: string;
     name: string;
-    description: string;
+    description: string | null;
 }
 
 export interface BaseSensor {

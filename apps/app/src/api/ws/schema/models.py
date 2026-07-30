@@ -112,7 +112,8 @@ Sensor = Annotated[
 class TriggerRuleLabel(WireModel):
     id: str
     name: str
-    description: str
+    # nullable, matching the DB column (labels can be created name-only)
+    description: str | None
 
 
 class TriggerAction(WireModel):

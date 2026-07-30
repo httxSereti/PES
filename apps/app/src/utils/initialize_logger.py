@@ -20,7 +20,9 @@ def initialize_logger(
         structlog.contextvars.merge_contextvars,
         structlog.stdlib.add_log_level,
         structlog.processors.TimeStamper(fmt="iso", utc=False),
-        structlog.processors.dict_tracebacks,
+        # NOTE: no dict_tracebacks here — it renders `exception` as a list,
+        # which crashes the dev ConsoleRenderer on any logged exception.
+        # format_exc_info (main chain) renders tracebacks as strings instead.
     ]
 
     console_formatter = structlog.stdlib.ProcessorFormatter(

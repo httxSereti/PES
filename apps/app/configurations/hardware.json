@@ -1,8 +1,8 @@
 {
-  "UNIT1": true,
-  "UNIT2": true,
-  "UNIT3": true,
-  "motion1": true,
-  "motion2": true,
-  "sound": true
+  "UNIT1": false,
+  "UNIT2": false,
+  "UNIT3": false,
+  "motion1": false,
+  "motion2": false,
+  "sound": false
 }

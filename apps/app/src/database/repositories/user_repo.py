@@ -62,11 +62,12 @@ class UserRepo:
                 user.last_login_at = datetime.utcnow()
                 await session.commit()
 
-    async def has_active_root(self) -> bool:
+    async def get_active_root(self) -> Optional[UserModel]:
+        """The first active ROOT user, if any."""
         async with self._db.session_maker() as session:
             result = await session.execute(
-                select(UserModel.id).where(
+                select(UserModel).where(
                     UserModel.role == "root", UserModel.is_active.is_(True)
                 )
             )
-            return result.first() is not None
+            return result.scalars().first()
