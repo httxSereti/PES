@@ -9,3 +9,4 @@ backup/
 tmp/
 plunes.db*
 logs/
+hardware.json
