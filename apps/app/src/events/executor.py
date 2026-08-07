@@ -12,6 +12,7 @@ import aiohttp
 
 from .enums import ActionType
 from .models import QueueItem
+from hardware.ramp import RampMode, ramp_manager
 from store import Store
 from constants import BT_UNITS
 
@@ -195,6 +196,11 @@ class ActionExecutor:
 
         for unit_name, unit_profile in bck_settings.items():
             unit = UnitDict(unit_name)
+
+            # Profile owns the ramps of its units: kill any orphan ramp so it
+            # can't fight the profile values (ramps always start at 0%).
+            ramp_manager.stop_unit(unit, restore=False)
+
             changes = {"sync": False, "updated": True}
 
             for field, value in unit_profile.items():
@@ -207,6 +213,28 @@ class ActionExecutor:
                     changes[field] = value
 
             self._store.update_unit_dict(unit, changes)
+
+            # Optional per-unit ramps block, e.g.
+            #   "ramps": {"ch_A": {"timer": 1.2, "step": 1,
+            #                      "mode": "wave", "duration": 60, "max": 46}}
+            # `max` defaults to the just-applied (level_pct-scaled) level;
+            # ramps always start at 0%. Invalid entries are logged and
+            # skipped (profiles are hand-edited JSON).
+            for field, ramp_cfg in unit_profile.get("ramps", {}).items():
+                try:
+                    ramp_manager.start(
+                        unit,
+                        field,
+                        timer=ramp_cfg["timer"],
+                        step=ramp_cfg.get("step", 1),
+                        mode=RampMode(ramp_cfg.get("mode", "reset")),
+                        duration=ramp_cfg.get("duration", -1),
+                        max_value=ramp_cfg.get("max"),
+                    )
+                except (KeyError, TypeError, ValueError) as err:
+                    logger.warning(
+                        f"[Executor] Skipped invalid ramp '{unit_name}.{field}': {err}"
+                    )
 
         logger.info(
             f"[Executor] Profile '{profile_name}' applied at {level_pct}%",
@@ -222,6 +250,11 @@ class ActionExecutor:
         units_data = snapshot.get("units", {})
         for unit_name, unit_data in units_data.items():
             unit = UnitDict(unit_name)
+
+            # stop ramps first (they own the fields while active and would
+            # overwrite the restored values on their next tick)
+            ramp_manager.stop_unit(unit, restore=False)
+
             changes = {
                 field: value
                 for field, value in unit_data.items()

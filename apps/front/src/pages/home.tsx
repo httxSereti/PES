@@ -1,4 +1,5 @@
 import type { Route } from "../pages/+types/home";
+import { RampsPanel } from "@/components/common/ramps/ramps-panel";
 
 // eslint-disable-next-line no-empty-pattern
 export function meta({ }: Route.MetaArgs) {
@@ -10,9 +11,14 @@ export function meta({ }: Route.MetaArgs) {
 
 export default function Home() {
   return (
-    <div className="home">
-      <h1 >Home</h1>
-      <button className="px-4 py-2 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90">Button</button>
+    <div className="flex flex-col gap-4">
+      <div className="px-5 mb-2">
+        <h1 className="font-syne text-xl sm:text-2xl lg:text-[26px] font-extrabold">Ramps</h1>
+        <p className="text-muted-foreground text-xs">
+          Software ramps for your units — start, pause and stop them here.
+        </p>
+      </div>
+      <RampsPanel />
     </div>
   );
 }

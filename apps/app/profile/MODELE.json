@@ -28,7 +28,10 @@
       "mode": 1,
       "cnx_ok": true,
       "sync": false,
-      "updated": true
+      "updated": true,
+      "ramps": {
+        "ch_A": { "timer": 1.0, "step": 1, "mode": "wave", "duration": 60, "max": 40 }
+      }
     },
     "UNIT2": {
       "ch_A": 0,

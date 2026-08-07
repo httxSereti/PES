@@ -3,6 +3,7 @@ import authReducer from '@/store/slices/authSlice';
 import websocketReducer from '@/store/slices/websocketSlice';
 import sensorsReducer from '@/store/slices/sensorsSlice';
 import unitsReducer from '@/store/slices/unitsSlice';
+import rampsReducer from '@/store/slices/rampsSlice';
 import hardwareReducer from '@/store/slices/hardwareSlice';
 import unitsHistorySlice from '@/store/slices/unitsHistorySlice';
 import eventsReducer from '@/store/slices/eventsSlice';
@@ -32,6 +33,7 @@ export const store = configureStore({
         websocket: websocketReducer,
         sensors: sensorsReducer,
         units: unitsReducer,
+        ramps: rampsReducer,
         hardware: hardwareReducer,
         unitsHistory: unitsHistorySlice,
         events: eventsReducer,

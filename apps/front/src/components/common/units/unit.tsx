@@ -16,6 +16,7 @@ import { UnitSelectChannel } from "@/components/common/units/unit-select-channel
 import { UnitSelectMode } from "@/components/common/units/unit-select-mode"
 import { UnitPowerMode } from "@/components/common/units/unit-power-mode"
 import { UnitAdj } from "./unit-adj"
+import { UnitRamps } from "@/components/common/ramps/unit-ramps"
 
 type UnitProps = {
     unitId: string;
@@ -94,12 +95,8 @@ export const Unit: FC<UnitProps> = ({ unitId }) => {
                         <UnitSelectMode unitId={unitId} />
 
                     </div>
-                    {/* 
-                    <div className="flex flex-col gap-3.5 px-3 py-3 rounded-lg border border-border/35 bg-muted/20">
-                        <p className="font-mono text-[10px] tracking-widest uppercase text-primary/40">Ramp Settings</p>
 
-                        Coming Soon...
-                    </div> */}
+                    <UnitRamps unitId={unitId} />
                 </div>
             </CardContent>
         </Card>

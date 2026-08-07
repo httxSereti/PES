@@ -3,6 +3,7 @@ import type { AppDispatch, RootState } from '@/store';
 import { logout, verifyToken } from '@/store/slices/authSlice';
 import { sensorsInitialized, sensorUpdated } from '@/store/slices/sensorsSlice';
 import { unitsInitialized, unitUpdated } from '@/store/slices/unitsSlice';
+import { rampsInitialized, rampUpserted, rampRemoved } from '@/store/slices/rampsSlice';
 import { hardwareInitialized, hardwareUpdated } from '@/store/slices/hardwareSlice';
 import { setError, setStatus, resetReconnect, incrementReconnect } from '@/store/slices/websocketSlice';
 import { eventsHistoryLoaded, eventTriggered } from '@/store/slices/eventsSlice';
@@ -174,6 +175,19 @@ export function createWebSocketMiddleware(config: WebSocketConfig): Middleware {
                             id: message.payload.id,
                             changes: message.payload.changes
                         }))
+                        break;
+
+                    /**
+                     * @Ramps
+                     * */
+                    case 'ramps:init':
+                        dispatch(rampsInitialized(message.payload))
+                        break;
+                    case 'ramps:update':
+                        dispatch(rampUpserted(message.payload))
+                        break;
+                    case 'ramps:remove':
+                        dispatch(rampRemoved(`${message.payload.unit}.${message.payload.field}`))
                         break;
 
                     /**

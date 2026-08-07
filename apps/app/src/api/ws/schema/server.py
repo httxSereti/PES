@@ -17,6 +17,7 @@ from .base import ServerMessage, WireModel, server_message
 from .models import (
     CommandResult,
     QueueStatus,
+    Ramp,
     Sensor,
     SensorPatch,
     StatusMessage,
@@ -109,8 +110,33 @@ class UnitsUpdateMessage(ServerMessage):
     payload: UnitUpdatePayload
 
 
-# ─────────────────────────────── Hardware ───────────────────────────────
+# ─────────────────────────────── Ramps ───────────────────────────────
 
+
+@server_message(audience=Permission.READ_UNITS)
+class RampsInitMessage(ServerMessage):
+    type: Literal["ramps:init"] = "ramps:init"
+    payload: list[Ramp]
+
+
+@server_message(audience=Permission.READ_UNITS)
+class RampsUpdateMessage(ServerMessage):
+    type: Literal["ramps:update"] = "ramps:update"
+    payload: Ramp
+
+
+class RampRemovePayload(WireModel):
+    unit: str
+    field: str
+
+
+@server_message(audience=Permission.READ_UNITS)
+class RampsRemoveMessage(ServerMessage):
+    type: Literal["ramps:remove"] = "ramps:remove"
+    payload: RampRemovePayload
+
+
+# ─────────────────────────────── Hardware ───────────────────────────────
 
 @server_message(audience=Permission.READ_SENSORS)
 class HardwareInitMessage(ServerMessage):
@@ -224,6 +250,10 @@ __all__ = [
     "UnitsInitMessage",
     "UnitUpdatePayload",
     "UnitsUpdateMessage",
+    "RampsInitMessage",
+    "RampsUpdateMessage",
+    "RampRemovePayload",
+    "RampsRemoveMessage",
     "HardwareInitMessage",
     "HardwareUpdateMessage",
     "CoreStopMessage",

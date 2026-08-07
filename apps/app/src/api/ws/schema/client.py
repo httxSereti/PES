@@ -11,6 +11,7 @@ from __future__ import annotations
 from typing import Any, Literal
 
 from events.enums import ActionType
+from typings import RampMode
 
 from .base import ClientMessage, WireModel
 from .models import SensorPatch
@@ -76,6 +77,46 @@ class UnitAdjChange(WireModel):
 class UnitsUpdateAdjCommand(ClientMessage):
     type: Literal["units:update_adj"] = "units:update_adj"
     payload: dict[str, UnitAdjChange]
+
+
+# ─────────────────────────────── Ramps ───────────────────────────────
+
+
+class RampTarget(WireModel):
+    unit: Literal["UNIT1", "UNIT2", "UNIT3"]
+    field: Literal["ch_A", "ch_B", "adj_1", "adj_2"]
+
+
+class RampStartPayload(RampTarget):
+    timer: float
+    step: int = 1
+    mode: RampMode = RampMode.RESET
+    duration: float = -1  # seconds, -1 = permanent
+    max_value: int | None = None  # defaults to the field's current level
+
+
+class RampsStartCommand(ClientMessage):
+    type: Literal["ramps:start"] = "ramps:start"
+    payload: RampStartPayload
+
+
+class RampsPauseCommand(ClientMessage):
+    type: Literal["ramps:pause"] = "ramps:pause"
+    payload: RampTarget
+
+
+class RampsResumeCommand(ClientMessage):
+    type: Literal["ramps:resume"] = "ramps:resume"
+    payload: RampTarget
+
+
+class RampStopPayload(RampTarget):
+    restore: bool = True
+
+
+class RampsStopCommand(ClientMessage):
+    type: Literal["ramps:stop"] = "ramps:stop"
+    payload: RampStopPayload
 
 
 # ─────────────────────────────── Trigger rules ───────────────────────────────
@@ -189,6 +230,13 @@ __all__ = [
     "UnitsUpdatePowerModeCommand",
     "UnitAdjChange",
     "UnitsUpdateAdjCommand",
+    "RampTarget",
+    "RampStartPayload",
+    "RampsStartCommand",
+    "RampsPauseCommand",
+    "RampsResumeCommand",
+    "RampStopPayload",
+    "RampsStopCommand",
     "TriggerRuleUpdatePayload",
     "TriggerRulesUpdateCommand",
     "TriggerActionDraft",

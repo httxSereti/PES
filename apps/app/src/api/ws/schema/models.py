@@ -11,6 +11,7 @@ from typing import Annotated, Any, Literal
 from pydantic import Field
 
 from events.enums import ActionType
+from typings import RampMode
 
 from .base import TsType, WireModel
 
@@ -172,6 +173,22 @@ class QueueStatus(WireModel):
     total_cancelled: int
 
 
+class Ramp(WireModel):
+    """State of one software ramp on (unit, field) — see hardware/ramp.py."""
+
+    unit: str
+    field: str
+    max_value: int
+    timer: float
+    step: int
+    mode: RampMode
+    duration: float
+    elapsed: float
+    paused: bool
+    progress: int
+    value: int
+
+
 class CommandResult(WireModel):
     status: str
     message: str | None = None
@@ -201,6 +218,7 @@ __all__ = [
     "TriggeredRule",
     "TriggeredEvent",
     "QueueStatus",
+    "Ramp",
     "CommandResult",
     "StatusMessage",
 ]

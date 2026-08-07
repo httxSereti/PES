@@ -19,6 +19,7 @@ from events.dispatcher import EventDispatcher
 from events.executor import ActionExecutor
 from events.queue import ActionQueue
 from events.registry import EventRegistry
+from hardware.ramp import thread_ramp
 from hardware.sensors import thread_sensors_bt
 from hardware.units import mk2b_init, thread_bt_unit
 from store import Store
@@ -96,6 +97,9 @@ if __name__ == "__main__":
     # init threads for each mk2b unit
     for bt_name in BT_UNITS:
         threads[bt_name] = Thread(target=thread_bt_unit, args=(bt_name,))
+
+    # software ramp thread (channel/adj outputs)
+    threads["ramp"] = Thread(target=thread_ramp)
 
     # start all thread
     for tr in threads.keys():

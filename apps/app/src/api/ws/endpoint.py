@@ -21,6 +21,7 @@ from api.ws.schema import (
     InboundMessage,
 )
 from api.ws.websocket_notifier import ws_notifier
+from hardware.ramp import ramp_manager
 from store import Store
 from typings import Permission
 
@@ -67,6 +68,11 @@ async def _send_init_sequence(websocket: WebSocket, user) -> None:
     if allowed("units:init"):
         await websocket.send_json(
             {"type": "units:init", "payload": store.get_all_units_settings()}
+        )
+
+    if allowed("ramps:init"):
+        await websocket.send_json(
+            {"type": "ramps:init", "payload": ramp_manager.get_all()}
         )
 
     if allowed("hardware:init"):

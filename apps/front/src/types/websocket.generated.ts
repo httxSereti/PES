@@ -11,6 +11,11 @@ export enum ActionType {
     CHASTER_TIME_UPDATE = "CHASTER_TIME_UPDATE",
 }
 
+export enum RampMode {
+    RESET = "reset",
+    WAVE = "wave",
+}
+
 export interface UnitLevelChanges {
     ch_A?: string | null;
     ch_B?: string | null;
@@ -27,6 +32,11 @@ export interface UnitPowerModeChange {
 export interface UnitAdjChange {
     adj_1?: number | null;
     adj_2?: number | null;
+}
+
+export interface RampTarget {
+    unit: 'UNIT1' | 'UNIT2' | 'UNIT3';
+    field: 'ch_A' | 'ch_B' | 'adj_1' | 'adj_2';
 }
 
 export interface TriggerRuleUpdatePayload {
@@ -165,6 +175,25 @@ export interface UnitUpdatePayload {
     changes: Partial<UnitSettings>;
 }
 
+export interface Ramp {
+    unit: string;
+    field: string;
+    max_value: number;
+    timer: number;
+    step: number;
+    mode: RampMode;
+    duration: number;
+    elapsed: number;
+    paused: boolean;
+    progress: number;
+    value: number;
+}
+
+export interface RampRemovePayload {
+    unit: string;
+    field: string;
+}
+
 export interface StatusMessage {
     status: string;
     message: string;
@@ -216,6 +245,18 @@ export interface TriggerRuleCreatedPayload {
 
 export interface TriggerRuleDeletedPayload {
     id: string;
+}
+
+export interface RampStartPayload extends RampTarget {
+    timer: number;
+    step: number;
+    mode: RampMode;
+    duration: number;
+    max_value?: number | null;
+}
+
+export interface RampStopPayload extends RampTarget {
+    restore: boolean;
 }
 
 export interface TriggerRuleEditDraft extends TriggerRuleDraft {
@@ -291,6 +332,30 @@ export interface UnitsUpdateAdjCommand {
     id?: string | null;
     type: 'units:update_adj';
     payload: Record<string, UnitAdjChange>;
+}
+
+export interface RampsStartCommand {
+    id?: string | null;
+    type: 'ramps:start';
+    payload: RampStartPayload;
+}
+
+export interface RampsPauseCommand {
+    id?: string | null;
+    type: 'ramps:pause';
+    payload: RampTarget;
+}
+
+export interface RampsResumeCommand {
+    id?: string | null;
+    type: 'ramps:resume';
+    payload: RampTarget;
+}
+
+export interface RampsStopCommand {
+    id?: string | null;
+    type: 'ramps:stop';
+    payload: RampStopPayload;
 }
 
 export interface TriggerRulesUpdateCommand {
@@ -392,6 +457,24 @@ export interface UnitsUpdateMessage {
     payload: UnitUpdatePayload;
 }
 
+export interface RampsInitMessage {
+    id?: string | null;
+    type: 'ramps:init';
+    payload: Ramp[];
+}
+
+export interface RampsUpdateMessage {
+    id?: string | null;
+    type: 'ramps:update';
+    payload: Ramp;
+}
+
+export interface RampsRemoveMessage {
+    id?: string | null;
+    type: 'ramps:remove';
+    payload: RampRemovePayload;
+}
+
 export interface HardwareInitMessage {
     id?: string | null;
     type: 'hardware:init';
@@ -474,6 +557,10 @@ export type WebSocketClientMessage =
     | UnitsUpdateModeCommand
     | UnitsUpdatePowerModeCommand
     | UnitsUpdateAdjCommand
+    | RampsStartCommand
+    | RampsPauseCommand
+    | RampsResumeCommand
+    | RampsStopCommand
     | TriggerRulesUpdateCommand
     | TriggerRulesCreateCommand
     | TriggerRulesEditCommand
@@ -493,6 +580,9 @@ export type WebSocketServerMessage =
     | SensorsUpdateMessage
     | UnitsInitMessage
     | UnitsUpdateMessage
+    | RampsInitMessage
+    | RampsUpdateMessage
+    | RampsRemoveMessage
     | HardwareInitMessage
     | HardwareUpdateMessage
     | CoreStopMessage
