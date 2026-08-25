@@ -13,7 +13,8 @@ export default [
         route("sensors", "pages/app/sensors.tsx"),
 
         route("events", "components/layout/events-layout.tsx", [
-            index("pages/app/events/index.tsx"),
+            index("pages/app/events/dashboard.tsx"),
+            route("triggered", "pages/app/events/triggered-events.tsx"),
 
             ...prefix("trigger-rules", [
                 index("pages/app/events/trigger-rules/index.tsx"),

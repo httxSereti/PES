@@ -109,6 +109,7 @@ export interface TriggerRule {
     priority: number;
     actions: TriggerAction[];
     labels: TriggerRuleLabel[];
+    created_at?: string | null;
 }
 
 export interface TriggerAction {

@@ -1,9 +1,10 @@
 import { useAppSelector } from "@/store/hooks";
 import { Link, Navigate, NavLink, Outlet } from "react-router";
-import { Activity, Zap, } from "lucide-react";
+import { Activity, LayoutDashboard, Zap } from "lucide-react";
 
 const TABS = [
-    { to: "/app/events", label: "Events", icon: Activity, end: true },
+    { to: "/app/events", label: "Dashboard", icon: LayoutDashboard, end: true },
+    { to: "/app/events/triggered", label: "Triggered Events", icon: Activity, end: false },
     { to: "/app/events/trigger-rules", label: "Trigger Rules", icon: Zap, end: false },
 ] as const;
 

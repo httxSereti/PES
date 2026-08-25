@@ -136,6 +136,8 @@ class TriggerRule(WireModel):
     priority: int
     actions: list[TriggerAction]
     labels: list[TriggerRuleLabel]
+    # nullable for legacy rows created before the column existed
+    created_at: datetime | None = None
 
 
 class TriggeredAction(WireModel):

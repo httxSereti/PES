@@ -15,6 +15,7 @@ def _serialize_rule(rule) -> dict:
         "priority": rule.priority,
         "actions": [_serialize_action(a) for a in rule.actions],
         "labels": [_serialize_label(a) for a in rule.labels],
+        "created_at": rule.created_at.isoformat() if rule.created_at else None,
     }
 
 
