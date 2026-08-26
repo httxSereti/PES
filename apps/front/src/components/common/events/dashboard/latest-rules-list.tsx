@@ -4,16 +4,8 @@ import { useAppSelector } from "@/store/hooks";
 import { triggerRulesSelectors } from "@/store/slices/triggerRulesSlice";
 import type { TriggerRule } from "@/types";
 import { EventTypeBadge } from "@/components/common/events/event-badges";
+import { formatDateTime } from "@/components/common/events/date-format";
 import { Card, CardContent, CardHeader, CardTitle } from "@pes/ui/components/card";
-
-function formatDate(iso: string | null | undefined): string {
-    if (!iso) return "—";
-    const d = new Date(iso);
-    if (Number.isNaN(d.getTime())) return "—";
-    return d.toLocaleDateString("fr-FR", { day: "2-digit", month: "2-digit" }) +
-        " " +
-        d.toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" });
-}
 
 function LatestRuleRow({ rule }: { rule: TriggerRule }) {
     return (
@@ -28,7 +20,7 @@ function LatestRuleRow({ rule }: { rule: TriggerRule }) {
             <span className="font-mono text-xs text-foreground truncate">{rule.name}</span>
             <EventTypeBadge type={rule.event_type} />
             <span className="ml-auto text-[10px] text-muted-foreground/50 font-mono whitespace-nowrap tabular-nums hidden sm:inline">
-                {formatDate(rule.created_at)}
+                {formatDateTime(rule.created_at)}
             </span>
         </Link>
     );

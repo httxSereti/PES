@@ -1,4 +1,5 @@
 import TriggerRulesActions from "@/components/common/events/trigger-rules/actions/trigger-rules-actions";
+import { formatDateTime } from "@/components/common/events/date-format";
 import { useWebSocket } from "@/hooks/useWebSocket";
 import { useAppDispatch } from "@/store/hooks";
 import { triggerRuleUpdated, triggerRuleRemoved } from "@/store/slices/triggerRulesSlice";
@@ -92,21 +93,26 @@ export default function TriggerRulesCard({ triggerRule }: { triggerRule: Trigger
     return (
         <Card className="">
             <CardHeader className="flex flex-row justify-between items-center">
-                <CardTitle className="flex gap-2">
-                    <div className="p-2 rounded-lg accent-tile" >
+                <CardTitle className="flex items-center gap-2.5">
+                    <div className="p-2 rounded-lg accent-tile shrink-0">
                         <Zap size={14} className="accent-tile-icon" />
                     </div>
-                    <div className="flex flex-col justify-center">
+                    <div className="flex flex-col justify-center min-w-0">
                         <div className="font-mono text-xs">
                             {triggerRule.name}
                         </div>
                         <div className="font-mono text-xs text-muted-foreground/50">
                             {triggerRule.description}
                         </div>
+                        <div className="flex flex-wrap items-center gap-x-2 text-[10px] font-mono text-muted-foreground/40 mt-1">
+                            <span>created {formatDateTime(triggerRule.created_at)}</span>
+                            <span aria-hidden="true">·</span>
+                            <span>updated {formatDateTime(triggerRule.updated_at)}</span>
+                        </div>
                     </div>
                 </CardTitle>
 
-                <div className="flex items-center gap-1">
+                <div className="flex items-center gap-1 shrink-0">
                     <Switch checked={triggerRule.enabled} onCheckedChange={toggleStatus} />
 
                     <DropdownMenu>
@@ -171,11 +177,11 @@ export default function TriggerRulesCard({ triggerRule }: { triggerRule: Trigger
 
             <CardContent>
                 <div className="flex flex-col">
-                    <div className="flex-row">
-                        <div className="flex flex-row items-center gap-2">
+                    <div>
+                        <div className="flex flex-row flex-wrap items-center gap-2">
 
                             <>
-                                <Activity size={15} className="text-muted-foreground" />
+                                <Activity size={12} className="text-muted-foreground/70 shrink-0" />
                                 <span className={`inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-medium border font-mono bg-violet-500/15 text-violet-700 border-violet-500/30 dark:text-violet-300`}>
                                     {triggerRule.event_type}
                                 </span>
@@ -183,7 +189,7 @@ export default function TriggerRulesCard({ triggerRule }: { triggerRule: Trigger
 
                             {triggerRule.labels.length > 0 ? (
                                 <>
-                                    <Tag size={15} className="text-muted-foreground" />
+                                    <Tag size={12} className="text-muted-foreground/70 shrink-0" />
                                     {triggerRule.labels.map((label) => (
                                         <TriggerRuleLabelBadge key={label.id} name={label.name} />
                                     ))}
