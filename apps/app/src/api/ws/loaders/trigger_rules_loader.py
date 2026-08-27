@@ -1,4 +1,5 @@
 import structlog
+from utils import to_utc_iso
 from api.ws.websocket_manager import WebSocketManager
 from database.repositories.trigger_rule_repo import TriggerRuleRepo
 
@@ -15,8 +16,8 @@ def _serialize_rule(rule) -> dict:
         "priority": rule.priority,
         "actions": [_serialize_action(a) for a in rule.actions],
         "labels": [_serialize_label(a) for a in rule.labels],
-        "created_at": rule.created_at.isoformat() if rule.created_at else None,
-        "updated_at": rule.updated_at.isoformat() if rule.updated_at else None,
+        "created_at": to_utc_iso(rule.created_at),
+        "updated_at": to_utc_iso(rule.updated_at),
     }
 
 

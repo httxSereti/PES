@@ -106,6 +106,20 @@ class UserService:
         logger.info("[Users] Created user", user_id=user.id, role=role.value)
         return user, raw_token
 
+    async def generate_magic_link_for_user(self, user_id: str) -> Optional[str]:
+        """Issue a fresh magic token for an existing user (previous unused
+        tokens are revoked). Returns the raw token, or None if unknown."""
+        if self._store.get_user(user_id) is None:
+            record = await self._users.get_by_id(user_id)
+            if record is None:
+                return None
+            self._store.add_user(self._to_domain(record))
+
+        await self._tokens.revoke_for_user(user_id)
+        raw_token = await self._issue_magic_token(user_id)
+        logger.info("[Users] Magic link issued", user_id=user_id)
+        return raw_token
+
     async def ensure_root_bootstrap(self) -> str:
         """
         Guarantee a usable ROOT login at every startup: create the ROOT user
@@ -190,6 +204,51 @@ class UserService:
             {"type": "auth:refresh"}, user_id
         )
         logger.info("[Users] Role updated", user_id=user_id, role=role.value)
+        return True
+
+    async def set_user_permissions(
+        self,
+        user_id: str,
+        grant: Optional[set] = None,
+        revoke: Optional[set] = None,
+    ) -> bool:
+        """
+        Write-through custom-permission change: DB, cache, live WS permission
+        snapshot, then nudge the user's clients to re-fetch their profile.
+        `grant`/`revoke` are sets of Permission applied to the custom set only
+        (role bundles are untouched).
+        """
+        user = self._store.get_user(user_id)
+        if user is None:
+            return False
+
+        current = set(user.custom_permissions)
+        target = (current | (grant or set())) - (revoke or set())
+
+        for p in target - current:
+            self._store.add_user_permission(user_id, p)
+        for p in current - target:
+            self._store.remove_user_permission(user_id, p)
+
+        await self._users.update_permissions(
+            user_id, [p.value for p in sorted(target, key=lambda x: x.value)]
+        )
+
+        updated = self._store.get_user(user_id)
+        if updated is None:
+            return False
+        self._store.websocket.update_permissions(
+            user_id, updated.get_permissions()
+        )
+        await self._store.websocket.send_personal_message(
+            {"type": "auth:refresh"}, user_id
+        )
+        logger.info(
+            "[Users] Custom permissions updated",
+            user_id=user_id,
+            granted=sorted(p.value for p in (target - current)),
+            revoked=sorted(p.value for p in (current - target)),
+        )
         return True
 
 

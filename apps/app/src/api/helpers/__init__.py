@@ -1,8 +1,10 @@
+from utils.datetime_utils import to_utc_iso
 from .generate_magic_token import generate_magic_token, hash_magic_token
 from .jwt_helpers import create_access_token, get_current_user, TokenResponse
 from .permissions import require_permission
 
 __all__ = [
+    "to_utc_iso",
     "generate_magic_token",
     "hash_magic_token",
     "create_access_token",

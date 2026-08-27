@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 
-from api.helpers import get_current_user, require_permission
+from api.helpers import get_current_user, require_permission, to_utc_iso
 from database.repositories.trigger_rule_repo import TriggerRuleRepo
 from events.enums import ActionType, TriggerableEvent
 from events.queue import ActionQueue
@@ -71,8 +71,8 @@ def _serialize_queue_item(item) -> dict:
         "elapsed": item.elapsed,
         "trigger_action_id": item.trigger_action_id,
         "trigger_rule_id": item.trigger_rule_id,
-        "created_at": item.created_at.isoformat() if item.created_at else None,
-        "started_at": item.started_at.isoformat() if item.started_at else None,
+        "created_at": to_utc_iso(item.created_at),
+        "started_at": to_utc_iso(item.started_at),
     }
 
 

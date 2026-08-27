@@ -4,7 +4,7 @@ import { useAppSelector } from "@/store/hooks";
 import { triggerRulesSelectors } from "@/store/slices/triggerRulesSlice";
 import type { TriggerRule } from "@/types";
 import { EventTypeBadge } from "@/components/common/events/event-badges";
-import { formatDateTime } from "@/components/common/events/date-format";
+import { formatDateTime } from "@/lib/format-date";
 import { Card, CardContent, CardHeader, CardTitle } from "@pes/ui/components/card";
 
 function LatestRuleRow({ rule }: { rule: TriggerRule }) {

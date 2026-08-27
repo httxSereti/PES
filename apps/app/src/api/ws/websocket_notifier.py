@@ -2,6 +2,7 @@ import asyncio
 import structlog
 from typing import Optional
 
+from utils import to_utc_iso
 from api.ws.schema import MESSAGE_AUDIENCE
 
 from .websocket_manager import WebSocketManager
@@ -60,7 +61,7 @@ class WebSocketNotifier:
                 "event_type": ev.event_type,
                 "origin": ev.origin,
                 "event_data": ev.event_data,
-                "triggered_at": ev.triggered_at.isoformat(),
+                "triggered_at": to_utc_iso(ev.triggered_at),
                 "triggered_rules": ev.triggered_rules,
             }
             for ev in events

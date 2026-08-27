@@ -1,4 +1,4 @@
-/** Short date-time used across the events UI, e.g. "26/08/2026 14:32". */
+/** Short date-time used across the UI, e.g. "26/08/2026 14:32". */
 export function formatDateTime(iso: string | null | undefined): string {
     if (!iso) return "—";
     const d = new Date(iso);

@@ -4,7 +4,7 @@ from models import User
 from typings import Permission
 from store import Store
 
-from api.helpers import require_permission
+from api.helpers import require_permission, to_utc_iso
 
 router = APIRouter(tags=["users"])
 store = Store()
@@ -16,11 +16,12 @@ def _serialize_user(user: User) -> dict:
         "display_name": user.display_name,
         "role": user.role.value,
         "permissions": [p.value for p in user.get_permissions()],
+        "custom_permissions": [p.value for p in user.custom_permissions],
         "is_active": user.is_active,
-        "created_at": user.created_at.isoformat(),
-        "last_login_at": user.last_login_at.isoformat()
-        if user.last_login_at
-        else None,
+        # online == currently holding a live WebSocket connection
+        "is_online": user.id in store.websocket.get_connected_clients(),
+        "created_at": to_utc_iso(user.created_at),
+        "last_login_at": to_utc_iso(user.last_login_at),
     }
 
 

@@ -1,5 +1,5 @@
 import TriggerRulesActions from "@/components/common/events/trigger-rules/actions/trigger-rules-actions";
-import { formatDateTime } from "@/components/common/events/date-format";
+import { formatDateTime } from "@/lib/format-date";
 import { useWebSocket } from "@/hooks/useWebSocket";
 import { useAppDispatch } from "@/store/hooks";
 import { triggerRuleUpdated, triggerRuleRemoved } from "@/store/slices/triggerRulesSlice";
