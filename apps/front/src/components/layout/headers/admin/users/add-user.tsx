@@ -15,7 +15,7 @@ import { Role } from "@/types";
 
 const API_URL = import.meta.env.VITE_API_URL;
 
-// Invitable roles (ROOT is never assignable from the UI)
+// Invitable roles (HOST is never assignable from the UI)
 const availableRoles = [
     { label: "Guest", value: Role.GUEST },
     { label: "User", value: Role.USER },

@@ -45,7 +45,7 @@ export function UserPermissionsDialog({
 
     if (!user) return null;
 
-    const isRootTarget = user.role === "root";
+    const isHostTarget = user.role === "host";
 
     async function toggle(permission: Permission, granted: boolean) {
         if (!user || !token) return;
@@ -102,9 +102,9 @@ export function UserPermissionsDialog({
 
                 <Separator />
 
-                {isRootTarget && (
+                {isHostTarget && (
                     <p className="text-xs text-muted-foreground/70">
-                        ROOT bypasses every permission check — the toggles below have no effect.
+                        HOST bypasses every permission check — the toggles below have no effect.
                     </p>
                 )}
 
@@ -142,7 +142,7 @@ export function UserPermissionsDialog({
                                             <div className="ml-auto">
                                                 <Switch
                                                     checked={effective}
-                                                    disabled={viaRole || isSaving || isRootTarget}
+                                                    disabled={viaRole || isSaving || isHostTarget}
                                                     onCheckedChange={checked => void toggle(permission, checked)}
                                                 />
                                             </div>

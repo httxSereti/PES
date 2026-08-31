@@ -120,16 +120,16 @@ class UserService:
         logger.info("[Users] Magic link issued", user_id=user_id)
         return raw_token
 
-    async def ensure_root_bootstrap(self) -> str:
+    async def ensure_host_bootstrap(self) -> str:
         """
-        Guarantee a usable ROOT login at every startup: create the ROOT user
+        Guarantee a usable HOST login at every startup: create the HOST user
         when none exists, then always issue a FRESH magic token (previous
         unused tokens are revoked) and print the link to the console.
         """
-        record = await self._users.get_active_root()
+        record = await self._users.get_active_host()
         if record is None:
-            user, _ = await self.create_user(Role.ROOT, "Sereti")
-            logger.info("[Users] ROOT bootstrap created", user_id=user.id)
+            user, _ = await self.create_user(Role.HOST, "Sereti")
+            logger.info("[Users] HOST bootstrap created", user_id=user.id)
         else:
             user = self._store.get_user(record.id)
             if user is None:
@@ -140,8 +140,8 @@ class UserService:
         raw_token = await self._issue_magic_token(user.id)
 
         link = f"{os.getenv('FRONT_URL')}/auth?magic_token={raw_token}"
-        print(f"root magic url {link}")
-        logger.info("[Users] ROOT magic link rotated", user_id=user.id)
+        print(f"host magic url {link}")
+        logger.info("[Users] HOST magic link rotated", user_id=user.id)
         return link
 
     def get_or_create_guest(self) -> User:

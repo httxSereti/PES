@@ -8,7 +8,7 @@ class Role(Enum):
     OPERATOR = "operator"
     TRUSTED = "trusted"
     ADMIN = "admin"
-    ROOT = "root"
+    HOST = "host"
     
 ROLE_PERMISSIONS: Dict[Role, Set[Permission]] = {
     Role.GUEST: {
@@ -52,5 +52,5 @@ ROLE_PERMISSIONS: Dict[Role, Set[Permission]] = {
         Permission.MANAGE_PROFILES,
         Permission.ADMIN,
     },
-    Role.ROOT: set(Permission),  # Toutes les permissions
+    Role.HOST: set(Permission),  # Toutes les permissions
 }

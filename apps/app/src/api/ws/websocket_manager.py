@@ -12,7 +12,7 @@ class WebSocketManager:
 
     Each connection registers the user's effective permissions at connect
     time; `broadcast(audience=...)` only delivers to connections holding the
-    required permission (ROOT bypasses). Snapshots are refreshed via
+    required permission (HOST bypasses). Snapshots are refreshed via
     `update_permissions` when a role changes — per-command checks always hit
     the live User object, so only broadcast filtering uses the snapshot.
     """
@@ -46,7 +46,7 @@ class WebSocketManager:
     def has_permission(self, client_id: str, permission: Permission) -> bool:
         with self._lock:
             perms = self._permissions.get(client_id, set())
-        return Permission.ROOT in perms or permission in perms
+        return Permission.HOST in perms or permission in perms
 
     async def send_personal_message(self, message: dict, client_id: str):
         with self._lock:
@@ -75,7 +75,7 @@ class WebSocketManager:
                 continue
             if audience is not None:
                 perms = permissions.get(client_id, set())
-                if Permission.ROOT not in perms and audience not in perms:
+                if Permission.HOST not in perms and audience not in perms:
                     continue
             try:
                 await websocket.send_json(message)

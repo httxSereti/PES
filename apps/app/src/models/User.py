@@ -41,7 +41,7 @@ class User:
 
     def has_permission(self, permission: Permission) -> bool:
         perms = self.get_permissions()
-        if Permission.ROOT in perms:
+        if Permission.HOST in perms:
             return True
         return permission in perms
 

@@ -19,4 +19,4 @@ class Permission(Enum):
     MANAGE_PROFILES = "manage_profiles"
     
     ADMIN = "admin"
-    ROOT = "root"
+    HOST = "host"

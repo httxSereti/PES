@@ -45,7 +45,7 @@ async def _send_init_sequence(websocket: WebSocket, user) -> None:
         audience = MESSAGE_AUDIENCE.get(msg_type)
         return (
             audience is None
-            or Permission.ROOT in perms
+            or Permission.HOST in perms
             or audience in perms
         )
 

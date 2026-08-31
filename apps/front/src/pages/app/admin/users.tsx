@@ -37,11 +37,11 @@ const ROLE_LABELS: Record<string, string> = {
     operator: "Operator",
     trusted: "Trusted",
     admin: "Admin",
-    root: "Root",
+    host: "Host",
 };
 
-/** Roles an admin may assign from the UI (ROOT is bootstrap-only). */
-const ASSIGNABLE_ROLES = Object.values(Role).filter(r => r !== Role.ROOT);
+/** Roles an admin may assign from the UI (HOST is bootstrap-only). */
+const ASSIGNABLE_ROLES = Object.values(Role).filter(r => r !== Role.HOST);
 
 function initials(user: AdminUser): string {
     const name = user.display_name?.trim();
@@ -70,8 +70,8 @@ function RoleSelect({ user, onChanged }: {
     const me = useAppSelector(state => state.auth.user);
     const [saving, setSaving] = useState(false);
 
-    // Safety rails: never reassign ROOT, never change your own role here
-    const locked = user.role === Role.ROOT || user.id === me?.id;
+    // Safety rails: never reassign HOST, never change your own role here
+    const locked = user.role === Role.HOST || user.id === me?.id;
 
     const change = async (role: string) => {
         if (!token) return;
@@ -101,11 +101,11 @@ function RoleSelect({ user, onChanged }: {
     if (locked) {
         return (
             <span
-                className={`inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-medium border font-mono ${user.role === Role.ROOT
+                className={`inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-medium border font-mono ${user.role === Role.HOST
                     ? "bg-amber-500/15 text-amber-700 border-amber-500/30 dark:text-amber-300"
                     : "bg-muted/50 text-muted-foreground/60 border-border"
                 }`}
-                title={user.role === Role.ROOT ? "ROOT role can't be changed" : "You can't change your own role"}
+                title={user.role === Role.HOST ? "HOST role can't be changed" : "You can't change your own role"}
             >
                 {ROLE_LABELS[user.role] ?? user.role}
             </span>

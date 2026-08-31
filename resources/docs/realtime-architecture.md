@@ -132,9 +132,9 @@ permission.
   stored; tokens expire (7 days) and are single-use (marked `used_at` on
   login). Raw tokens only ever exist in the magic link shown once at
   creation.
-- **Root bootstrap**: at startup, if no active ROOT user exists one is
-  created; then a **fresh ROOT magic token is issued on every boot** —
-  previous unused root tokens are revoked, and the link is printed to the
+- **Host bootstrap**: at startup, if no active HOST user exists one is
+  created; then a **fresh HOST magic token is issued on every boot** —
+  previous unused host tokens are revoked, and the link is printed to the
   console. The console is the root-of-trust recovery path (a printed link is
   single-use; the next boot always prints a new one).
 - **JWT**: HS256, 24 h, `sub` = user id. Used as REST `Bearer` and as the WS

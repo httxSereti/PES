@@ -10,7 +10,7 @@ export enum Role {
     OPERATOR = "operator",
     TRUSTED = "trusted",
     ADMIN = "admin",
-    ROOT = "root",
+    HOST = "host",
 }
 
 export enum Permission {
@@ -26,7 +26,7 @@ export enum Permission {
     MANAGE_SENSORS = "manage_sensors",
     MANAGE_PROFILES = "manage_profiles",
     ADMIN = "admin",
-    ROOT = "root",
+    HOST = "host",
 }
 
 export const SERVER_MESSAGE_AUDIENCE: Record<WebSocketServerMessage['type'], Permission | null> = {
