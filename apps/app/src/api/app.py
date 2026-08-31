@@ -83,6 +83,7 @@ async def lifespan(app: FastAPI):
     await seed_from_json(db)
 
     # Load persisted users into the Store cache, then bootstrap HOST if needed
+    await user_service.migrate_legacy_root_role()
     await user_service.load_from_db()
     await user_service.ensure_host_bootstrap()
 

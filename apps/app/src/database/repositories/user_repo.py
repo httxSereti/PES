@@ -71,3 +71,20 @@ class UserRepo:
                 )
             )
             return result.scalars().first()
+
+    async def migrate_legacy_root_role(self) -> None:
+        """Rewrite legacy 'root' role/permissions to 'host' (backward compat)."""
+        async with self._db.session_maker() as session:
+            result = await session.execute(select(UserModel))
+            changed = False
+            for row in result.scalars().all():
+                if row.role == "root":
+                    row.role = "host"
+                    changed = True
+                if row.custom_permissions and "root" in row.custom_permissions:
+                    row.custom_permissions = [
+                        "host" if p == "root" else p for p in row.custom_permissions
+                    ]
+                    changed = True
+            if changed:
+                await session.commit()

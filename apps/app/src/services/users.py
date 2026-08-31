@@ -60,6 +60,10 @@ class UserService:
         logger.info(f"[Users] Loaded {len(rows)} user(s) from database")
         return len(rows)
 
+    async def migrate_legacy_root_role(self) -> None:
+        """Rewrite legacy 'root' role/permissions to 'host' (backward compat)."""
+        await self._users.migrate_legacy_root_role()
+
     # ── Creation & bootstrap ──
 
     async def _issue_magic_token(self, user_id: str) -> str:

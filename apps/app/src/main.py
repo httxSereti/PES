@@ -107,6 +107,6 @@ if __name__ == "__main__":
         threads[tr].daemon = True
         threads[tr].start()
 
-    # run the API on the main thread (blocking). User loading + ROOT
+    # run the API on the main thread (blocking). User loading + HOST
     # bootstrap happen in the FastAPI lifespan (async, DB-backed).
     start_api()
