@@ -3,6 +3,7 @@ import {
   Archive,
   BellIcon,
   Crown,
+  Dumbbell,
   Frame,
   HardDrive,
   Home,
@@ -51,6 +52,11 @@ const data = {
       title: "Events",
       url: "/app/events",
       icon: Archive,
+    },
+    {
+      title: "Training",
+      url: "/app/training",
+      icon: Dumbbell,
     },
   ],
   navPlayground: [

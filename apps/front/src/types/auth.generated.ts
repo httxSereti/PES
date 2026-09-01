@@ -25,6 +25,8 @@ export enum Permission {
     MANAGE_USERS = "manage_users",
     MANAGE_SENSORS = "manage_sensors",
     MANAGE_PROFILES = "manage_profiles",
+    TRAINING_EDGING_READ = "training_edging_read",
+    TRAINING_EDGING_MANAGE = "training_edging_manage",
     ADMIN = "admin",
     HOST = "host",
 }
@@ -54,4 +56,8 @@ export const SERVER_MESSAGE_AUDIENCE: Record<WebSocketServerMessage['type'], Per
     'trigger_rules:create': Permission.ADMIN,
     'trigger_rules:create_label': Permission.ADMIN,
     'trigger_rules:delete': Permission.ADMIN,
+    'training:init': Permission.TRAINING_EDGING_READ,
+    'training:session': Permission.TRAINING_EDGING_READ,
+    'training:session_deleted': Permission.TRAINING_EDGING_READ,
+    'training:edge': Permission.TRAINING_EDGING_READ,
 };

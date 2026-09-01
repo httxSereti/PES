@@ -34,3 +34,14 @@ export type {
     CreateTriggerAction,
     UpdateTriggerAction,
 } from './events.types'
+
+export type {
+    TrainingIndexResponse,
+    TrainingSessionDetail,
+    TrainingLiveSnapshot,
+    TrainingSessionFields,
+    TrainingOverviewStats,
+    EdgingSessionStats,
+    EdgeDifficulty,
+    EdgeOutcome,
+} from './training.types'

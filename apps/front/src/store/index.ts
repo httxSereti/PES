@@ -9,6 +9,7 @@ import unitsHistorySlice from '@/store/slices/unitsHistorySlice';
 import eventsReducer from '@/store/slices/eventsSlice';
 import triggerRulesReducer from '@/store/slices/triggerRulesSlice';
 import triggerRuleLabelsReducer from '@/store/slices/triggerRuleLabelsSlice';
+import trainingReducer from '@/store/slices/trainingSlice';
 
 import { createWebSocketMiddleware } from '@/store/middleware/websocketMiddleware';
 
@@ -38,7 +39,8 @@ export const store = configureStore({
         unitsHistory: unitsHistorySlice,
         events: eventsReducer,
         triggerRules: triggerRulesReducer,
-        triggerRuleLabels: triggerRuleLabelsReducer
+        triggerRuleLabels: triggerRuleLabelsReducer,
+        training: trainingReducer,
     },
     middleware: (getDefaultMiddleware) =>
         getDefaultMiddleware({

@@ -204,6 +204,44 @@ class StatusMessage(WireModel):
     message: str
 
 
+# ─────────────────────────────── Training ───────────────────────────────
+
+
+class EdgingGoal(WireModel):
+    type: str
+    value: int
+
+
+class EdgingEdge(WireModel):
+    id: str
+    session_id: str
+    difficulty: str
+    outcome: str
+    recorded_by: str
+    recorded_at: datetime
+
+
+class EdgingSession(WireModel):
+    id: str
+    name: str
+    goals: list[EdgingGoal]
+    auto_stop_on_goal: bool
+    initiator: str
+    initiator_user_id: str | None
+    created_by: str
+    status: str
+    rating: int | None
+    notes: str | None
+    created_at: datetime
+    started_at: datetime | None
+    ended_at: datetime | None
+    # Derived: successful edges so far, elapsed seconds, and whether every
+    # goal is currently reached.
+    edge_count: int
+    duration_seconds: int | None
+    goals_met: bool
+
+
 __all__ = [
     "UnitSettingsPatch",
     "SensorPatch",
@@ -224,4 +262,7 @@ __all__ = [
     "Ramp",
     "CommandResult",
     "StatusMessage",
+    "EdgingGoal",
+    "EdgingEdge",
+    "EdgingSession",
 ]

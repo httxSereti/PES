@@ -16,6 +16,8 @@ from typings import Permission
 from .base import ServerMessage, WireModel, server_message
 from .models import (
     CommandResult,
+    EdgingEdge,
+    EdgingSession,
     QueueStatus,
     Ramp,
     Sensor,
@@ -237,6 +239,46 @@ class TriggerRulesDeleteMessage(ServerMessage):
     payload: TriggerRuleDeletedPayload
 
 
+# ─────────────────────────────── Training ───────────────────────────────
+
+
+class TrainingInitPayload(WireModel):
+    """Snapshot sent on WS connect: live session (null when none) + its edges."""
+
+    session: EdgingSession | None
+    edges: list[EdgingEdge]
+
+
+@server_message(audience=Permission.TRAINING_EDGING_READ)
+class TrainingInitMessage(ServerMessage):
+    type: Literal["training:init"] = "training:init"
+    payload: TrainingInitPayload
+
+
+@server_message(audience=Permission.TRAINING_EDGING_READ)
+class TrainingSessionMessage(ServerMessage):
+    """Broadcast on any session state change (create/start/edge/end/update)."""
+
+    type: Literal["training:session"] = "training:session"
+    payload: EdgingSession
+
+
+class TrainingSessionDeletedPayload(WireModel):
+    id: str
+
+
+@server_message(audience=Permission.TRAINING_EDGING_READ)
+class TrainingSessionDeletedMessage(ServerMessage):
+    type: Literal["training:session_deleted"] = "training:session_deleted"
+    payload: TrainingSessionDeletedPayload
+
+
+@server_message(audience=Permission.TRAINING_EDGING_READ)
+class TrainingEdgeMessage(ServerMessage):
+    type: Literal["training:edge"] = "training:edge"
+    payload: EdgingEdge
+
+
 __all__ = [
     "ConnectedPayload",
     "ConnectedMessage",
@@ -269,4 +311,10 @@ __all__ = [
     "TriggerRulesCreateLabelMessage",
     "TriggerRuleDeletedPayload",
     "TriggerRulesDeleteMessage",
+    "TrainingInitPayload",
+    "TrainingInitMessage",
+    "TrainingSessionMessage",
+    "TrainingSessionDeletedPayload",
+    "TrainingSessionDeletedMessage",
+    "TrainingEdgeMessage",
 ]

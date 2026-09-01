@@ -249,6 +249,48 @@ export interface TriggerRuleDeletedPayload {
     id: string;
 }
 
+export interface TrainingInitPayload {
+    session: EdgingSession | null;
+    edges: EdgingEdge[];
+}
+
+export interface EdgingSession {
+    id: string;
+    name: string;
+    goals: EdgingGoal[];
+    auto_stop_on_goal: boolean;
+    initiator: string;
+    initiator_user_id: string | null;
+    created_by: string;
+    status: string;
+    rating: number | null;
+    notes: string | null;
+    created_at: string;
+    started_at: string | null;
+    ended_at: string | null;
+    edge_count: number;
+    duration_seconds: number | null;
+    goals_met: boolean;
+}
+
+export interface EdgingGoal {
+    type: string;
+    value: number;
+}
+
+export interface EdgingEdge {
+    id: string;
+    session_id: string;
+    difficulty: string;
+    outcome: string;
+    recorded_by: string;
+    recorded_at: string;
+}
+
+export interface TrainingSessionDeletedPayload {
+    id: string;
+}
+
 export interface RampStartPayload extends RampTarget {
     timer: number;
     step: number;
@@ -549,6 +591,30 @@ export interface TriggerRulesDeleteMessage {
     payload: TriggerRuleDeletedPayload;
 }
 
+export interface TrainingInitMessage {
+    id?: string | null;
+    type: 'training:init';
+    payload: TrainingInitPayload;
+}
+
+export interface TrainingSessionMessage {
+    id?: string | null;
+    type: 'training:session';
+    payload: EdgingSession;
+}
+
+export interface TrainingSessionDeletedMessage {
+    id?: string | null;
+    type: 'training:session_deleted';
+    payload: TrainingSessionDeletedPayload;
+}
+
+export interface TrainingEdgeMessage {
+    id?: string | null;
+    type: 'training:edge';
+    payload: EdgingEdge;
+}
+
 export type Sensor = MotionSensor | SoundSensor;
 
 export type WebSocketClientMessage =
@@ -596,7 +662,11 @@ export type WebSocketServerMessage =
     | TriggerRulesUpdateMessage
     | TriggerRulesCreateMessage
     | TriggerRulesCreateLabelMessage
-    | TriggerRulesDeleteMessage;
+    | TriggerRulesDeleteMessage
+    | TrainingInitMessage
+    | TrainingSessionMessage
+    | TrainingSessionDeletedMessage
+    | TrainingEdgeMessage;
 
 /** Messages the client receives (alias of WebSocketServerMessage). */
 export type WebSocketIncomingMessage = WebSocketServerMessage;

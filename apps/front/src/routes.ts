@@ -24,6 +24,14 @@ export default [
             ]),
         ]),
 
+        route("training", "components/layout/training-layout.tsx", [
+            index("pages/app/training/overview.tsx"),
+            route("live", "pages/app/training/live.tsx"),
+            route("edging", "pages/app/training/edging/index.tsx"),
+            route("edging/new", "pages/app/training/edging/new.tsx"),
+            route("edging/:id", "pages/app/training/edging/session.tsx"),
+        ]),
+
         // admin 
         route("admin", "components/layout/admin-layout.tsx", [
             index("pages/app/admin/dashboard.tsx"),
