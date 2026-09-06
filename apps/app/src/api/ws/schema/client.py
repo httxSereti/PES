@@ -14,7 +14,7 @@ from events.enums import ActionType
 from typings import RampMode
 
 from .base import ClientMessage, WireModel
-from .models import SensorPatch
+from .models import SensorPatch, SessionSensorId, SessionUnitId
 
 # ─────────────────────────────── Core ───────────────────────────────
 
@@ -177,6 +177,27 @@ class TriggerRulesDeleteCommand(ClientMessage):
     payload: TriggerRuleDeletePayload
 
 
+# ─────────────────────────────── Session ───────────────────────────────
+
+
+class SessionStartPayload(WireModel):
+    type: Literal["testing", "solo_play", "multiplayer"]
+    name: str
+    description: str | None = None
+    unit_ids: list[SessionUnitId] = []
+    sensor_ids: list[SessionSensorId] = []
+
+
+class SessionStartCommand(ClientMessage):
+    type: Literal["session:start"] = "session:start"
+    payload: SessionStartPayload
+
+
+class SessionEndCommand(ClientMessage):
+    type: Literal["session:end"] = "session:end"
+    payload: dict[str, Any] | None = None
+
+
 # ─────────────────────────────── Hardware ───────────────────────────────
 
 
@@ -246,6 +267,9 @@ __all__ = [
     "TriggerRulesEditCommand",
     "TriggerRuleDeletePayload",
     "TriggerRulesDeleteCommand",
+    "SessionStartPayload",
+    "SessionStartCommand",
+    "SessionEndCommand",
     "HardwareMk2btUpdatePayload",
     "HardwareUpdateMk2btCommand",
     "HardwareMk2btRescanPayload",

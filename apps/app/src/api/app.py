@@ -79,6 +79,7 @@ async def lifespan(app: FastAPI):
     from database.models.user import UserModel  # noqa: F401
     from database.models.edging_session import EdgingSession  # noqa: F401
     from database.models.edging_edge import EdgingEdge  # noqa: F401
+    from database.models.app_session import AppSession  # noqa: F401
 
     async with db._engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)

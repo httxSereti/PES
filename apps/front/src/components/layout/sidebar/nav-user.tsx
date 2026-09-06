@@ -6,7 +6,9 @@ import {
     ChevronsUpDown,
     CreditCard,
     LogOut,
+    Settings2,
     Sparkles,
+    SquareArrowOutUpRight,
 } from "lucide-react"
 
 import {
@@ -29,16 +31,53 @@ import {
     SidebarMenuItem,
     useSidebar,
 } from "@pes/ui/components/sidebar"
-import { useAppSelector } from "@/store/hooks"
+import { useWebSocket } from "@/hooks/useWebSocket"
+import { hasPermission } from "@/lib/permissions"
+import { useAppDispatch, useAppSelector } from "@/store/hooks"
+import { openSessionSettings } from "@/store/slices/sessionSlice"
+import { Permission } from "@/types"
+import { toast } from "sonner"
 
 export function NavUser() {
     const { user } = useAppSelector((state) => state.auth);
+    const activeSession = useAppSelector((state) => state.session.activeSession);
+    const dispatch = useAppDispatch();
+    const { sendCommand } = useWebSocket();
     const { isMobile } = useSidebar()
 
     if (!user)
         return
 
     const capitalizedRole = user.role.charAt(0).toUpperCase() + user.role.slice(1)
+    const canManageSession = hasPermission(user, Permission.SESSION_MANAGE)
+
+    const endSession = async () => {
+        try {
+            const data = await sendCommand('session:end');
+
+            if (data.status === "ok") {
+                toast.success("Session ended", {
+                    description: data.message ?? "The session was ended",
+                    position: "bottom-right",
+                    closeButton: true,
+                })
+                return
+            }
+
+            toast.error("Failed to end session", {
+                description: data.message ?? undefined,
+                position: "bottom-right",
+                closeButton: true,
+            })
+        } catch (error) {
+            toast.error("Failed to end session", {
+                description: "The server did not answer",
+                position: "bottom-right",
+                closeButton: true,
+            })
+            console.error('End session failed', error);
+        }
+    };
 
     return (
         <SidebarMenu>
@@ -79,6 +118,24 @@ export function NavUser() {
                             </div>
                         </DropdownMenuLabel>
                         <DropdownMenuSeparator />
+                        {canManageSession && (
+                            <>
+                                <DropdownMenuGroup>
+                                    {activeSession ? (
+                                        <DropdownMenuItem onClick={endSession}>
+                                            <SquareArrowOutUpRight />
+                                            End Session
+                                        </DropdownMenuItem>
+                                    ) : (
+                                        <DropdownMenuItem onClick={() => dispatch(openSessionSettings())}>
+                                            <Settings2 />
+                                            Session settings
+                                        </DropdownMenuItem>
+                                    )}
+                                </DropdownMenuGroup>
+                                <DropdownMenuSeparator />
+                            </>
+                        )}
                         <DropdownMenuGroup>
                             <DropdownMenuItem>
                                 <Sparkles />

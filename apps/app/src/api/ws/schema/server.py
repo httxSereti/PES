@@ -22,6 +22,7 @@ from .models import (
     Ramp,
     Sensor,
     SensorPatch,
+    Session,
     StatusMessage,
     TriggeredEvent,
     TriggerRule,
@@ -279,6 +280,29 @@ class TrainingEdgeMessage(ServerMessage):
     payload: EdgingEdge
 
 
+# ─────────────────────────────── Session ───────────────────────────────
+
+
+class SessionInitPayload(WireModel):
+    """Snapshot sent on WS connect: the active application session (null when none)."""
+
+    session: Session | None
+
+
+@server_message(audience=Permission.SESSION_READ)
+class SessionInitMessage(ServerMessage):
+    type: Literal["session:init"] = "session:init"
+    payload: SessionInitPayload
+
+
+@server_message(audience=Permission.SESSION_READ)
+class SessionUpdateMessage(ServerMessage):
+    """Broadcast on any session lifecycle change (start/end)."""
+
+    type: Literal["session:update"] = "session:update"
+    payload: Session
+
+
 __all__ = [
     "ConnectedPayload",
     "ConnectedMessage",
@@ -317,4 +341,7 @@ __all__ = [
     "TrainingSessionDeletedPayload",
     "TrainingSessionDeletedMessage",
     "TrainingEdgeMessage",
+    "SessionInitPayload",
+    "SessionInitMessage",
+    "SessionUpdateMessage",
 ]

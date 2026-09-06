@@ -6,6 +6,7 @@ from .user import UserModel
 from .magic_token import MagicTokenModel
 from .edging_session import EdgingSession
 from .edging_edge import EdgingEdge
+from .app_session import AppSession
 
 __all__ = [
     "TriggerRule",
@@ -16,4 +17,5 @@ __all__ = [
     "MagicTokenModel",
     "EdgingSession",
     "EdgingEdge",
+    "AppSession",
 ]

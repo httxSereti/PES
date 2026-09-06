@@ -92,6 +92,14 @@ async def _send_init_sequence(websocket: WebSocket, user) -> None:
             {"type": "training:init", "payload": await get_live_snapshot()}
         )
 
+    # Active application session snapshot (session readers)
+    if allowed("session:init"):
+        from services.session import get_live_snapshot
+
+        await websocket.send_json(
+            {"type": "session:init", "payload": await get_live_snapshot()}
+        )
+
     # Load trigger rules + labels (admins only)
     if allowed("trigger_rules:load"):
         await ws_notifier.load_datas(user.id, store.websocket)

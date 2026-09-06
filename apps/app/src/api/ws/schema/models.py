@@ -242,6 +242,29 @@ class EdgingSession(WireModel):
     goals_met: bool
 
 
+# ─────────────────────────────── Session ───────────────────────────────
+
+
+SessionUnitId = Literal["UNIT1", "UNIT2", "UNIT3"]
+SessionSensorId = Literal["sound", "motion1", "motion2"]
+
+
+class Session(WireModel):
+    """An application session (lifecycle wrapper, not a training session)."""
+
+    id: str
+    type: Literal["testing", "solo_play", "multiplayer"]
+    name: str
+    description: str | None
+    unit_ids: list[SessionUnitId]
+    sensor_ids: list[SessionSensorId]
+    status: Literal["running", "ended"]
+    created_by: str
+    created_at: datetime
+    started_at: datetime | None
+    ended_at: datetime | None
+
+
 __all__ = [
     "UnitSettingsPatch",
     "SensorPatch",
@@ -265,4 +288,7 @@ __all__ = [
     "EdgingGoal",
     "EdgingEdge",
     "EdgingSession",
+    "SessionUnitId",
+    "SessionSensorId",
+    "Session",
 ]

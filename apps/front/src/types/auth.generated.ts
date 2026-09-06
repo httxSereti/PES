@@ -27,6 +27,8 @@ export enum Permission {
     MANAGE_PROFILES = "manage_profiles",
     TRAINING_EDGING_READ = "training_edging_read",
     TRAINING_EDGING_MANAGE = "training_edging_manage",
+    SESSION_READ = "session_read",
+    SESSION_MANAGE = "session_manage",
     ADMIN = "admin",
     HOST = "host",
 }
@@ -60,4 +62,6 @@ export const SERVER_MESSAGE_AUDIENCE: Record<WebSocketServerMessage['type'], Per
     'training:session': Permission.TRAINING_EDGING_READ,
     'training:session_deleted': Permission.TRAINING_EDGING_READ,
     'training:edge': Permission.TRAINING_EDGING_READ,
+    'session:init': Permission.SESSION_READ,
+    'session:update': Permission.SESSION_READ,
 };

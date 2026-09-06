@@ -2,7 +2,7 @@
 // by apps/app/scripts/generate_ws_types.py — DO NOT EDIT.
 // Regenerate with: pnpm codegen:ws
 
-export const WS_SCHEMA_VERSION = 2;
+export const WS_SCHEMA_VERSION = 3;
 
 export enum ActionType {
     PROFILE = "PROFILE",
@@ -68,6 +68,14 @@ export interface TriggerActionDraft {
 
 export interface TriggerRuleDeletePayload {
     rule_id: string;
+}
+
+export interface SessionStartPayload {
+    type: 'testing' | 'solo_play' | 'multiplayer';
+    name: string;
+    description?: string | null;
+    unit_ids: ('UNIT1' | 'UNIT2' | 'UNIT3')[];
+    sensor_ids: ('sound' | 'motion1' | 'motion2')[];
 }
 
 export interface HardwareMk2btUpdatePayload {
@@ -291,6 +299,24 @@ export interface TrainingSessionDeletedPayload {
     id: string;
 }
 
+export interface SessionInitPayload {
+    session: Session | null;
+}
+
+export interface Session {
+    id: string;
+    type: 'testing' | 'solo_play' | 'multiplayer';
+    name: string;
+    description: string | null;
+    unit_ids: ('UNIT1' | 'UNIT2' | 'UNIT3')[];
+    sensor_ids: ('sound' | 'motion1' | 'motion2')[];
+    status: 'running' | 'ended';
+    created_by: string;
+    created_at: string;
+    started_at: string | null;
+    ended_at: string | null;
+}
+
 export interface RampStartPayload extends RampTarget {
     timer: number;
     step: number;
@@ -424,6 +450,18 @@ export interface TriggerRulesDeleteCommand {
     id?: string | null;
     type: 'trigger_rules:delete';
     payload: TriggerRuleDeletePayload;
+}
+
+export interface SessionStartCommand {
+    id?: string | null;
+    type: 'session:start';
+    payload: SessionStartPayload;
+}
+
+export interface SessionEndCommand {
+    id?: string | null;
+    type: 'session:end';
+    payload?: Record<string, unknown> | null;
 }
 
 export interface HardwareUpdateMk2btCommand {
@@ -615,6 +653,18 @@ export interface TrainingEdgeMessage {
     payload: EdgingEdge;
 }
 
+export interface SessionInitMessage {
+    id?: string | null;
+    type: 'session:init';
+    payload: SessionInitPayload;
+}
+
+export interface SessionUpdateMessage {
+    id?: string | null;
+    type: 'session:update';
+    payload: Session;
+}
+
 export type Sensor = MotionSensor | SoundSensor;
 
 export type WebSocketClientMessage =
@@ -633,6 +683,8 @@ export type WebSocketClientMessage =
     | TriggerRulesCreateCommand
     | TriggerRulesEditCommand
     | TriggerRulesDeleteCommand
+    | SessionStartCommand
+    | SessionEndCommand
     | HardwareUpdateMk2btCommand
     | HardwareRescanMk2btCommand
     | HardwareUpdateBtSensorsCommand
@@ -666,7 +718,9 @@ export type WebSocketServerMessage =
     | TrainingInitMessage
     | TrainingSessionMessage
     | TrainingSessionDeletedMessage
-    | TrainingEdgeMessage;
+    | TrainingEdgeMessage
+    | SessionInitMessage
+    | SessionUpdateMessage;
 
 /** Messages the client receives (alias of WebSocketServerMessage). */
 export type WebSocketIncomingMessage = WebSocketServerMessage;
