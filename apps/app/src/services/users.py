@@ -164,11 +164,12 @@ class UserService:
 
     async def authenticate_magic_token(self, raw_token: str) -> Optional[User]:
         """
-        Exchange a raw magic token for its user. Enforces expiry, revocation
-        and single-use; marks the token used and touches last_login_at.
+        Exchange a raw magic token for its user. Enforces expiry and
+        revocation. Non-HOST tokens are single-use; HOST tokens stay reusable
+        until rotated (so the same link can log in several devices at once).
         """
         row = await self._tokens.get_by_hash(hash_magic_token(raw_token))
-        if row is None or row.revoked or row.used_at is not None:
+        if row is None or row.revoked:
             return None
         if row.expires_at < datetime.utcnow():
             return None
@@ -184,7 +185,12 @@ class UserService:
         if not user.is_active:
             return None
 
-        await self._tokens.mark_used(row.id)
+        is_host = user.role == Role.HOST
+        if not is_host and row.used_at is not None:
+            return None
+
+        if not is_host:
+            await self._tokens.mark_used(row.id)
         await self._users.touch_last_login(user.id)
         user.last_login_at = datetime.utcnow()
         return user

@@ -10,7 +10,8 @@ from database.models.magic_token import MagicTokenModel
 
 
 class MagicTokenRepo:
-    """Repository for magic login tokens (hashed, expiring, single-use)."""
+    """Repository for magic login tokens (hashed, expiring; HOST tokens are
+    reusable, others are single-use)."""
 
     def __init__(self, db: Database | None = None):
         self._db = db or Database.get_instance()

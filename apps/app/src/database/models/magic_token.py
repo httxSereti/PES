@@ -12,7 +12,8 @@ from database.base import Base
 class MagicTokenModel(Base):
     """
     Persisted magic login token. Only the SHA-256 hash of the raw token is
-    stored; tokens expire and are single-use (`used_at` set on login).
+    stored; tokens expire and non-HOST tokens are single-use (`used_at` set
+    on login). HOST tokens are reusable until rotated at the next boot.
     """
 
     __tablename__ = "magic_tokens"

@@ -1,6 +1,4 @@
-from cuid2 import Cuid
-
-CUID_GENERATOR: Cuid = Cuid(length=42)
+import secrets
 
 
 def generate_magic_token() -> str:
@@ -8,7 +6,7 @@ def generate_magic_token() -> str:
     Generate a MagicToken for User to Login
     """
 
-    return CUID_GENERATOR.generate()
+    return secrets.token_urlsafe(16)
 
 
 def hash_magic_token(raw_token: str) -> str:
