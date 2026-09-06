@@ -1,6 +1,7 @@
-import { BookOpen, Crosshair, Percent } from "lucide-react";
+import { BookOpen, ChevronDown, Crosshair, Percent } from "lucide-react";
 import { EVENT_GROUPS } from "@/components/common/events/event-groups";
-import { Card, CardContent, CardHeader, CardTitle } from "@pes/ui/components/card";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@pes/ui/components/card";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@pes/ui/components/collapsible";
 
 /** Short human description per triggerable event type (see events/enums.py). */
 const EVENT_DESCRIPTIONS: Record<string, string> = {
@@ -58,13 +59,14 @@ function WikiSection({ icon, title, children }: {
     children: React.ReactNode;
 }) {
     return (
-        <div className="space-y-3">
-            <div className="flex items-center gap-2">
+        <Collapsible defaultOpen className="space-y-3 group/wiki-section">
+            <CollapsibleTrigger className="flex w-full items-center gap-2 rounded-md -mx-1 px-1 py-0.5 transition-colors hover:bg-accent/50 cursor-pointer select-none">
                 {icon}
-                <span className="text-[11px] uppercase tracking-widest text-muted-foreground/70 font-semibold">{title}</span>
-            </div>
-            {children}
-        </div>
+                <span className="text-[11px] uppercase tracking-widest text-violet-700 dark:text-violet-300 font-semibold">{title}</span>
+                <ChevronDown size={14} className="ml-auto text-muted-foreground/50 transition-transform duration-200 group-data-[state=open]/wiki-section:rotate-180" />
+            </CollapsibleTrigger>
+            <CollapsibleContent className="space-y-3">{children}</CollapsibleContent>
+        </Collapsible>
     );
 }
 
@@ -83,14 +85,22 @@ function DefinitionList({ entries }: { entries: Array<[string, string]> }) {
 
 export default function EventsWiki() {
     return (
-        <Card>
-            <CardHeader className="pb-3">
-                <CardTitle className="flex items-center gap-2 text-sm">
-                    <BookOpen size={14} className="accent-tile-icon" />
-                    Events handbook
-                </CardTitle>
-            </CardHeader>
-            <CardContent className="pt-0 space-y-6">
+        <Collapsible defaultOpen className="group/wiki-card">
+            <Card>
+                <CollapsibleTrigger asChild>
+                    <CardHeader className="pb-3 cursor-pointer select-none transition-colors hover:bg-accent/30">
+                        <CardTitle className="flex items-center gap-2 text-sm text-violet-700 dark:text-violet-300">
+                            <BookOpen size={14} className="accent-tile-icon" />
+                            Events handbook
+                            <ChevronDown size={14} className="ml-auto text-muted-foreground/50 transition-transform duration-200 group-data-[state=open]/wiki-card:rotate-180" />
+                        </CardTitle>
+                        <CardDescription className="text-xs text-muted-foreground/70">
+                            An event is anything that happens — a Chaster vote, sensor motion or noise — that can trigger actions on your units.
+                        </CardDescription>
+                    </CardHeader>
+                </CollapsibleTrigger>
+                <CollapsibleContent>
+                    <CardContent className="pt-0 space-y-6">
 
                 <WikiSection icon={<BookOpen size={12} className="text-muted-foreground/50" />} title="Available events">
                     <p className="text-xs text-muted-foreground/70">
@@ -148,6 +158,8 @@ export default function EventsWiki() {
                 </WikiSection>
 
             </CardContent>
-        </Card>
+                </CollapsibleContent>
+            </Card>
+        </Collapsible>
     );
 }

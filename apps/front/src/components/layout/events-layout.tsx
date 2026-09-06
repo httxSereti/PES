@@ -1,6 +1,7 @@
 import { useAppSelector } from "@/store/hooks";
 import { Link, Navigate, NavLink, Outlet } from "react-router";
-import { Activity, LayoutDashboard, Zap } from "lucide-react";
+import { Activity, LayoutDashboard, Plus, Zap } from "lucide-react";
+import { Button } from "@pes/ui/components/button";
 
 const TABS = [
     { to: "/app/events", label: "Dashboard", icon: LayoutDashboard, end: true },
@@ -33,10 +34,12 @@ export default function EventsLayout() {
                         <span>{eventsCount}</span>
                         <Activity size={11} className="accent-tile-icon" />
                     </div>
-                    <Link to="/app/events/trigger-rules/new" className="flex items-center gap-2 px-3 py-1.5 rounded-md accent-tile text-xs text-muted-foreground/70">
-                        <Zap size={11} className="accent-tile-icon" />
-                        <span>New TriggerRule</span>
-                    </Link>
+                    <Button asChild variant="outline" size="sm">
+                        <Link to="/app/events/trigger-rules/new">
+                            <Plus size={14} />
+                            <span>New trigger rule</span>
+                        </Link>
+                    </Button>
                 </div>
             </div>
 
