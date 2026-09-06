@@ -1,8 +1,14 @@
+import type { Permission, Role } from './auth.generated';
+
+/**
+ * Shape of `GET /auth/me`: role + *effective* permissions (role bundle ∪
+ * custom grants), as returned by the backend.
+ */
 export interface User {
     id: string;
-    role?: UserRole;
-    permissions: Array<string>
-    display_name: string;
+    display_name: string | null;
+    role: Role;
+    permissions: Permission[];
     is_guest?: boolean;
 }
 
@@ -13,15 +19,6 @@ export interface AuthState {
     isGuest: boolean;
     loading: boolean;
     error: string | null;
-}
-
-export enum UserRole {
-    ROOT = 'root',
-    ADMIN = 'admin',
-    TRUSTED = 'trusted',
-    OPERATOR = 'operator',
-    USER = 'user',
-    GUEST = 'guest',
 }
 
 export interface AuthTokens {

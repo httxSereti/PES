@@ -1,31 +1,9 @@
-import type { TriggerRule } from '@/types';
+import type { TriggerRule, TriggeredEvent } from '@/types';
 import { createSlice, type PayloadAction } from '@reduxjs/toolkit';
 
-export interface TriggeredAction {
-    queue_item_id: string;
-    action_id: string | null;
-    action_type: string;
-    display_name: string | null;
-    duration: number;
-    cumulative: boolean;
-    payload: Record<string, unknown>;
-}
-
-export interface TriggeredRule {
-    rule_id: string | null;
-    rule_name: string;
-    priority: number;
-    actions: TriggeredAction[];
-}
-
-export interface TriggeredEvent {
-    id: string;
-    event_type: string;
-    origin: string;
-    event_data: Record<string, unknown>;
-    triggered_at: string;
-    triggered_rules: TriggeredRule[];
-}
+// Wire shapes come from the generated WS contract; re-exported here for
+// existing importers.
+export type { TriggeredAction, TriggeredRule, TriggeredEvent } from '@/types';
 
 interface EventsState {
     events: TriggeredEvent[];

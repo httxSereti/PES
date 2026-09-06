@@ -1,13 +1,26 @@
 
 import { useContext, createContext, useEffect, useRef } from 'react';
+import type {
+  CommandPayload,
+  CommandResult,
+  ServerEventPayload,
+  WebSocketCommandType,
+  WebSocketServerEventType,
+} from '@/types';
 
 export interface WebSocketContextValue {
   status: string;
   error: string | null;
   reconnectAttempts: number;
   isConnected: boolean;
-  send: <T = unknown>(type: string, payload?: T) => void;
-  sendCommand: <T = unknown, R = unknown>(command: string, params?: T) => Promise<R>;
+  send: <T extends WebSocketCommandType>(
+    type: T,
+    ...args: CommandPayload<T> extends undefined ? [] : [payload: CommandPayload<T>]
+  ) => void;
+  sendCommand: <T extends WebSocketCommandType>(
+    type: T,
+    ...args: CommandPayload<T> extends undefined ? [] : [payload: CommandPayload<T>]
+  ) => Promise<CommandResult>;
   disconnect: () => void;
   reconnect: () => void;
 }
@@ -25,9 +38,9 @@ export function useWebSocket() {
 }
 
 // hook to subscribe to an event
-export function useWebSocketEvent<T = unknown>(
-  eventType: string,
-  callback: (data: T) => void
+export function useWebSocketEvent<T extends WebSocketServerEventType>(
+  eventType: T,
+  callback: (data: ServerEventPayload<T>) => void
 ) {
   const callbackRef = useRef(callback);
 
@@ -37,7 +50,7 @@ export function useWebSocketEvent<T = unknown>(
 
   useEffect(() => {
     const handleEvent = (event: Event) => {
-      const customEvent = event as CustomEvent<T>;
+      const customEvent = event as CustomEvent<ServerEventPayload<T>>;
       callbackRef.current(customEvent.detail);
     };
 

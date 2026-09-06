@@ -12,6 +12,8 @@ export const EVENT_GROUPS: Record<string, EventGroupDef> = {
             "chaster_time_add",
             "chaster_time_sub",
             "chaster_wof_turned",
+            "chaster_lock_frozen",
+            "chaster_lock_unfrozen",
         ],
     },
     sensor: {

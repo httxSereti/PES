@@ -1,6 +1,6 @@
 # ˚.✨⋆ PlunEStim (app)
 
-PlunEStim is a Software running a Discord BOT as Client, managing 1+ EStim units using 2B-Estim Board over BT or Serial.
+PlunEStim is a Software managing 1+ EStim units using 2B-Estim Board over BT or Serial, controlled from a web front-end.
 
 ## ˚.✨⋆ Project goals
 
@@ -11,7 +11,7 @@ Randomness and Surprise is a real funny thing, having random actions done over y
 
 ## ˚.✨⋆ How its work
 
-You can control this software using the Discord Bot, using Slash Commands from discord, check `/guide` to see what you can do.
+You can control this software from the web front-end, over the REST/WebSocket API.
 Increase, Decrease using random, arbitrary value or percentage (~, +5%, -5) intensity of the units with ease, apply different profile, listener rules, programs, mode, ton of settings just waiting to be discovered.
 This Software also use multiples `Service Integrations` (like Chaster, X, Sensors) these can be enabled to listen to supported `Events` (by example Noises made, Post liked, Pillory Vote...)
 Administrators can setup `Listener Rules` triggered by `Events`, applying one or many `Actions` (Shock, Apply new profile, Increase Level, Change Settings), queueing them to play them one by one or playing them as cumulative at the same time...

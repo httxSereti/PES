@@ -1,46 +1,38 @@
-import { useState, useMemo } from "react";
+import { useCallback, useState, useMemo } from "react";
 import { useAppSelector } from "@/store/hooks";
-import { ALL_KNOWN_TYPES, EVENT_GROUPS, getEventGroup } from "@/components/common/events/event-groups";
+import {
+    DEFAULT_EVENTS_FILTER,
+    matchesEventFilters,
+    type EventsFilterState,
+} from "@/components/common/events/events-filters";
 import { EventsToolbar } from "@/components/common/events/events-toolbar";
 import { EventCard, EventRow } from "@/components/common/events/event-row";
 
 export default function EventsTable() {
     const events = useAppSelector(state => state.events.events);
-    const [search, setSearch] = useState("");
-    const [selectedFilter, setSelectedFilter] = useState("all");
+    const [filter, setFilter] = useState<EventsFilterState>(DEFAULT_EVENTS_FILTER);
+    const [sortDesc, setSortDesc] = useState(true);
 
-    const unknownTypes = useMemo(() =>
-        Array.from(new Set(
-            events.map(e => e.event_type).filter(t => !ALL_KNOWN_TYPES.has(t))
-        )).sort()
-        , [events]);
+    const patchFilter = useCallback((patch: Partial<EventsFilterState>) => {
+        setFilter(prev => ({ ...prev, ...patch }));
+    }, []);
 
     const filtered = useMemo(() => {
-        return [...events].reverse().filter(e => {
-            const matchesFilter =
-                selectedFilter === "all" ? true :
-                    selectedFilter in EVENT_GROUPS ? getEventGroup(e.event_type) === selectedFilter :
-                        e.event_type === selectedFilter;
-
-            const matchesSearch =
-                search === "" ||
-                e.event_type.includes(search.toLowerCase()) ||
-                e.origin.toLowerCase().includes(search.toLowerCase());
-
-            return matchesFilter && matchesSearch;
-        });
-    }, [events, selectedFilter, search]);
+        const list = events.filter(e => matchesEventFilters(e, filter));
+        return sortDesc ? [...list].reverse() : list;
+    }, [events, filter, sortDesc]);
 
     return (
         <div className="space-y-4 px-4 md:px-5">
             <EventsToolbar
-                search={search}
-                onSearchChange={setSearch}
-                selectedFilter={selectedFilter}
-                onFilterChange={setSelectedFilter}
-                unknownTypes={unknownTypes}
+                events={events}
+                filter={filter}
+                onFilterChange={patchFilter}
+                onReset={() => setFilter(DEFAULT_EVENTS_FILTER)}
                 filteredCount={filtered.length}
                 totalCount={events.length}
+                sortDesc={sortDesc}
+                onSortToggle={() => setSortDesc(v => !v)}
             />
 
             <div className="hidden md:block rounded-xl border border-border overflow-hidden">

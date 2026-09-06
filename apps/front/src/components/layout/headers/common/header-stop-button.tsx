@@ -1,5 +1,4 @@
 import { useWebSocket } from "@/hooks/useWebSocket"
-import type { CoreStopMessage } from "@/types"
 import { Button } from "@pes/ui/components/button"
 import { CirclePower } from "lucide-react"
 import { toast } from "sonner"
@@ -9,7 +8,7 @@ export function HeaderStopButton() {
 
     const stopApplication = async () => {
         try {
-            const data: CoreStopMessage = await sendCommand('core:stop');
+            const data = await sendCommand('core:stop');
 
             console.log(data)
 

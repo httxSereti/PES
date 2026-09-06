@@ -1,4 +1,5 @@
 import {
+    Navigate,
     Outlet,
     useMatches,
     type UIMatch
@@ -10,11 +11,22 @@ import { AppSidebar } from "@/components/layout/sidebar/app-sidebar";
 import type { RouteHandle } from "@/types/route-handle";
 import { SensorHeader } from "@/components/layout/headers/sensors/header";
 import { AdminUsersHeader } from "@/components/layout/headers/admin/users/header";
+import { useAppSelector } from "@/store/hooks";
 
 export default function AppLayout() {
     const matches = useMatches() as UIMatch<unknown, RouteHandle>[];
     const currentRoute = matches[matches.length - 1];
     const headerType = currentRoute?.handle?.header;
+    const { user, token, loading } = useAppSelector((state) => state.auth);
+
+    // Wait for the startup verifyToken round-trip before deciding
+    if (loading || (token && !user)) {
+        return "Loading...";
+    }
+
+    if (!user) {
+        return <Navigate to="/auth" replace />;
+    }
 
     const renderHeader = () => {
         switch (headerType) {

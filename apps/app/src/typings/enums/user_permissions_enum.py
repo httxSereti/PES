@@ -8,6 +8,7 @@ class Permission(Enum):
     READ_SENSORS = "read_sensors"
     READ_PROFILES = "read_profiles"
     READ_USERS = "read_users"
+    READ_EVENTS = "read_events"
     
     WRITE_UNITS = "write_units"
     WRITE_SENSORS = "write_sensors"
@@ -16,6 +17,9 @@ class Permission(Enum):
     MANAGE_USERS = "manage_users"
     MANAGE_SENSORS = "manage_sensors"
     MANAGE_PROFILES = "manage_profiles"
-    
+
+    TRAINING_EDGING_READ = "training_edging_read"
+    TRAINING_EDGING_MANAGE = "training_edging_manage"
+
     ADMIN = "admin"
-    ROOT = "root"
+    HOST = "host"

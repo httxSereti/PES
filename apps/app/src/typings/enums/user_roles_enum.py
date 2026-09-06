@@ -8,22 +8,25 @@ class Role(Enum):
     OPERATOR = "operator"
     TRUSTED = "trusted"
     ADMIN = "admin"
-    ROOT = "root"
+    HOST = "host"
     
 ROLE_PERMISSIONS: Dict[Role, Set[Permission]] = {
     Role.GUEST: {
         Permission.READ_UNITS,
         Permission.READ_SENSORS,
+        Permission.TRAINING_EDGING_READ,
     },
     Role.USER: {
         Permission.READ_UNITS,
         Permission.READ_SENSORS,
         Permission.READ_PROFILES,
+        Permission.READ_EVENTS,
     },
     Role.OPERATOR: {
         Permission.READ_UNITS,
         Permission.READ_SENSORS,
         Permission.READ_PROFILES,
+        Permission.READ_EVENTS,
         Permission.WRITE_UNITS,
         Permission.WRITE_SENSORS,
     },
@@ -31,22 +34,28 @@ ROLE_PERMISSIONS: Dict[Role, Set[Permission]] = {
         Permission.READ_UNITS,
         Permission.READ_SENSORS,
         Permission.READ_PROFILES,
+        Permission.READ_EVENTS,
         Permission.WRITE_UNITS,
         Permission.WRITE_SENSORS,
         Permission.WRITE_PROFILES,
         Permission.MANAGE_PROFILES,
+        Permission.TRAINING_EDGING_READ,
+        Permission.TRAINING_EDGING_MANAGE,
     },
     Role.ADMIN: {
         Permission.READ_UNITS,
         Permission.READ_SENSORS,
         Permission.READ_PROFILES,
         Permission.READ_USERS,
+        Permission.READ_EVENTS,
         Permission.WRITE_UNITS,
         Permission.WRITE_SENSORS,
         Permission.WRITE_PROFILES,
         Permission.MANAGE_USERS,
         Permission.MANAGE_PROFILES,
+        Permission.TRAINING_EDGING_READ,
+        Permission.TRAINING_EDGING_MANAGE,
         Permission.ADMIN,
     },
-    Role.ROOT: set(Permission),  # Toutes les permissions
+    Role.HOST: set(Permission),  # Toutes les permissions
 }

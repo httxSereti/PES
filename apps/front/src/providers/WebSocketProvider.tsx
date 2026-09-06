@@ -2,7 +2,11 @@ import React, { useEffect, useCallback, useRef, type ReactNode } from 'react';
 import { createId } from "@paralleldrive/cuid2";
 import { useAppDispatch, useAppSelector } from '@/store/hooks';
 import { WebSocketContext, type WebSocketContextValue } from '@/hooks/useWebSocket';
-import type { WebSocketMessage } from '@/types';
+import type {
+    CommandPayload,
+    CommandResult,
+    WebSocketCommandType,
+} from '@/types';
 
 interface WebSocketProviderProps {
     children: ReactNode;
@@ -71,18 +75,25 @@ export function WebSocketProvider({
     }, []);
 
     const send = useCallback(
-        <T = unknown,>(type: string, payload?: T) => {
-            console.log('📤 Sending message:', type);
+        <T extends WebSocketCommandType>(
+            type: T,
+            ...args: CommandPayload<T> extends undefined ? [] : [payload: CommandPayload<T>]
+        ) => {
+            const [payload] = args;
             dispatch({
                 type: 'websocket/send',
-                payload: { type, payload } as WebSocketMessage<T>,
+                payload: { type, payload },
             });
         },
         [dispatch]
     );
 
     const sendCommand = useCallback(
-        <T = unknown, R = unknown,>(command: string, params?: T): Promise<R> => {
+        <T extends WebSocketCommandType>(
+            type: T,
+            ...args: CommandPayload<T> extends undefined ? [] : [payload: CommandPayload<T>]
+        ): Promise<CommandResult> => {
+            const [params] = args;
             return new Promise((resolve, reject) => {
                 if (status !== 'connected') {
                     console.error('❌ Cannot send command, not connected:', status);
@@ -90,8 +101,7 @@ export function WebSocketProvider({
                     return;
                 }
 
-                const id = `${command}_${Date.now()}_${createId()}`;
-                console.log('🎯 Sending command:', command, id);
+                const id = `${type}_${Date.now()}_${createId()}`;
 
                 const timeout = setTimeout(() => {
                     pendingCommands.current.delete(id);
@@ -102,8 +112,7 @@ export function WebSocketProvider({
                 pendingCommands.current.set(id, {
                     resolve: (value) => {
                         clearTimeout(timeout);
-                        console.log('✅ Command resolved:', id);
-                        resolve(value as R);
+                        resolve(value as CommandResult);
                     },
                     reject: (reason) => {
                         clearTimeout(timeout);
@@ -114,7 +123,7 @@ export function WebSocketProvider({
 
                 dispatch({
                     type: 'websocket/send',
-                    payload: { type: command, payload: params, id }
+                    payload: { type, payload: params, id }
                 });
             });
         },

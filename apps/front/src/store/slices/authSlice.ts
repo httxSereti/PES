@@ -1,12 +1,5 @@
 import { createSlice, createAsyncThunk } from '@reduxjs/toolkit';
-
-interface User {
-    id: string;
-    role: string;
-    permissions: Array<string>
-    display_name: string;
-    is_guest?: boolean;
-}
+import type { User } from '@/types';
 
 export interface AuthState {
     user: User | null;
@@ -36,6 +29,17 @@ const initialState: AuthState = {
 
 const API_URL = import.meta.env.VITE_API_URL;
 
+// Fetch the current user profile with a token (shared by login flows)
+const fetchMe = async (token: string): Promise<User> => {
+    const response = await fetch(`${API_URL}/auth/me`, {
+        headers: { 'Authorization': `Bearer ${token}`, "ngrok-skip-browser-warning": "69420" },
+    });
+    if (!response.ok) {
+        throw new Error('Failed to fetch user data');
+    }
+    return response.json();
+};
+
 // Async thunks
 export const login = createAsyncThunk<
     { access_token: string; token_type: string; user: User },
@@ -44,10 +48,10 @@ export const login = createAsyncThunk<
     'auth/login',
     async (credentials, { rejectWithValue }) => {
         try {
-            const response = await fetch(`${API_URL}/auth/login?magic_token=${encodeURIComponent(credentials.magic_token)}`, {
+            const response = await fetch(`${API_URL}/auth/login`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json', "ngrok-skip-browser-warning": "69420" },
-                body: JSON.stringify(credentials),
+                body: JSON.stringify({ magic_token: credentials.magic_token }),
             });
 
             if (!response.ok) {
@@ -60,16 +64,7 @@ export const login = createAsyncThunk<
                 localStorage.setItem('token', data.access_token);
             }
 
-            // Fetch user data with the new token
-            const userResponse = await fetch(`${API_URL}/auth/me`, {
-                headers: { 'Authorization': `Bearer ${data.access_token}`, "ngrok-skip-browser-warning": "69420" },
-            });
-
-            if (!userResponse.ok) {
-                return rejectWithValue('Failed to fetch user data');
-            }
-
-            const user = await userResponse.json();
+            const user = await fetchMe(data.access_token);
 
             return {
                 access_token: data.access_token,
@@ -102,7 +97,14 @@ export const guestLogin = createAsyncThunk<
             if (typeof window !== 'undefined') {
                 localStorage.setItem('token', data.access_token);
             }
-            return data;
+
+            const user = await fetchMe(data.access_token);
+
+            return {
+                access_token: data.access_token,
+                token_type: data.token_type,
+                user: user,
+            };
             // eslint-disable-next-line @typescript-eslint/no-unused-vars
         } catch (error) {
             return rejectWithValue('Network error');

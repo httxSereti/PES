@@ -3,7 +3,7 @@ import { SensorSound } from "@/components/common/sensors/sound/sensor-sound";
 import { useWebSocket } from "@/hooks/useWebSocket";
 import { useAppSelector } from "@/store/hooks";
 import { sensorsSelectors } from "@/store/slices/sensorsSlice";
-import type { MotionSensor, SoundSensor } from "@/types";
+import type { HardwareSensorId, MotionSensor, SoundSensor } from "@/types";
 import { Button } from "@pes/ui/components/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@pes/ui/components/card";
 import {
@@ -15,16 +15,17 @@ import {
     DropdownMenuTrigger,
 } from "@pes/ui/components/dropdown-menu";
 import { Skeleton } from "@pes/ui/components/skeleton";
-import { Edit, MoreVertical, Power, Trash2, Volume2 } from "lucide-react";
+import { Edit, MoreVertical, Power, RefreshCw, Trash2, Volume2, Wifi, WifiOff } from "lucide-react";
 import type { FC } from "react";
 import { toast } from "sonner";
 
 type SensorProps = {
-    sensorId: string;
+    sensorId: HardwareSensorId;
 };
 
 export const Sensor: FC<SensorProps> = ({ sensorId }) => {
     const sensor = useAppSelector(state => sensorsSelectors.selectById(state, sensorId));
+    const enabled = useAppSelector(state => state.hardware[sensorId] ?? true);
     const { sendCommand } = useWebSocket();
 
     if (!sensor)
@@ -35,9 +36,11 @@ export const Sensor: FC<SensorProps> = ({ sensorId }) => {
         )
 
     const dotColor =
-        sensor?.sensor_online === true
-            ? "bg-green-500"
-            : "bg-red-500";
+        enabled !== true
+            ? "bg-gray-400"
+            : sensor?.sensor_online === true
+                ? "bg-green-500"
+                : "bg-red-500";
 
     const toggleStatus = async () => {
         try {
@@ -57,6 +60,35 @@ export const Sensor: FC<SensorProps> = ({ sensorId }) => {
             })
 
             console.error('Failed to update sensor:', error);
+        }
+    };
+
+    const toggleConnection = async () => {
+        try {
+            await sendCommand('hardware:update_bt_sensors', {
+                id: sensorId,
+                enabled: !enabled,
+            });
+        } catch (err: unknown) {
+            const error: Error = err as Error;
+
+            toast.error("Can't update Sensor connexion", {
+                description: error.message,
+                position: "top-right",
+            })
+        }
+    };
+
+    const rescan = async () => {
+        try {
+            await sendCommand('hardware:rescan_bt_sensors', { id: sensorId });
+        } catch (err: unknown) {
+            const error: Error = err as Error;
+
+            toast.error("Can't rescan Sensor", {
+                description: error.message,
+                position: "top-right",
+            })
         }
     };
 
@@ -98,18 +130,29 @@ export const Sensor: FC<SensorProps> = ({ sensorId }) => {
                         <DropdownMenuContent align="end" className="w-48">
                             <DropdownMenuLabel>Actions</DropdownMenuLabel>
                             <DropdownMenuSeparator />
+                            <DropdownMenuItem onClick={toggleConnection}>
+                                {enabled
+                                    ? <WifiOff className="mr-2 h-4 w-4" />
+                                    : <Wifi className="mr-2 h-4 w-4" />}
+                                <span>{enabled ? "Disable connexion" : "Enable connexion"}</span>
+                            </DropdownMenuItem>
+                            <DropdownMenuItem onClick={rescan} disabled={!enabled}>
+                                <RefreshCw className="mr-2 h-4 w-4" />
+                                <span>Relaunch scan</span>
+                            </DropdownMenuItem>
+                            <DropdownMenuSeparator />
                             <DropdownMenuItem onClick={toggleStatus}>
                                 <Power className="mr-2 h-4 w-4" />
-                                <span>{sensor.alarm_enable ? "Désactiver" : "Activer"}</span>
+                                <span>{sensor.alarm_enable ? "Disable" : "Enable"}</span>
                             </DropdownMenuItem>
                             <DropdownMenuItem onClick={handleEdit}>
                                 <Edit className="mr-2 h-4 w-4" />
-                                <span>Modifier</span>
+                                <span>Edit (soon)</span>
                             </DropdownMenuItem>
                             <DropdownMenuSeparator />
                             <DropdownMenuItem onClick={handleDelete} className="text-red-600">
                                 <Trash2 className="mr-2 h-4 w-4" />
-                                <span>Supprimer</span>
+                                <span>Delete (soon)</span>
                             </DropdownMenuItem>
                         </DropdownMenuContent>
                     </DropdownMenu>

@@ -1,25 +1,31 @@
 from utils import calculate_magic_number
 from store import Store
-from api.ws.websocket_notifier import WebSocketNotifier
-from typings import UnitDict
+from api.ws.context import CommandContext
+from api.ws.registry import command
+from api.ws.schema import CommandResult, UnitsUpdateLevelCommand
+from typings import Permission, UnitDict
 import structlog
 
 store = Store()
 logger = structlog.get_logger("pes")
 
 
-async def handle_update_level(payload: dict, ws_notifier: WebSocketNotifier) -> dict:
+@command(UnitsUpdateLevelCommand, Permission.WRITE_UNITS)
+async def handle_update_level(
+    msg: UnitsUpdateLevelCommand, ctx: CommandContext
+) -> CommandResult:
     """
     Update the intensity level of one or more Units using "magic number" number with random and operators
     """
 
     # loop over units, then changes
-    for unit_id, unit_changes in payload.items():
+    for unit_id, unit_changes in msg.payload.items():
         unit = UnitDict(unit_id)
         snapshot = store.get_unit_dict(unit)
         changes = {}
 
-        for field, field_value in unit_changes.items():
+        # only the fields the client actually set (model_dump drops the Nones)
+        for field, field_value in unit_changes.model_dump(exclude_none=True).items():
             if field == "ch_A" or field == "ch_B":
                 # calc new value using lexer for operators
                 new_value = calculate_magic_number(snapshot[field], str(field_value))
@@ -43,9 +49,9 @@ async def handle_update_level(payload: dict, ws_notifier: WebSocketNotifier) -> 
             changes["updated"] = True
             store.update_unit_dict(unit, changes)
 
-            ws_notifier.notify(
+            ctx.notifier.notify(
                 "units:update",
                 {"id": unit_id, "changes": changes},
             )
 
-    return {"status": "ok"}
+    return CommandResult(status="ok")

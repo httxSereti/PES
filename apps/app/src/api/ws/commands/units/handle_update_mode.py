@@ -1,7 +1,9 @@
 import structlog
 from store import Store
-from api.ws.websocket_notifier import WebSocketNotifier
-from typings import UnitDict
+from api.ws.context import CommandContext
+from api.ws.registry import command
+from api.ws.schema import CommandResult, UnitsUpdateModeCommand
+from typings import Permission, UnitDict
 
 from constants import MODE_2B
 
@@ -9,14 +11,17 @@ store = Store()
 logger = structlog.get_logger("pes")
 
 
-async def handle_update_mode(payload: dict, ws_notifier: WebSocketNotifier) -> dict:
+@command(UnitsUpdateModeCommand, Permission.WRITE_UNITS)
+async def handle_update_mode(
+    msg: UnitsUpdateModeCommand, ctx: CommandContext
+) -> CommandResult:
     """
     Update the mode of one or more Units, set channelA & channelB to zero
     """
 
     # loop over units
-    for unit_id, unit_changes in payload.items():
-        new_mode = unit_changes.get("mode")
+    for unit_id, unit_changes in msg.payload.items():
+        new_mode = unit_changes.mode
 
         # if we're changing mode and is a 2B mode (0-16)
         if new_mode is None or not (0 <= new_mode < len(MODE_2B)):
@@ -50,7 +55,7 @@ async def handle_update_mode(payload: dict, ws_notifier: WebSocketNotifier) -> d
         # save changes
         store.update_unit_dict(unit, changes)
 
-        ws_notifier.notify(
+        ctx.notifier.notify(
             "units:update",
             {
                 "id": unit_id,
@@ -62,4 +67,4 @@ async def handle_update_mode(payload: dict, ws_notifier: WebSocketNotifier) -> d
             },
         )
 
-    return {"status": "ok"}
+    return CommandResult(status="ok")

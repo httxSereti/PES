@@ -17,6 +17,8 @@ import {
     SidebarMenuSubItem,
 } from "@pes/ui/components/sidebar"
 import { useAppSelector } from "@/store/hooks"
+import { hasPermission } from "@/lib/permissions"
+import { Permission } from "@/types"
 
 export function NavAdmin({
     items,
@@ -45,7 +47,7 @@ export function NavAdmin({
     }
 
     // check if admin
-    if (!user || (user.role !== "admin" && user.role !== "root")) {
+    if (!hasPermission(user, Permission.ADMIN)) {
         return null;
     }
 

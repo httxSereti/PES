@@ -1,23 +1,7 @@
-// WebSocket types
-export type {
-    WebSocketStatus,
-    WebSocketMessage,
-    WebSocketError,
-    WebSocketIncomingMessage,
-    WebSocketConfig,
-    WebSocketState,
-    // Message types
-    CoreStopMessage,
-    ChatMessage,
-    UserConnected,
-    UserDisconnected,
-    NotificationMessage,
-    AuthErrorMessage,
-    PingMessage,
-    PongMessage,
-    TriggerRulesInitialMessage,
-    TriggerRuleUpdateMessage,
-} from './websocket.types';
+// WebSocket contract (generated from apps/app/src/api/ws/schema.py)
+// plus hand-maintained transport types
+export * from './websocket.types';
+
 // Auth types
 export type {
     User,
@@ -27,7 +11,8 @@ export type {
     AuthState,
 } from './auth.types';
 
-export { UserRole } from './auth.types';
+// Role/Permission enums + audience matrix (generated from the backend)
+export { Role, Permission, SERVER_MESSAGE_AUDIENCE } from './auth.generated';
 
 // API types
 export type {
@@ -36,25 +21,27 @@ export type {
 } from './api.types';
 
 export type {
-    BaseSensor,
-    Sensor,
-    MotionSensor,
-    SoundSensor,
     SensorsState,
 } from './sensor.types';
 
 export type {
     UnitsState,
-    UnitSettings,
 } from './units.types';
 
 export type {
-    ActionType,
-    TriggerRule,
     CreateTriggerRule,
     UpdateTriggerRule,
-    TriggerAction,
     CreateTriggerAction,
     UpdateTriggerAction,
-    TriggerRuleLabel
 } from './events.types'
+
+export type {
+    TrainingIndexResponse,
+    TrainingSessionDetail,
+    TrainingLiveSnapshot,
+    TrainingSessionFields,
+    TrainingOverviewStats,
+    EdgingSessionStats,
+    EdgeDifficulty,
+    EdgeOutcome,
+} from './training.types'
