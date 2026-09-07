@@ -57,6 +57,10 @@ def broadcast_session(session: dict) -> None:
     ws_notifier.notify("session:update", session)
 
 
+def broadcast_session_deleted(session_id: str) -> None:
+    ws_notifier.notify("sessions:deleted", {"id": session_id})
+
+
 async def get_live_snapshot(repo: Optional[SessionRepo] = None) -> dict:
     """Active session (or None) for the WS init sequence."""
     repo = repo or SessionRepo()
@@ -167,6 +171,23 @@ async def end_session(repo: Optional[SessionRepo] = None) -> Optional[dict]:
 
 
 # ───────── History ─────────
+
+
+async def delete_session(session_id: str, repo: Optional[SessionRepo] = None) -> bool:
+    """Delete one application session (history cleanup)."""
+    repo = repo or SessionRepo()
+
+    session = await repo.get_session(session_id)
+    if session is None:
+        raise ValueError("Session not found")
+    if session.status == SessionStatus.RUNNING.value:
+        raise ValueError("Cannot delete a running session — end it first")
+
+    deleted = await repo.delete_session(session_id)
+    if deleted:
+        broadcast_session_deleted(session_id)
+        logger.info("[Session] Deleted", session_id=session_id)
+    return deleted
 
 
 def _period(session: AppSession) -> tuple[datetime, datetime]:

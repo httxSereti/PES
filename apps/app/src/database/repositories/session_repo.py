@@ -3,7 +3,7 @@ from __future__ import annotations
 from typing import List, Optional
 
 from cuid2 import cuid_wrapper
-from sqlalchemy import select
+from sqlalchemy import delete, select
 
 from database.connection import Database
 from database.models import AppSession
@@ -73,6 +73,13 @@ class SessionRepo:
             )
             result = await db_session.execute(stmt)
             return list(result.scalars().all())
+
+    async def delete_session(self, session_id: str) -> bool:
+        async with self._db.session_maker() as db_session:
+            stmt = delete(AppSession).where(AppSession.id == session_id)
+            result = await db_session.execute(stmt)
+            await db_session.commit()
+            return result.rowcount > 0
 
     async def update_session(
         self, session_id: str, **fields

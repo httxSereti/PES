@@ -82,6 +82,10 @@ export interface SessionHistoryDetailPayload {
     session_id: string;
 }
 
+export interface SessionDeletePayload {
+    session_id: string;
+}
+
 export interface HardwareMk2btUpdatePayload {
     id: 'UNIT1' | 'UNIT2' | 'UNIT3';
     enabled: boolean;
@@ -327,6 +331,10 @@ export interface SessionHistoryDetail {
     events: TriggeredEvent[] | null;
 }
 
+export interface SessionDeletedPayload {
+    id: string;
+}
+
 export interface RampStartPayload extends RampTarget {
     timer: number;
     step: number;
@@ -490,6 +498,12 @@ export interface SessionsHistoryDetailCommand {
     id?: string | null;
     type: 'sessions:history_detail';
     payload: SessionHistoryDetailPayload;
+}
+
+export interface SessionsDeleteCommand {
+    id?: string | null;
+    type: 'sessions:delete';
+    payload: SessionDeletePayload;
 }
 
 export interface HardwareUpdateMk2btCommand {
@@ -705,6 +719,12 @@ export interface SessionsHistoryDetailMessage {
     payload: SessionHistoryDetail;
 }
 
+export interface SessionsDeletedMessage {
+    id?: string | null;
+    type: 'sessions:deleted';
+    payload: SessionDeletedPayload;
+}
+
 export type Sensor = MotionSensor | SoundSensor;
 
 export type WebSocketClientMessage =
@@ -727,6 +747,7 @@ export type WebSocketClientMessage =
     | SessionEndCommand
     | SessionsHistoryCommand
     | SessionsHistoryDetailCommand
+    | SessionsDeleteCommand
     | HardwareUpdateMk2btCommand
     | HardwareRescanMk2btCommand
     | HardwareUpdateBtSensorsCommand
@@ -764,7 +785,8 @@ export type WebSocketServerMessage =
     | SessionInitMessage
     | SessionUpdateMessage
     | SessionsHistoryMessage
-    | SessionsHistoryDetailMessage;
+    | SessionsHistoryDetailMessage
+    | SessionsDeletedMessage;
 
 /** Messages the client receives (alias of WebSocketServerMessage). */
 export type WebSocketIncomingMessage = WebSocketServerMessage;

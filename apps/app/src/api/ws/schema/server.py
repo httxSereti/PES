@@ -324,6 +324,18 @@ class SessionsHistoryDetailMessage(ServerMessage):
     payload: SessionHistoryDetail
 
 
+class SessionDeletedPayload(WireModel):
+    id: str
+
+
+@server_message(audience=Permission.SESSION_READ)
+class SessionsDeletedMessage(ServerMessage):
+    """Broadcast when an application session was deleted."""
+
+    type: Literal["sessions:deleted"] = "sessions:deleted"
+    payload: SessionDeletedPayload
+
+
 __all__ = [
     "ConnectedPayload",
     "ConnectedMessage",
@@ -367,4 +379,6 @@ __all__ = [
     "SessionUpdateMessage",
     "SessionsHistoryMessage",
     "SessionsHistoryDetailMessage",
+    "SessionDeletedPayload",
+    "SessionsDeletedMessage",
 ]

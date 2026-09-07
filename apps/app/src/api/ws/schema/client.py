@@ -219,6 +219,17 @@ class SessionsHistoryDetailCommand(ClientMessage):
     payload: SessionHistoryDetailPayload
 
 
+class SessionDeletePayload(WireModel):
+    session_id: str
+
+
+class SessionsDeleteCommand(ClientMessage):
+    """Delete one application session from the history (Host only)."""
+
+    type: Literal["sessions:delete"] = "sessions:delete"
+    payload: SessionDeletePayload
+
+
 # ─────────────────────────────── Hardware ───────────────────────────────
 
 
@@ -294,6 +305,8 @@ __all__ = [
     "SessionsHistoryCommand",
     "SessionHistoryDetailPayload",
     "SessionsHistoryDetailCommand",
+    "SessionDeletePayload",
+    "SessionsDeleteCommand",
     "HardwareMk2btUpdatePayload",
     "HardwareUpdateMk2btCommand",
     "HardwareMk2btRescanPayload",

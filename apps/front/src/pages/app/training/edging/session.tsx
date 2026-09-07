@@ -60,6 +60,7 @@ import { EdgeChart } from "@/components/common/training/edge-chart";
 import { SessionStats } from "@/components/common/training/session-stats";
 import { RatingStars } from "@/components/common/training/rating-stars";
 import { SessionForm } from "@/components/common/training/session-form";
+import { ConfirmDeleteDialog } from "@/components/common/dialogs/confirm-delete-dialog";
 import { Permission } from "@/types";
 import type { EdgeDifficulty, TrainingSessionDetail } from "@/types";
 
@@ -112,6 +113,7 @@ export default function EdgingSessionPage() {
   const [notes, setNotes] = useState("");
   const [notesDirty, setNotesDirty] = useState(false);
   const [editOpen, setEditOpen] = useState(false);
+  const [deleteOpen, setDeleteOpen] = useState(false);
 
   const load = useCallback(async () => {
     if (!token || !id) return;
@@ -242,16 +244,11 @@ export default function EdgingSessionPage() {
   }
 
   async function handleDelete() {
-    if (
-      !window.confirm(
-        `Delete session '${session.name}'? This cannot be undone.`,
-      )
-    )
-      return;
     await run(async () => {
       await deleteTrainingSession(token!, session.id);
       navigate("/app/training/edging");
     }, "Session deleted");
+    setDeleteOpen(false);
   }
 
   return (
@@ -275,7 +272,7 @@ export default function EdgingSessionPage() {
             )}
           </p>
         </div>
-        {configured && canManage && (
+        {((configured && canManage) || (isHost && !running)) && (
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button variant="outline" size="icon-sm">
@@ -284,12 +281,17 @@ export default function EdgingSessionPage() {
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
-              <DropdownMenuItem onSelect={() => setEditOpen(true)}>
-                <Pencil size={13} />
-                Edit session
-              </DropdownMenuItem>
-              {isHost && (
-                <DropdownMenuItem variant="destructive" onSelect={handleDelete}>
+              {configured && canManage && (
+                <DropdownMenuItem onSelect={() => setEditOpen(true)}>
+                  <Pencil size={13} />
+                  Edit session
+                </DropdownMenuItem>
+              )}
+              {isHost && !running && (
+                <DropdownMenuItem
+                  variant="destructive"
+                  onSelect={() => setDeleteOpen(true)}
+                >
                   <Trash2 size={13} />
                   Delete session
                 </DropdownMenuItem>
@@ -543,6 +545,14 @@ export default function EdgingSessionPage() {
           />
         </DialogContent>
       </Dialog>
+
+      <ConfirmDeleteDialog
+        open={deleteOpen}
+        onOpenChange={setDeleteOpen}
+        title={`Delete session '${session.name}'?`}
+        busy={busy}
+        onConfirm={() => void handleDelete()}
+      />
     </div>
   );
 }

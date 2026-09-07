@@ -66,4 +66,5 @@ export const SERVER_MESSAGE_AUDIENCE: Record<WebSocketServerMessage['type'], Per
     'session:update': Permission.SESSION_READ,
     'sessions:history': Permission.SESSION_READ,
     'sessions:history_detail': Permission.SESSION_READ,
+    'sessions:deleted': Permission.SESSION_READ,
 };

@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { Link } from "react-router";
+import { Button } from "@pes/ui/components/button";
 import {
   Card,
   CardContent,
@@ -8,14 +9,19 @@ import {
   CardTitle,
 } from "@pes/ui/components/card";
 import { Skeleton } from "@pes/ui/components/skeleton";
-import { History, Zap } from "lucide-react";
+import { History, Trash2, Zap } from "lucide-react";
+import { toast } from "sonner";
 
 import { useWebSocket } from "@/hooks/useWebSocket";
 import { useAppSelector } from "@/store/hooks";
+import { hasPermission } from "@/lib/permissions";
 import { formatDuration } from "@/lib/training";
 import { formatDateTime } from "@/lib/format-date";
 import { SESSION_TYPE_META } from "@/components/common/session/session.constants";
 import { SessionStatusBadge } from "@/components/common/session/session-status-badge";
+import { ConfirmDeleteDialog } from "@/components/common/dialogs/confirm-delete-dialog";
+import { Permission } from "@/types";
+import type { SessionHistoryItem } from "@/types";
 
 export function meta() {
   return [{ title: "PES | Sessions" }];
@@ -25,6 +31,7 @@ export default function SessionsPage() {
   const { sendCommand } = useWebSocket();
   const sessions = useAppSelector((state) => state.sessionHistory.list);
   const activeSession = useAppSelector((state) => state.session.activeSession);
+  const user = useAppSelector((state) => state.auth.user);
 
   const [error, setError] = useState<string | null>(null);
 
@@ -50,6 +57,33 @@ export default function SessionsPage() {
     if (activeSession) void load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeSession?.id]);
+
+  const isHost = hasPermission(user, Permission.HOST);
+  const [deleteTarget, setDeleteTarget] = useState<SessionHistoryItem | null>(
+    null,
+  );
+
+  async function handleDelete() {
+    if (!deleteTarget) return;
+    const target = deleteTarget;
+    try {
+      const result = await sendCommand("sessions:delete", {
+        session_id: target.id,
+      });
+      if (result.status !== "ok") {
+        setError(result.message ?? "Failed to delete the session");
+        return;
+      }
+      toast.success("Session deleted", { position: "bottom-right" });
+      void load();
+    } catch (err) {
+      setError(
+        err instanceof Error ? err.message : "Failed to delete the session",
+      );
+    } finally {
+      setDeleteTarget(null);
+    }
+  }
 
   return (
     <div className="px-4 md:px-5 space-y-4">
@@ -92,7 +126,7 @@ export default function SessionsPage() {
                   <li key={session.id}>
                     <Link
                       to={`/app/sessions/${session.id}`}
-                      className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3 rounded-md px-2 py-3 -mx-2 transition-colors hover:bg-accent/40 sm:grid-cols-[minmax(0,1fr)_auto_auto_auto_auto]"
+                      className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3 rounded-md px-2 py-3 -mx-2 transition-colors hover:bg-accent/40 sm:grid-cols-[minmax(0,1fr)_auto_auto_auto_auto_auto]"
                     >
                       <div className="flex min-w-0 items-center gap-2.5">
                         <SessionStatusBadge status={session.status} />
@@ -124,6 +158,24 @@ export default function SessionsPage() {
                           {session.event_count}
                         </span>
                       </span>
+                      {isHost && session.status !== "running" && (
+                        <span
+                          onClick={(event) => {
+                            event.preventDefault();
+                            event.stopPropagation();
+                            setDeleteTarget(session);
+                          }}
+                        >
+                          <Button
+                            variant="ghost"
+                            size="icon-sm"
+                            className="text-muted-foreground/70 hover:text-destructive"
+                            aria-label={`Delete session ${session.name}`}
+                          >
+                            <Trash2 size={13} />
+                          </Button>
+                        </span>
+                      )}
                     </Link>
                   </li>
                 );
@@ -132,6 +184,15 @@ export default function SessionsPage() {
           )}
         </CardContent>
       </Card>
+
+      <ConfirmDeleteDialog
+        open={deleteTarget !== null}
+        onOpenChange={(open) => {
+          if (!open) setDeleteTarget(null);
+        }}
+        title={`Delete session '${deleteTarget?.name ?? ""}'?`}
+        onConfirm={() => void handleDelete()}
+      />
     </div>
   );
 }

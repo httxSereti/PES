@@ -195,6 +195,13 @@ async def delete_edging_session(
     session_id: str,
     current_user: dict = Depends(require_permission(Permission.HOST)),
 ):
+    session = await _repo().get_session(session_id)
+    if session is None:
+        raise HTTPException(status_code=404, detail="Session not found")
+    if session.status == "running":
+        raise HTTPException(
+            status_code=409, detail="Cannot delete a running session — end it first"
+        )
     if not await _repo().delete_session(session_id):
         raise HTTPException(status_code=404, detail="Session not found")
     broadcast_session_deleted(session_id)

@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
-import { Link, useParams } from "react-router";
+import { Link, useNavigate, useParams } from "react-router";
+import { Button } from "@pes/ui/components/button";
 import {
   Card,
   CardContent,
@@ -7,16 +8,20 @@ import {
   CardHeader,
   CardTitle,
 } from "@pes/ui/components/card";
-import { Archive, Dumbbell } from "lucide-react";
+import { Archive, Dumbbell, Trash2 } from "lucide-react";
+import { toast } from "sonner";
 
 import { useWebSocket } from "@/hooks/useWebSocket";
 import { useAppSelector } from "@/store/hooks";
+import { hasPermission } from "@/lib/permissions";
 import { formatDuration } from "@/lib/training";
 import { formatDateTime } from "@/lib/format-date";
 import { SESSION_TYPE_META } from "@/components/common/session/session.constants";
 import { SessionStatusBadge } from "@/components/common/session/session-status-badge";
 import { TrainingStatusBadge } from "@/components/common/training/training-status-badge";
 import { EventRow, EventCard } from "@/components/common/events/event-row";
+import { ConfirmDeleteDialog } from "@/components/common/dialogs/confirm-delete-dialog";
+import { Permission } from "@/types";
 
 export function meta() {
   return [{ title: "PES | Session history" }];
@@ -24,12 +29,15 @@ export function meta() {
 
 export default function SessionHistoryDetailPage() {
   const { id } = useParams<{ id: string }>();
+  const navigate = useNavigate();
   const { sendCommand } = useWebSocket();
+  const user = useAppSelector((state) => state.auth.user);
   const detail = useAppSelector((state) =>
     id ? state.sessionHistory.details[id] : undefined,
   );
 
   const [error, setError] = useState<string | null>(null);
+  const [deleteOpen, setDeleteOpen] = useState(false);
 
   const load = useCallback(async () => {
     if (!id) return;
@@ -52,6 +60,29 @@ export default function SessionHistoryDetailPage() {
   useEffect(() => {
     void load();
   }, [load]);
+
+  const isHost = hasPermission(user, Permission.HOST);
+
+  async function handleDelete() {
+    if (!detail) return;
+    try {
+      const result = await sendCommand("sessions:delete", {
+        session_id: detail.session.id,
+      });
+      if (result.status !== "ok") {
+        setError(result.message ?? "Failed to delete the session");
+        return;
+      }
+      toast.success("Session deleted", { position: "bottom-right" });
+      navigate("/app/sessions");
+    } catch (err) {
+      setError(
+        err instanceof Error ? err.message : "Failed to delete the session",
+      );
+    } finally {
+      setDeleteOpen(false);
+    }
+  }
 
   if (!detail) {
     return (
@@ -109,6 +140,17 @@ export default function SessionHistoryDetailPage() {
                 {session.sensor_ids.length}{" "}
                 {session.sensor_ids.length === 1 ? "sensor" : "sensors"}
               </span>
+              {isHost && session.status !== "running" && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="mt-1 h-7 gap-1.5 text-muted-foreground/70 hover:text-destructive"
+                  onClick={() => setDeleteOpen(true)}
+                >
+                  <Trash2 size={13} />
+                  Delete session
+                </Button>
+              )}
             </div>
           </div>
         </CardHeader>
@@ -228,6 +270,13 @@ export default function SessionHistoryDetailPage() {
           </CardContent>
         </Card>
       )}
+
+      <ConfirmDeleteDialog
+        open={deleteOpen}
+        onOpenChange={setDeleteOpen}
+        title={`Delete session '${session.name}'?`}
+        onConfirm={() => void handleDelete()}
+      />
     </div>
   );
 }

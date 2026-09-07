@@ -31,9 +31,21 @@ const sessionHistorySlice = createSlice({
     ) => {
       state.details[action.payload.session.id] = action.payload;
     },
+    /** Broadcast `sessions:deleted`: drop one session from list + details. */
+    sessionHistoryDeleted: (state, action: PayloadAction<string>) => {
+      if (state.list) {
+        state.list = state.list.filter(
+          (session) => session.id !== action.payload,
+        );
+      }
+      delete state.details[action.payload];
+    },
   },
 });
 
-export const { sessionHistoryLoaded, sessionHistoryDetailLoaded } =
-  sessionHistorySlice.actions;
+export const {
+  sessionHistoryLoaded,
+  sessionHistoryDetailLoaded,
+  sessionHistoryDeleted,
+} = sessionHistorySlice.actions;
 export default sessionHistorySlice.reducer;
