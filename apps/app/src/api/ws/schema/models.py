@@ -265,6 +265,23 @@ class Session(WireModel):
     ended_at: datetime | None
 
 
+class SessionHistoryItem(Session):
+    """An application session with quick log counts for the history pages."""
+
+    duration_seconds: int | None
+    edging_session_count: int
+    event_count: int
+
+
+class SessionHistoryDetail(WireModel):
+    """One application session + the edging sessions and events logged in it."""
+
+    session: SessionHistoryItem
+    # null when the requester lacks the matching read permission
+    edging_sessions: list[EdgingSession] | None
+    events: list[TriggeredEvent] | None
+
+
 __all__ = [
     "UnitSettingsPatch",
     "SensorPatch",
@@ -291,4 +308,6 @@ __all__ = [
     "SessionUnitId",
     "SessionSensorId",
     "Session",
+    "SessionHistoryItem",
+    "SessionHistoryDetail",
 ]

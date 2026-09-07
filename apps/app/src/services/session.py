@@ -16,11 +16,14 @@ import structlog
 
 from api.ws.websocket_notifier import ws_notifier
 from constants import BT_UNITS
-from database.models import AppSession
+from database.models import AppSession, EdgingSession, TriggeredEvent
+from database.repositories.edging_repo import EdgingRepo
 from database.repositories.session_repo import SessionRepo
+from database.repositories.triggered_event_repo import TriggeredEventRepo
 from events.queue import ActionQueue
+from services.training import serialize_session as serialize_edging_session
 from store import Store
-from typings import SessionStatus, SessionType, UnitDict
+from typings import Permission, SessionStatus, SessionType, UnitDict
 from utils import to_utc_iso
 
 logger = structlog.get_logger("pes")
@@ -161,3 +164,117 @@ async def end_session(repo: Optional[SessionRepo] = None) -> Optional[dict]:
         logger.info("[Session] Ended", session_id=ended.id)
         return serialized
     return None
+
+
+# ───────── History ─────────
+
+
+def _period(session: AppSession) -> tuple[datetime, datetime]:
+    """[start, end] window of a session (open-ended while running)."""
+    start = session.started_at or session.created_at
+    end = session.ended_at or datetime.utcnow()
+    return start, end
+
+
+def _duration_seconds(session: AppSession) -> int | None:
+    if session.started_at is None:
+        return None
+    start, end = _period(session)
+    return max(0, int((end - start).total_seconds()))
+
+
+def _edging_overlaps(
+    session: EdgingSession, period_start: datetime, period_end: datetime
+) -> bool:
+    """True when an edging session ran (or was configured) inside the window."""
+    start = session.started_at or session.created_at
+    end = session.ended_at or datetime.utcnow()
+    return start <= period_end and end >= period_start
+
+
+def serialize_event(event: TriggeredEvent) -> dict:
+    """Same wire shape as the WS events history/triggered payloads."""
+    return {
+        "id": event.id,
+        "event_type": event.event_type,
+        "origin": event.origin,
+        "event_data": event.event_data,
+        "triggered_at": to_utc_iso(event.triggered_at),
+        "triggered_rules": event.triggered_rules,
+    }
+
+
+def serialize_history_item(
+    session: AppSession, edging_session_count: int, event_count: int
+) -> dict:
+    item = serialize_session(session)
+    item["duration_seconds"] = _duration_seconds(session)
+    item["edging_session_count"] = edging_session_count
+    item["event_count"] = event_count
+    return item
+
+
+async def send_personal(payload_type: str, payload, client_id: str) -> None:
+    """Send a server message to a single client (command replies to history)."""
+    await store.websocket.send_personal_message(
+        {"type": payload_type, "payload": payload}, client_id=client_id
+    )
+
+
+async def get_history() -> list[dict]:
+    """Every application session, newest first, with quick log counts."""
+    sessions = await SessionRepo().list_sessions(limit=200)
+    if not sessions:
+        return []
+
+    event_counts = await TriggeredEventRepo().count_by_sessions(
+        [s.id for s in sessions]
+    )
+    edging_sessions = await EdgingRepo().list_sessions(limit=1000)
+
+    result = []
+    for session in sessions:
+        start, end = _period(session)
+        edging_count = sum(
+            1 for es in edging_sessions if _edging_overlaps(es, start, end)
+        )
+        result.append(
+            serialize_history_item(
+                session, edging_count, event_counts.get(session.id, 0)
+            )
+        )
+    return result
+
+
+async def get_history_detail(session_id: str, user_id: str) -> dict:
+    """One application session + the edging sessions and events logged in it."""
+    session = await SessionRepo().get_session(session_id)
+    if session is None:
+        raise ValueError("Session not found")
+
+    start, end = _period(session)
+
+    if store.check_permission(user_id, Permission.TRAINING_EDGING_READ):
+        all_edging = await EdgingRepo().list_sessions(limit=1000)
+        matching = [es for es in all_edging if _edging_overlaps(es, start, end)]
+        edging_sessions = [serialize_edging_session(es) for es in matching]
+    else:
+        matching = []
+        edging_sessions = None
+
+    if store.check_permission(user_id, Permission.READ_EVENTS):
+        events = await TriggeredEventRepo().get_by_session(session_id)
+        serialized_events = [serialize_event(ev) for ev in events]
+        counts = await TriggeredEventRepo().count_by_sessions([session_id])
+        event_count = counts.get(session_id, len(serialized_events))
+    else:
+        serialized_events = None
+        event_count = 0
+
+    return {
+        "session": serialize_history_item(
+            session, len(matching), event_count
+        ),
+        "edging_sessions": edging_sessions,
+        "events": serialized_events,
+    }

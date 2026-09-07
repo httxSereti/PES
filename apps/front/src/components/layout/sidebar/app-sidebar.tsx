@@ -6,6 +6,7 @@ import {
   Dumbbell,
   Frame,
   HardDrive,
+  History,
   Home,
   Map,
   MessageCircleQuestion,
@@ -57,6 +58,11 @@ const data = {
       title: "Training",
       url: "/app/training",
       icon: Dumbbell,
+    },
+    {
+      title: "Sessions",
+      url: "/app/sessions",
+      icon: History,
     },
   ],
   navPlayground: [

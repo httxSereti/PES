@@ -23,6 +23,8 @@ from .models import (
     Sensor,
     SensorPatch,
     Session,
+    SessionHistoryDetail,
+    SessionHistoryItem,
     StatusMessage,
     TriggeredEvent,
     TriggerRule,
@@ -303,6 +305,25 @@ class SessionUpdateMessage(ServerMessage):
     payload: Session
 
 
+# ─────────────────────────────── Session history ───────────────────────────────
+
+
+@server_message(audience=Permission.SESSION_READ)
+class SessionsHistoryMessage(ServerMessage):
+    """Personal reply to `sessions:history`: every application session."""
+
+    type: Literal["sessions:history"] = "sessions:history"
+    payload: list[SessionHistoryItem]
+
+
+@server_message(audience=Permission.SESSION_READ)
+class SessionsHistoryDetailMessage(ServerMessage):
+    """Personal reply to `sessions:history_detail`: one session + its logs."""
+
+    type: Literal["sessions:history_detail"] = "sessions:history_detail"
+    payload: SessionHistoryDetail
+
+
 __all__ = [
     "ConnectedPayload",
     "ConnectedMessage",
@@ -344,4 +365,6 @@ __all__ = [
     "SessionInitPayload",
     "SessionInitMessage",
     "SessionUpdateMessage",
+    "SessionsHistoryMessage",
+    "SessionsHistoryDetailMessage",
 ]

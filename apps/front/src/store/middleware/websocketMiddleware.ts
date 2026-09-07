@@ -13,6 +13,7 @@ import { triggerRulesInitialized, triggerRuleUpdated, triggerRuleAdded, triggerR
 import { triggerRuleLabelsInitialized, triggerRuleLabelAdded } from '@/store/slices/triggerRuleLabelsSlice';
 import { trainingInit, trainingSessionUpdated, trainingEdgeAdded, trainingSessionDeleted } from '@/store/slices/trainingSlice';
 import { sessionInit, sessionUpdated } from '@/store/slices/sessionSlice';
+import { sessionHistoryLoaded, sessionHistoryDetailLoaded } from '@/store/slices/sessionHistorySlice';
 
 export function createWebSocketMiddleware(config: WebSocketConfig): Middleware {
     const {
@@ -271,6 +272,17 @@ export function createWebSocketMiddleware(config: WebSocketConfig): Middleware {
 
                     case 'session:update':
                         dispatch(sessionUpdated(message.payload));
+                        break;
+
+                    /**
+                     * @Session history (personal replies to history commands)
+                     */
+                    case 'sessions:history':
+                        dispatch(sessionHistoryLoaded(message.payload));
+                        break;
+
+                    case 'sessions:history_detail':
+                        dispatch(sessionHistoryDetailLoaded(message.payload));
                         break;
                 }
             } catch (err) {

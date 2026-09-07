@@ -2,7 +2,7 @@
 // by apps/app/scripts/generate_ws_types.py — DO NOT EDIT.
 // Regenerate with: pnpm codegen:ws
 
-export const WS_SCHEMA_VERSION = 3;
+export const WS_SCHEMA_VERSION = 4;
 
 export enum ActionType {
     PROFILE = "PROFILE",
@@ -76,6 +76,10 @@ export interface SessionStartPayload {
     description?: string | null;
     unit_ids: ('UNIT1' | 'UNIT2' | 'UNIT3')[];
     sensor_ids: ('sound' | 'motion1' | 'motion2')[];
+}
+
+export interface SessionHistoryDetailPayload {
+    session_id: string;
 }
 
 export interface HardwareMk2btUpdatePayload {
@@ -317,6 +321,12 @@ export interface Session {
     ended_at: string | null;
 }
 
+export interface SessionHistoryDetail {
+    session: SessionHistoryItem;
+    edging_sessions: EdgingSession[] | null;
+    events: TriggeredEvent[] | null;
+}
+
 export interface RampStartPayload extends RampTarget {
     timer: number;
     step: number;
@@ -361,6 +371,12 @@ export interface SoundSensor extends BaseSensor {
     sound_alarm_number: number;
     sound_alarm_number_action: number;
     current_sound: number;
+}
+
+export interface SessionHistoryItem extends Session {
+    duration_seconds: number | null;
+    edging_session_count: number;
+    event_count: number;
 }
 
 export interface PingCommand {
@@ -462,6 +478,18 @@ export interface SessionEndCommand {
     id?: string | null;
     type: 'session:end';
     payload?: Record<string, unknown> | null;
+}
+
+export interface SessionsHistoryCommand {
+    id?: string | null;
+    type: 'sessions:history';
+    payload?: Record<string, unknown> | null;
+}
+
+export interface SessionsHistoryDetailCommand {
+    id?: string | null;
+    type: 'sessions:history_detail';
+    payload: SessionHistoryDetailPayload;
 }
 
 export interface HardwareUpdateMk2btCommand {
@@ -665,6 +693,18 @@ export interface SessionUpdateMessage {
     payload: Session;
 }
 
+export interface SessionsHistoryMessage {
+    id?: string | null;
+    type: 'sessions:history';
+    payload: SessionHistoryItem[];
+}
+
+export interface SessionsHistoryDetailMessage {
+    id?: string | null;
+    type: 'sessions:history_detail';
+    payload: SessionHistoryDetail;
+}
+
 export type Sensor = MotionSensor | SoundSensor;
 
 export type WebSocketClientMessage =
@@ -685,6 +725,8 @@ export type WebSocketClientMessage =
     | TriggerRulesDeleteCommand
     | SessionStartCommand
     | SessionEndCommand
+    | SessionsHistoryCommand
+    | SessionsHistoryDetailCommand
     | HardwareUpdateMk2btCommand
     | HardwareRescanMk2btCommand
     | HardwareUpdateBtSensorsCommand
@@ -720,7 +762,9 @@ export type WebSocketServerMessage =
     | TrainingSessionDeletedMessage
     | TrainingEdgeMessage
     | SessionInitMessage
-    | SessionUpdateMessage;
+    | SessionUpdateMessage
+    | SessionsHistoryMessage
+    | SessionsHistoryDetailMessage;
 
 /** Messages the client receives (alias of WebSocketServerMessage). */
 export type WebSocketIncomingMessage = WebSocketServerMessage;

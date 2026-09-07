@@ -64,4 +64,6 @@ export const SERVER_MESSAGE_AUDIENCE: Record<WebSocketServerMessage['type'], Per
     'training:edge': Permission.TRAINING_EDGING_READ,
     'session:init': Permission.SESSION_READ,
     'session:update': Permission.SESSION_READ,
+    'sessions:history': Permission.SESSION_READ,
+    'sessions:history_detail': Permission.SESSION_READ,
 };

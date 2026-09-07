@@ -198,6 +198,27 @@ class SessionEndCommand(ClientMessage):
     payload: dict[str, Any] | None = None
 
 
+# ─────────────────────────────── Session history ───────────────────────────────
+
+
+class SessionsHistoryCommand(ClientMessage):
+    """Request the full application session history (list + log counts)."""
+
+    type: Literal["sessions:history"] = "sessions:history"
+    payload: dict[str, Any] | None = None
+
+
+class SessionHistoryDetailPayload(WireModel):
+    session_id: str
+
+
+class SessionsHistoryDetailCommand(ClientMessage):
+    """Request one application session with its edging sessions and events."""
+
+    type: Literal["sessions:history_detail"] = "sessions:history_detail"
+    payload: SessionHistoryDetailPayload
+
+
 # ─────────────────────────────── Hardware ───────────────────────────────
 
 
@@ -270,6 +291,9 @@ __all__ = [
     "SessionStartPayload",
     "SessionStartCommand",
     "SessionEndCommand",
+    "SessionsHistoryCommand",
+    "SessionHistoryDetailPayload",
+    "SessionsHistoryDetailCommand",
     "HardwareMk2btUpdatePayload",
     "HardwareUpdateMk2btCommand",
     "HardwareMk2btRescanPayload",

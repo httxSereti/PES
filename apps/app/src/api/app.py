@@ -9,9 +9,9 @@ import structlog
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from api.rest import users, auth, admin
-from api.rest import trigger_rules as trigger_rules_router
+from api.rest import admin, auth, users
 from api.rest import training as training_router
+from api.rest import trigger_rules as trigger_rules_router
 from api.rest.webhooks import chaster as chaster_webhooks
 from api.ws.endpoint import router as ws_router
 from api.ws.websocket_notifier import ws_notifier
