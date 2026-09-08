@@ -89,10 +89,18 @@ class RampTarget(WireModel):
 
 class RampStartPayload(RampTarget):
     timer: float
-    step: int = 1
+    # increment per step: percent of max_value, or an absolute field level
+    # when step_unit is "absolute"
+    step: float = 1
+    step_unit: Literal["percent", "absolute"] = "percent"
     mode: RampMode = RampMode.RESET
     duration: float = -1  # seconds, -1 = permanent
-    max_value: int | None = None  # defaults to the field's current level
+    # defaults to the field's current level; int or MagicNumber-style range
+    # string "[25-35]" (random value resolved once at start)
+    max_value: int | str | None = None
+    # ramp start level (and RESET/WAVE reset point); defaults to the
+    # field's current level; int or "[low-high]" range string
+    start_value: int | str | None = None
 
 
 class RampsStartCommand(ClientMessage):

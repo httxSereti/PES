@@ -111,7 +111,7 @@ async def _reply_error(websocket: WebSocket, msg_id: str | None, message: str):
             "id": msg_id,
             "type": "command",
             "payload": CommandResult(status="error", message=message).model_dump(
-                exclude_none=True
+                mode="json", exclude_none=True
             ),
         }
     )
@@ -178,7 +178,9 @@ async def websocket_endpoint(websocket: WebSocket, token: str):
                     {
                         "id": message.id,
                         "type": "command",
-                        "payload": result.model_dump(exclude_none=True),
+                        "payload": result.model_dump(
+                            mode="json", exclude_none=True
+                        ),
                     }
                 )
 

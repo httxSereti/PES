@@ -14,6 +14,7 @@ export enum ActionType {
 export enum RampMode {
     RESET = "reset",
     WAVE = "wave",
+    ASCEND = "ascend",
 }
 
 export interface UnitLevelChanges {
@@ -199,6 +200,7 @@ export interface Ramp {
     max_value: number;
     timer: number;
     step: number;
+    step_unit: string;
     mode: RampMode;
     duration: number;
     elapsed: number;
@@ -338,9 +340,11 @@ export interface SessionDeletedPayload {
 export interface RampStartPayload extends RampTarget {
     timer: number;
     step: number;
+    step_unit: 'percent' | 'absolute';
     mode: RampMode;
     duration: number;
-    max_value?: number | null;
+    max_value: number | string | null;
+    start_value: number | string | null;
 }
 
 export interface RampStopPayload extends RampTarget {

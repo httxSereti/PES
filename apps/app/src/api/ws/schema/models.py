@@ -183,12 +183,13 @@ class Ramp(WireModel):
     field: str
     max_value: int
     timer: float
-    step: int
+    step: float
+    step_unit: str
     mode: RampMode
     duration: float
     elapsed: float
     paused: bool
-    progress: int
+    progress: float
     value: int
 
 

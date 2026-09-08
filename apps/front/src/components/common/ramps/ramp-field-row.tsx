@@ -6,7 +6,7 @@ import { useAppSelector } from "@/store/hooks"
 import { unitsSelectors } from "@/store/slices/unitsSlice"
 import { rampsSelectors } from "@/store/slices/rampsSlice"
 import { useWebSocket } from "@/hooks/useWebSocket"
-import { RampMode, type RampStartPayload } from "@/types"
+import { type RampStartPayload } from "@/types"
 import { RampStartDialog } from "./ramp-start-dialog"
 
 const FIELD_LABELS: Record<RampStartPayload["field"], string> = {
@@ -53,7 +53,7 @@ export function RampFieldRow({ unitId, field }: RampFieldRowProps) {
                 {ramp ? (
                     <div className="flex items-center gap-1.5 flex-wrap">
                         <span className="text-[10px] font-mono uppercase text-primary/40">
-                            {ramp.mode === RampMode.WAVE ? "wave" : "reset"} · step {ramp.step} · {ramp.timer}s
+                            {ramp.mode} · step {ramp.step}{ramp.step_unit === "absolute" ? "" : "%"} · {ramp.timer}s
                         </span>
                         {ramp.duration > 0 && (
                             <span className="text-[10px] font-mono text-primary/40">max {ramp.duration}s</span>

@@ -198,7 +198,8 @@ class ActionExecutor:
             unit = UnitDict(unit_name)
 
             # Profile owns the ramps of its units: kill any orphan ramp so it
-            # can't fight the profile values (ramps always start at 0%).
+            # can't fight the profile values (ramps start at the field's
+            # current value).
             ramp_manager.stop_unit(unit, restore=False)
 
             changes = {"sync": False, "updated": True}
@@ -215,11 +216,13 @@ class ActionExecutor:
             self._store.update_unit_dict(unit, changes)
 
             # Optional per-unit ramps block, e.g.
-            #   "ramps": {"ch_A": {"timer": 1.2, "step": 1,
-            #                      "mode": "wave", "duration": 60, "max": 46}}
-            # `max` defaults to the just-applied (level_pct-scaled) level;
-            # ramps always start at 0%. Invalid entries are logged and
-            # skipped (profiles are hand-edited JSON).
+            #   "ramps": {"ch_A": {"timer": 1.2, "step": 2, "step_unit": "absolute",
+            #                      "mode": "wave", "duration": 60, "max": 46,
+            #                      "start": 10}}
+            # `max` defaults to the just-applied (level_pct-scaled) level
+            # and may be a "[25-35]" range string; ramps start at the
+            # field's current value unless `start` is set. Invalid entries
+            # are logged and skipped (profiles are hand-edited JSON).
             for field, ramp_cfg in unit_profile.get("ramps", {}).items():
                 try:
                     ramp_manager.start(
@@ -227,9 +230,11 @@ class ActionExecutor:
                         field,
                         timer=ramp_cfg["timer"],
                         step=ramp_cfg.get("step", 1),
+                        step_unit=ramp_cfg.get("step_unit", "percent"),
                         mode=RampMode(ramp_cfg.get("mode", "reset")),
                         duration=ramp_cfg.get("duration", -1),
                         max_value=ramp_cfg.get("max"),
+                        start_value=ramp_cfg.get("start"),
                     )
                 except (KeyError, TypeError, ValueError) as err:
                     logger.warning(
