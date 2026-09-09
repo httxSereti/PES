@@ -5,6 +5,7 @@ import {
   Crown,
   Dumbbell,
   Frame,
+  Hammer,
   HardDrive,
   History,
   Home,
@@ -90,9 +91,9 @@ const data = {
   ],
   navAdmin: [
     {
-      title: "Administration Panel",
+      title: "Panel",
       url: "/",
-      icon: Crown,
+      // icon: Hammer,
       isActive: true,
       items: [
         {
@@ -102,10 +103,6 @@ const data = {
         {
           title: "Users",
           url: "/app/admin/users",
-        },
-        {
-          title: "Settings",
-          url: "/app/admin/settings",
         },
       ],
     },
@@ -128,16 +125,6 @@ const data = {
     },
   ],
   navFooter: [
-    {
-      title: "Notifications",
-      url: "#",
-      icon: BellIcon,
-    },
-    {
-      title: "Settings",
-      url: "#",
-      icon: Settings2,
-    },
     {
       title: "Guide",
       url: "#",
