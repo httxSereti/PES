@@ -198,6 +198,9 @@ class CommandResult(WireModel):
     message: str | None = None
     # Present on trigger_rules:create / trigger_rules:edit replies
     rule: TriggerRule | None = None
+    # Present on training mutation replies (create/update/start/edge/end)
+    session: EdgingSession | None = None
+    edge: EdgingEdge | None = None
 
 
 class StatusMessage(WireModel):
@@ -241,6 +244,41 @@ class EdgingSession(WireModel):
     edge_count: int
     duration_seconds: int | None
     goals_met: bool
+
+
+class TrainingOverviewStats(WireModel):
+    """Aggregate stats for the whole Training module (see overview page)."""
+
+    total_sessions: int
+    ended_sessions: int
+    succeeded_sessions: int
+    failed_sessions: int
+    cancelled_sessions: int
+    total_edges: int
+    total_success_edges: int
+    total_failed_edges: int
+    total_duration_seconds: int
+    average_duration_seconds: float | None
+    average_edges_per_session: float | None
+    success_rate: float | None
+    average_rating: float | None
+    difficulty_counts: dict[str, int]
+
+
+class EdgingSessionStats(WireModel):
+    """Per-session stats, compared to the previous session and averages."""
+
+    duration_seconds: int | None
+    success_edges: int
+    failed_edges: int
+    edges_per_minute: float | None
+    edges_per_minute_previous: float | None
+    edges_per_minute_average: float | None
+    duration_previous_seconds: int | None
+    duration_average_seconds: float | None
+    edges_previous: int | None
+    edges_average: float | None
+    difficulty_counts: dict[str, int]
 
 
 # ─────────────────────────────── Session ───────────────────────────────
@@ -306,6 +344,8 @@ __all__ = [
     "EdgingGoal",
     "EdgingEdge",
     "EdgingSession",
+    "TrainingOverviewStats",
+    "EdgingSessionStats",
     "SessionUnitId",
     "SessionSensorId",
     "Session",

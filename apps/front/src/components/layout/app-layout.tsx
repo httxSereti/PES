@@ -9,6 +9,7 @@ import { useEffect, useRef } from "react";
 import { SidebarInset, SidebarProvider } from "@pes/ui/components/sidebar"
 import { AppHeader } from "@/components/layout/headers/common/app-header";
 import { AppSidebar } from "@/components/layout/sidebar/app-sidebar";
+import { MobileTabBar } from "@/components/layout/mobile-tab-bar";
 import { SessionSettingsModal } from "@/components/common/session/session-settings-modal";
 import type { RouteHandle } from "@/types/route-handle";
 import { SensorHeader } from "@/components/layout/headers/sensors/header";
@@ -94,12 +95,13 @@ export default function AppLayout() {
                 {renderHeader()}
                 <div className="flex flex-1 flex-col">
                     <div className="@container/main flex flex-1 flex-col gap-2">
-                        <div className="flex flex-col gap-4 py-4 md:gap-6 md:py-6">
+                        <div className="flex flex-col gap-4 pb-24 py-4 md:gap-6 md:py-6 md:pb-0">
                             <Outlet />
                         </div>
                     </div>
                 </div>
             </SidebarInset>
+            <MobileTabBar />
         </SidebarProvider>
     );
 }

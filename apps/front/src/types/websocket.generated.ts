@@ -87,6 +87,49 @@ export interface SessionDeletePayload {
     session_id: string;
 }
 
+export interface TrainingSessionDetailPayload {
+    session_id: string;
+}
+
+export interface TrainingSessionDraft {
+    name: string;
+    goals: TrainingGoalDraft[];
+    auto_stop_on_goal: boolean;
+}
+
+export interface TrainingGoalDraft {
+    type: string;
+    value: number;
+}
+
+export interface TrainingUpdatePayload {
+    session_id: string;
+    name?: string | null;
+    goals?: TrainingGoalDraft[] | null;
+    auto_stop_on_goal?: boolean | null;
+    notes?: string | null;
+    rating?: number | null;
+}
+
+export interface TrainingDeletePayload {
+    session_id: string;
+}
+
+export interface TrainingStartPayload {
+    session_id: string;
+}
+
+export interface TrainingRecordEdgePayload {
+    session_id: string;
+    difficulty: 'easy' | 'normal' | 'hard' | 'extreme';
+    outcome: 'success' | 'fail';
+}
+
+export interface TrainingEndPayload {
+    session_id: string;
+    status: 'succeeded' | 'cancelled';
+}
+
 export interface HardwareMk2btUpdatePayload {
     id: 'UNIT1' | 'UNIT2' | 'UNIT3';
     enabled: boolean;
@@ -115,6 +158,8 @@ export interface CommandResult {
     status: string;
     message?: string | null;
     rule?: TriggerRule | null;
+    session?: EdgingSession | null;
+    edge?: EdgingEdge | null;
 }
 
 export interface TriggerRule {
@@ -144,6 +189,39 @@ export interface TriggerRuleLabel {
     id: string;
     name: string;
     description: string | null;
+}
+
+export interface EdgingSession {
+    id: string;
+    name: string;
+    goals: EdgingGoal[];
+    auto_stop_on_goal: boolean;
+    initiator: string;
+    initiator_user_id: string | null;
+    created_by: string;
+    status: string;
+    rating: number | null;
+    notes: string | null;
+    created_at: string;
+    started_at: string | null;
+    ended_at: string | null;
+    edge_count: number;
+    duration_seconds: number | null;
+    goals_met: boolean;
+}
+
+export interface EdgingGoal {
+    type: string;
+    value: number;
+}
+
+export interface EdgingEdge {
+    id: string;
+    session_id: string;
+    difficulty: string;
+    outcome: string;
+    recorded_by: string;
+    recorded_at: string;
 }
 
 export interface BaseSensor {
@@ -272,41 +350,50 @@ export interface TrainingInitPayload {
     edges: EdgingEdge[];
 }
 
-export interface EdgingSession {
-    id: string;
-    name: string;
-    goals: EdgingGoal[];
-    auto_stop_on_goal: boolean;
-    initiator: string;
-    initiator_user_id: string | null;
-    created_by: string;
-    status: string;
-    rating: number | null;
-    notes: string | null;
-    created_at: string;
-    started_at: string | null;
-    ended_at: string | null;
-    edge_count: number;
-    duration_seconds: number | null;
-    goals_met: boolean;
-}
-
-export interface EdgingGoal {
-    type: string;
-    value: number;
-}
-
-export interface EdgingEdge {
-    id: string;
-    session_id: string;
-    difficulty: string;
-    outcome: string;
-    recorded_by: string;
-    recorded_at: string;
-}
-
 export interface TrainingSessionDeletedPayload {
     id: string;
+}
+
+export interface TrainingOverviewPayload {
+    edging: TrainingOverviewStats;
+    recent_sessions: EdgingSession[];
+}
+
+export interface TrainingOverviewStats {
+    total_sessions: number;
+    ended_sessions: number;
+    succeeded_sessions: number;
+    failed_sessions: number;
+    cancelled_sessions: number;
+    total_edges: number;
+    total_success_edges: number;
+    total_failed_edges: number;
+    total_duration_seconds: number;
+    average_duration_seconds: number | null;
+    average_edges_per_session: number | null;
+    success_rate: number | null;
+    average_rating: number | null;
+    difficulty_counts: Record<string, number>;
+}
+
+export interface TrainingSessionDetail {
+    session: EdgingSession;
+    edges: EdgingEdge[];
+    stats: EdgingSessionStats;
+}
+
+export interface EdgingSessionStats {
+    duration_seconds: number | null;
+    success_edges: number;
+    failed_edges: number;
+    edges_per_minute: number | null;
+    edges_per_minute_previous: number | null;
+    edges_per_minute_average: number | null;
+    duration_previous_seconds: number | null;
+    duration_average_seconds: number | null;
+    edges_previous: number | null;
+    edges_average: number | null;
+    difficulty_counts: Record<string, number>;
 }
 
 export interface SessionInitPayload {
@@ -510,6 +597,60 @@ export interface SessionsDeleteCommand {
     payload: SessionDeletePayload;
 }
 
+export interface TrainingIndexCommand {
+    id?: string | null;
+    type: 'training:index';
+    payload?: Record<string, unknown> | null;
+}
+
+export interface TrainingSessionsCommand {
+    id?: string | null;
+    type: 'training:sessions';
+    payload?: Record<string, unknown> | null;
+}
+
+export interface TrainingSessionDetailCommand {
+    id?: string | null;
+    type: 'training:session_detail';
+    payload: TrainingSessionDetailPayload;
+}
+
+export interface TrainingCreateCommand {
+    id?: string | null;
+    type: 'training:create';
+    payload: TrainingSessionDraft;
+}
+
+export interface TrainingUpdateCommand {
+    id?: string | null;
+    type: 'training:update';
+    payload: TrainingUpdatePayload;
+}
+
+export interface TrainingDeleteCommand {
+    id?: string | null;
+    type: 'training:delete';
+    payload: TrainingDeletePayload;
+}
+
+export interface TrainingStartCommand {
+    id?: string | null;
+    type: 'training:start';
+    payload: TrainingStartPayload;
+}
+
+export interface TrainingRecordEdgeCommand {
+    id?: string | null;
+    type: 'training:record_edge';
+    payload: TrainingRecordEdgePayload;
+}
+
+export interface TrainingEndCommand {
+    id?: string | null;
+    type: 'training:end';
+    payload: TrainingEndPayload;
+}
+
 export interface HardwareUpdateMk2btCommand {
     id?: string | null;
     type: 'hardware:update_mk2bt';
@@ -699,6 +840,24 @@ export interface TrainingEdgeMessage {
     payload: EdgingEdge;
 }
 
+export interface TrainingOverviewMessage {
+    id?: string | null;
+    type: 'training:overview';
+    payload: TrainingOverviewPayload;
+}
+
+export interface TrainingSessionsMessage {
+    id?: string | null;
+    type: 'training:sessions';
+    payload: EdgingSession[];
+}
+
+export interface TrainingSessionDetailMessage {
+    id?: string | null;
+    type: 'training:session_detail';
+    payload: TrainingSessionDetail;
+}
+
 export interface SessionInitMessage {
     id?: string | null;
     type: 'session:init';
@@ -752,6 +911,15 @@ export type WebSocketClientMessage =
     | SessionsHistoryCommand
     | SessionsHistoryDetailCommand
     | SessionsDeleteCommand
+    | TrainingIndexCommand
+    | TrainingSessionsCommand
+    | TrainingSessionDetailCommand
+    | TrainingCreateCommand
+    | TrainingUpdateCommand
+    | TrainingDeleteCommand
+    | TrainingStartCommand
+    | TrainingRecordEdgeCommand
+    | TrainingEndCommand
     | HardwareUpdateMk2btCommand
     | HardwareRescanMk2btCommand
     | HardwareUpdateBtSensorsCommand
@@ -786,6 +954,9 @@ export type WebSocketServerMessage =
     | TrainingSessionMessage
     | TrainingSessionDeletedMessage
     | TrainingEdgeMessage
+    | TrainingOverviewMessage
+    | TrainingSessionsMessage
+    | TrainingSessionDetailMessage
     | SessionInitMessage
     | SessionUpdateMessage
     | SessionsHistoryMessage

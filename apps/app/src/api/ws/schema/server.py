@@ -18,6 +18,7 @@ from .models import (
     CommandResult,
     EdgingEdge,
     EdgingSession,
+    EdgingSessionStats,
     QueueStatus,
     Ramp,
     Sensor,
@@ -26,6 +27,7 @@ from .models import (
     SessionHistoryDetail,
     SessionHistoryItem,
     StatusMessage,
+    TrainingOverviewStats,
     TriggeredEvent,
     TriggerRule,
     TriggerRuleLabel,
@@ -282,6 +284,41 @@ class TrainingEdgeMessage(ServerMessage):
     payload: EdgingEdge
 
 
+class TrainingOverviewPayload(WireModel):
+    """Personal reply to `training:index`: module stats + recent sessions."""
+
+    edging: TrainingOverviewStats
+    recent_sessions: list[EdgingSession]
+
+
+@server_message(audience=Permission.TRAINING_EDGING_READ)
+class TrainingOverviewMessage(ServerMessage):
+    type: Literal["training:overview"] = "training:overview"
+    payload: TrainingOverviewPayload
+
+
+@server_message(audience=Permission.TRAINING_EDGING_READ)
+class TrainingSessionsMessage(ServerMessage):
+    """Personal reply to `training:sessions`: every edging session."""
+
+    type: Literal["training:sessions"] = "training:sessions"
+    payload: list[EdgingSession]
+
+
+class TrainingSessionDetail(WireModel):
+    """Personal reply to `training:session_detail`."""
+
+    session: EdgingSession
+    edges: list[EdgingEdge]
+    stats: EdgingSessionStats
+
+
+@server_message(audience=Permission.TRAINING_EDGING_READ)
+class TrainingSessionDetailMessage(ServerMessage):
+    type: Literal["training:session_detail"] = "training:session_detail"
+    payload: TrainingSessionDetail
+
+
 # ─────────────────────────────── Session ───────────────────────────────
 
 
@@ -374,6 +411,11 @@ __all__ = [
     "TrainingSessionDeletedPayload",
     "TrainingSessionDeletedMessage",
     "TrainingEdgeMessage",
+    "TrainingOverviewPayload",
+    "TrainingOverviewMessage",
+    "TrainingSessionsMessage",
+    "TrainingSessionDetail",
+    "TrainingSessionDetailMessage",
     "SessionInitPayload",
     "SessionInitMessage",
     "SessionUpdateMessage",

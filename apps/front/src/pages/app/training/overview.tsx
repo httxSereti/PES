@@ -19,12 +19,12 @@ import {
   Trophy,
 } from "lucide-react";
 
+import { useWebSocket } from "@/hooks/useWebSocket";
 import { useAppSelector } from "@/store/hooks";
-import { fetchTrainingIndex } from "@/lib/training-api";
 import { formatDuration } from "@/lib/training";
 import { formatDateTime } from "@/lib/format-date";
 import { TrainingStatusBadge } from "@/components/common/training/training-status-badge";
-import type { EdgingSession, TrainingIndexResponse } from "@/types";
+import type { EdgingSession } from "@/types";
 
 export function meta() {
   return [{ title: "PES | Training - Overview" }];
@@ -71,7 +71,8 @@ function LiveSessionCard({ session }: { session: EdgingSession }) {
             {durationTarget > 0 && (
               <span className="flex items-center gap-1.5 font-mono text-xs tabular-nums text-muted-foreground">
                 <Clock size={12} className="text-emerald-500" />
-                {formatDuration(durationDone)} / {formatDuration(durationTarget)}
+                {formatDuration(durationDone)} /{" "}
+                {formatDuration(durationTarget)}
                 <span className="text-muted-foreground/60">
                   ({formatDuration(durationRemaining)} to go)
                 </span>
@@ -152,21 +153,24 @@ function StatCardsSkeleton() {
 }
 
 export default function TrainingOverviewPage() {
-  const token = useAppSelector((state) => state.auth.token);
-  const [data, setData] = useState<TrainingIndexResponse | null>(null);
+  const { sendCommand } = useWebSocket();
+  const data = useAppSelector((state) => state.training.overview);
   const [error, setError] = useState<string | null>(null);
 
   const load = useCallback(async () => {
-    if (!token) return;
     try {
-      setData(await fetchTrainingIndex(token));
-      setError(null);
+      const result = await sendCommand("training:index");
+      if (result.status !== "ok") {
+        setError(result.message ?? "Failed to load training stats");
+      } else {
+        setError(null);
+      }
     } catch (err) {
       setError(
         err instanceof Error ? err.message : "Failed to load training stats",
       );
     }
-  }, [token]);
+  }, [sendCommand]);
 
   useEffect(() => {
     void load();

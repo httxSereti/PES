@@ -10,6 +10,8 @@ from __future__ import annotations
 
 from typing import Any, Literal
 
+from pydantic import Field
+
 from events.enums import ActionType
 from typings import RampMode
 
@@ -238,6 +240,103 @@ class SessionsDeleteCommand(ClientMessage):
     payload: SessionDeletePayload
 
 
+# ─────────────────────────────── Training ───────────────────────────────
+
+
+class TrainingIndexCommand(ClientMessage):
+    """Module index: aggregate stats + the 5 most recent edging sessions."""
+
+    type: Literal["training:index"] = "training:index"
+    payload: dict[str, Any] | None = None
+
+
+class TrainingSessionsCommand(ClientMessage):
+    """Every edging session (newest first, up to 100)."""
+
+    type: Literal["training:sessions"] = "training:sessions"
+    payload: dict[str, Any] | None = None
+
+
+class TrainingSessionDetailPayload(WireModel):
+    session_id: str
+
+
+class TrainingSessionDetailCommand(ClientMessage):
+    """One edging session + its edges + per-session stats."""
+
+    type: Literal["training:session_detail"] = "training:session_detail"
+    payload: TrainingSessionDetailPayload
+
+
+class TrainingGoalDraft(WireModel):
+    type: str
+    value: int = Field(gt=0)
+
+
+class TrainingSessionDraft(WireModel):
+    name: str = Field(min_length=1, max_length=120)
+    goals: list[TrainingGoalDraft] = Field(min_length=1, max_length=10)
+    auto_stop_on_goal: bool = False
+
+
+class TrainingCreateCommand(ClientMessage):
+    type: Literal["training:create"] = "training:create"
+    payload: TrainingSessionDraft
+
+
+class TrainingUpdatePayload(WireModel):
+    session_id: str
+    name: str | None = Field(default=None, min_length=1, max_length=120)
+    goals: list[TrainingGoalDraft] | None = None
+    auto_stop_on_goal: bool | None = None
+    notes: str | None = None
+    rating: int | None = Field(default=None, ge=1, le=5)
+
+
+class TrainingUpdateCommand(ClientMessage):
+    type: Literal["training:update"] = "training:update"
+    payload: TrainingUpdatePayload
+
+
+class TrainingDeletePayload(WireModel):
+    session_id: str
+
+
+class TrainingDeleteCommand(ClientMessage):
+    type: Literal["training:delete"] = "training:delete"
+    payload: TrainingDeletePayload
+
+
+class TrainingStartPayload(WireModel):
+    session_id: str
+
+
+class TrainingStartCommand(ClientMessage):
+    type: Literal["training:start"] = "training:start"
+    payload: TrainingStartPayload
+
+
+class TrainingRecordEdgePayload(WireModel):
+    session_id: str
+    difficulty: Literal["easy", "normal", "hard", "extreme"]
+    outcome: Literal["success", "fail"]
+
+
+class TrainingRecordEdgeCommand(ClientMessage):
+    type: Literal["training:record_edge"] = "training:record_edge"
+    payload: TrainingRecordEdgePayload
+
+
+class TrainingEndPayload(WireModel):
+    session_id: str
+    status: Literal["succeeded", "cancelled"]
+
+
+class TrainingEndCommand(ClientMessage):
+    type: Literal["training:end"] = "training:end"
+    payload: TrainingEndPayload
+
+
 # ─────────────────────────────── Hardware ───────────────────────────────
 
 
@@ -315,6 +414,23 @@ __all__ = [
     "SessionsHistoryDetailCommand",
     "SessionDeletePayload",
     "SessionsDeleteCommand",
+    "TrainingIndexCommand",
+    "TrainingSessionsCommand",
+    "TrainingSessionDetailPayload",
+    "TrainingSessionDetailCommand",
+    "TrainingGoalDraft",
+    "TrainingSessionDraft",
+    "TrainingCreateCommand",
+    "TrainingUpdatePayload",
+    "TrainingUpdateCommand",
+    "TrainingDeletePayload",
+    "TrainingDeleteCommand",
+    "TrainingStartPayload",
+    "TrainingStartCommand",
+    "TrainingRecordEdgePayload",
+    "TrainingRecordEdgeCommand",
+    "TrainingEndPayload",
+    "TrainingEndCommand",
     "HardwareMk2btUpdatePayload",
     "HardwareUpdateMk2btCommand",
     "HardwareMk2btRescanPayload",

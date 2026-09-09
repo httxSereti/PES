@@ -12,9 +12,9 @@ import { Skeleton } from "@pes/ui/components/skeleton";
 import { List, Plus, Star, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 
+import { useWebSocket } from "@/hooks/useWebSocket";
 import { useAppSelector } from "@/store/hooks";
 import { hasPermission } from "@/lib/permissions";
-import { deleteTrainingSession, fetchTrainingSessions } from "@/lib/training-api";
 import { formatDuration } from "@/lib/training";
 import { formatDateTime } from "@/lib/format-date";
 import { TrainingStatusBadge } from "@/components/common/training/training-status-badge";
@@ -28,22 +28,25 @@ export function meta() {
 }
 
 export default function EdgingSessionsPage() {
-  const token = useAppSelector((state) => state.auth.token);
+  const { sendCommand } = useWebSocket();
   const user = useAppSelector((state) => state.auth.user);
   const events = useAppSelector((state) => state.training.events);
+  const sessions = useAppSelector((state) => state.training.sessions);
 
-  const [sessions, setSessions] = useState<EdgingSession[] | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const load = useCallback(async () => {
-    if (!token) return;
     try {
-      setSessions(await fetchTrainingSessions(token));
-      setError(null);
+      const result = await sendCommand("training:sessions");
+      if (result.status !== "ok") {
+        setError(result.message ?? "Failed to load sessions");
+      } else {
+        setError(null);
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to load sessions");
     }
-  }, [token]);
+  }, [sendCommand]);
 
   useEffect(() => {
     void load();
@@ -61,10 +64,16 @@ export default function EdgingSessionsPage() {
   const [deleteTarget, setDeleteTarget] = useState<EdgingSession | null>(null);
 
   async function handleDelete() {
-    if (!token || !deleteTarget) return;
+    if (!deleteTarget) return;
     const target = deleteTarget;
     try {
-      await deleteTrainingSession(token, target.id);
+      const result = await sendCommand("training:delete", {
+        session_id: target.id,
+      });
+      if (result.status !== "ok") {
+        setError(result.message ?? "Failed to delete the session");
+        return;
+      }
       toast.success("Session deleted", { position: "bottom-right" });
       void load();
     } catch (err) {

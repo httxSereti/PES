@@ -11,7 +11,7 @@ import type { WebSocketConfig, WebSocketIncomingMessage, WebSocketMessage } from
 import type { Middleware } from '@reduxjs/toolkit';
 import { triggerRulesInitialized, triggerRuleUpdated, triggerRuleAdded, triggerRuleRemoved } from '@/store/slices/triggerRulesSlice';
 import { triggerRuleLabelsInitialized, triggerRuleLabelAdded } from '@/store/slices/triggerRuleLabelsSlice';
-import { trainingInit, trainingSessionUpdated, trainingEdgeAdded, trainingSessionDeleted } from '@/store/slices/trainingSlice';
+import { trainingInit, trainingSessionUpdated, trainingEdgeAdded, trainingSessionDeleted, trainingOverviewLoaded, trainingSessionsLoaded, trainingSessionDetailLoaded } from '@/store/slices/trainingSlice';
 import { sessionInit, sessionUpdated } from '@/store/slices/sessionSlice';
 import { sessionHistoryLoaded, sessionHistoryDetailLoaded, sessionHistoryDeleted } from '@/store/slices/sessionHistorySlice';
 
@@ -261,6 +261,18 @@ export function createWebSocketMiddleware(config: WebSocketConfig): Middleware {
 
                     case 'training:edge':
                         dispatch(trainingEdgeAdded(message.payload));
+                        break;
+
+                    case 'training:overview':
+                        dispatch(trainingOverviewLoaded(message.payload));
+                        break;
+
+                    case 'training:sessions':
+                        dispatch(trainingSessionsLoaded(message.payload));
+                        break;
+
+                    case 'training:session_detail':
+                        dispatch(trainingSessionDetailLoaded(message.payload));
                         break;
 
                     /**
