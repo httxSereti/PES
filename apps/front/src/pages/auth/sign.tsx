@@ -7,7 +7,8 @@ import { Button } from '@pes/ui/components/button';
 import { Input } from '@pes/ui/components/input';
 import { Label } from '@pes/ui/components/label';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@pes/ui/components/card';
-import { Alert, AlertDescription } from '@pes/ui/components/alert';
+import { Alert, AlertDescription, AlertTitle } from '@pes/ui/components/alert';
+import { AlertCircleIcon } from 'lucide-react';
 
 
 export default function Login() {
@@ -50,47 +51,34 @@ export default function Login() {
         try {
             await dispatch(guestLogin()).unwrap();
             navigate('/app');
-            // eslint-disable-next-line @typescript-eslint/no-unused-vars
         } catch (err) {
             // Error is handled by Redux state
         }
     };
 
     return (
-        <div className="flex items-center justify-center min-h-screen">
+        <div className="flex px-3 items-center justify-center min-h-screen">
             <Card className="w-full max-w-md">
                 <CardHeader>
                     <CardTitle>Login</CardTitle>
-                    <CardDescription>Enter your credentials to access your account</CardDescription>
+                    <CardDescription>Guest can login without an account, but can only access limited features.</CardDescription>
                 </CardHeader>
                 <form onSubmit={handleSubmit}>
-                    <CardContent className="space-y-4">
+                    <CardContent className="">
                         {error && (
-                            <Alert variant="destructive">
-                                <AlertDescription>{error}</AlertDescription>
+                            <Alert className="max-w-md">
+                                <AlertCircleIcon />
+                                <AlertTitle>Login failed!</AlertTitle>
+                                <AlertDescription>
+                                    Your credentials are invalid. Please ask Host to send you a new magic link or try again.
+                                </AlertDescription>
                             </Alert>
                         )}
-
-                        <div className="space-y-2 mb-5">
-                            <Label htmlFor="email">Magic Token</Label>
-                            <Input
-                                id="magic_token"
-                                type="text"
-                                value={magic_token}
-                                onChange={(e) => setMagicToken(e.target.value)}
-                                required
-                            />
-                        </div>
                     </CardContent>
 
-                    <CardFooter className="flex flex-col space-y-2">
-                        <Button type="submit" className="w-full" disabled={loading}>
-                            {loading ? 'Logging in...' : 'Login'}
-                        </Button>
-
+                    <CardFooter className="flex flex-col pt-5 space-y-2">
                         <Button
                             type="button"
-                            variant="outline"
                             className="w-full"
                             onClick={handleGuestLogin}
                             disabled={loading}
