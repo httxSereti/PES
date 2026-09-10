@@ -9,8 +9,7 @@ import {
 } from "@pes/ui/components/card";
 import { toast } from "sonner";
 
-import { useAppSelector } from "@/store/hooks";
-import { createTrainingSession } from "@/lib/training-api";
+import { useWebSocket } from "@/hooks/useWebSocket";
 import { SessionForm } from "@/components/common/training/session-form";
 import type { TrainingSessionFields } from "@/types";
 
@@ -20,13 +19,21 @@ export function meta() {
 
 export default function NewEdgingSessionPage() {
   const navigate = useNavigate();
-  const token = useAppSelector((state) => state.auth.token);
+  const { sendCommand } = useWebSocket();
   const [error, setError] = useState<string | null>(null);
 
   async function handleSubmit(fields: TrainingSessionFields) {
-    if (!token) return;
     try {
-      const session = await createTrainingSession(token, fields);
+      const result = await sendCommand("training:create", {
+        name: fields.name,
+        goals: fields.goals,
+        auto_stop_on_goal: fields.auto_stop_on_goal,
+      });
+      if (result.status !== "ok" || !result.session) {
+        setError(result.message ?? "Failed to create the session");
+        return;
+      }
+      const session = result.session;
       toast.success(`Session '${session.name}' created`, {
         description: "The Host can start it from the session page.",
         position: "bottom-right",

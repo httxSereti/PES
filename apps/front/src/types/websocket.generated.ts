@@ -2,7 +2,7 @@
 // by apps/app/scripts/generate_ws_types.py — DO NOT EDIT.
 // Regenerate with: pnpm codegen:ws
 
-export const WS_SCHEMA_VERSION = 2;
+export const WS_SCHEMA_VERSION = 4;
 
 export enum ActionType {
     PROFILE = "PROFILE",
@@ -14,6 +14,7 @@ export enum ActionType {
 export enum RampMode {
     RESET = "reset",
     WAVE = "wave",
+    ASCEND = "ascend",
 }
 
 export interface UnitLevelChanges {
@@ -70,6 +71,65 @@ export interface TriggerRuleDeletePayload {
     rule_id: string;
 }
 
+export interface SessionStartPayload {
+    type: 'testing' | 'solo_play' | 'multiplayer';
+    name: string;
+    description?: string | null;
+    unit_ids: ('UNIT1' | 'UNIT2' | 'UNIT3')[];
+    sensor_ids: ('sound' | 'motion1' | 'motion2')[];
+}
+
+export interface SessionHistoryDetailPayload {
+    session_id: string;
+}
+
+export interface SessionDeletePayload {
+    session_id: string;
+}
+
+export interface TrainingSessionDetailPayload {
+    session_id: string;
+}
+
+export interface TrainingSessionDraft {
+    name: string;
+    goals: TrainingGoalDraft[];
+    auto_stop_on_goal: boolean;
+}
+
+export interface TrainingGoalDraft {
+    type: string;
+    value: number;
+}
+
+export interface TrainingUpdatePayload {
+    session_id: string;
+    name?: string | null;
+    goals?: TrainingGoalDraft[] | null;
+    auto_stop_on_goal?: boolean | null;
+    notes?: string | null;
+    rating?: number | null;
+}
+
+export interface TrainingDeletePayload {
+    session_id: string;
+}
+
+export interface TrainingStartPayload {
+    session_id: string;
+}
+
+export interface TrainingRecordEdgePayload {
+    session_id: string;
+    difficulty: 'easy' | 'normal' | 'hard' | 'extreme';
+    outcome: 'success' | 'fail';
+}
+
+export interface TrainingEndPayload {
+    session_id: string;
+    status: 'succeeded' | 'cancelled';
+}
+
 export interface HardwareMk2btUpdatePayload {
     id: 'UNIT1' | 'UNIT2' | 'UNIT3';
     enabled: boolean;
@@ -98,6 +158,8 @@ export interface CommandResult {
     status: string;
     message?: string | null;
     rule?: TriggerRule | null;
+    session?: EdgingSession | null;
+    edge?: EdgingEdge | null;
 }
 
 export interface TriggerRule {
@@ -127,6 +189,39 @@ export interface TriggerRuleLabel {
     id: string;
     name: string;
     description: string | null;
+}
+
+export interface EdgingSession {
+    id: string;
+    name: string;
+    goals: EdgingGoal[];
+    auto_stop_on_goal: boolean;
+    initiator: string;
+    initiator_user_id: string | null;
+    created_by: string;
+    status: string;
+    rating: number | null;
+    notes: string | null;
+    created_at: string;
+    started_at: string | null;
+    ended_at: string | null;
+    edge_count: number;
+    duration_seconds: number | null;
+    goals_met: boolean;
+}
+
+export interface EdgingGoal {
+    type: string;
+    value: number;
+}
+
+export interface EdgingEdge {
+    id: string;
+    session_id: string;
+    difficulty: string;
+    outcome: string;
+    recorded_by: string;
+    recorded_at: string;
 }
 
 export interface BaseSensor {
@@ -183,6 +278,7 @@ export interface Ramp {
     max_value: number;
     timer: number;
     step: number;
+    step_unit: string;
     mode: RampMode;
     duration: number;
     elapsed: number;
@@ -254,49 +350,88 @@ export interface TrainingInitPayload {
     edges: EdgingEdge[];
 }
 
-export interface EdgingSession {
+export interface TrainingSessionDeletedPayload {
     id: string;
+}
+
+export interface TrainingOverviewPayload {
+    edging: TrainingOverviewStats;
+    recent_sessions: EdgingSession[];
+}
+
+export interface TrainingOverviewStats {
+    total_sessions: number;
+    ended_sessions: number;
+    succeeded_sessions: number;
+    failed_sessions: number;
+    cancelled_sessions: number;
+    total_edges: number;
+    total_success_edges: number;
+    total_failed_edges: number;
+    total_duration_seconds: number;
+    average_duration_seconds: number | null;
+    average_edges_per_session: number | null;
+    success_rate: number | null;
+    average_rating: number | null;
+    difficulty_counts: Record<string, number>;
+}
+
+export interface TrainingSessionDetail {
+    session: EdgingSession;
+    edges: EdgingEdge[];
+    stats: EdgingSessionStats;
+}
+
+export interface EdgingSessionStats {
+    duration_seconds: number | null;
+    success_edges: number;
+    failed_edges: number;
+    edges_per_minute: number | null;
+    edges_per_minute_previous: number | null;
+    edges_per_minute_average: number | null;
+    duration_previous_seconds: number | null;
+    duration_average_seconds: number | null;
+    edges_previous: number | null;
+    edges_average: number | null;
+    difficulty_counts: Record<string, number>;
+}
+
+export interface SessionInitPayload {
+    session: Session | null;
+}
+
+export interface Session {
+    id: string;
+    type: 'testing' | 'solo_play' | 'multiplayer';
     name: string;
-    goals: EdgingGoal[];
-    auto_stop_on_goal: boolean;
-    initiator: string;
-    initiator_user_id: string | null;
+    description: string | null;
+    unit_ids: ('UNIT1' | 'UNIT2' | 'UNIT3')[];
+    sensor_ids: ('sound' | 'motion1' | 'motion2')[];
+    status: 'running' | 'ended';
     created_by: string;
-    status: string;
-    rating: number | null;
-    notes: string | null;
     created_at: string;
     started_at: string | null;
     ended_at: string | null;
-    edge_count: number;
-    duration_seconds: number | null;
-    goals_met: boolean;
 }
 
-export interface EdgingGoal {
-    type: string;
-    value: number;
+export interface SessionHistoryDetail {
+    session: SessionHistoryItem;
+    edging_sessions: EdgingSession[] | null;
+    events: TriggeredEvent[] | null;
 }
 
-export interface EdgingEdge {
-    id: string;
-    session_id: string;
-    difficulty: string;
-    outcome: string;
-    recorded_by: string;
-    recorded_at: string;
-}
-
-export interface TrainingSessionDeletedPayload {
+export interface SessionDeletedPayload {
     id: string;
 }
 
 export interface RampStartPayload extends RampTarget {
     timer: number;
     step: number;
+    step_unit: 'percent' | 'absolute';
     mode: RampMode;
     duration: number;
-    max_value?: number | null;
+    max_value: number | string | null;
+    start_value: number | string | null;
 }
 
 export interface RampStopPayload extends RampTarget {
@@ -335,6 +470,12 @@ export interface SoundSensor extends BaseSensor {
     sound_alarm_number: number;
     sound_alarm_number_action: number;
     current_sound: number;
+}
+
+export interface SessionHistoryItem extends Session {
+    duration_seconds: number | null;
+    edging_session_count: number;
+    event_count: number;
 }
 
 export interface PingCommand {
@@ -424,6 +565,90 @@ export interface TriggerRulesDeleteCommand {
     id?: string | null;
     type: 'trigger_rules:delete';
     payload: TriggerRuleDeletePayload;
+}
+
+export interface SessionStartCommand {
+    id?: string | null;
+    type: 'session:start';
+    payload: SessionStartPayload;
+}
+
+export interface SessionEndCommand {
+    id?: string | null;
+    type: 'session:end';
+    payload?: Record<string, unknown> | null;
+}
+
+export interface SessionsHistoryCommand {
+    id?: string | null;
+    type: 'sessions:history';
+    payload?: Record<string, unknown> | null;
+}
+
+export interface SessionsHistoryDetailCommand {
+    id?: string | null;
+    type: 'sessions:history_detail';
+    payload: SessionHistoryDetailPayload;
+}
+
+export interface SessionsDeleteCommand {
+    id?: string | null;
+    type: 'sessions:delete';
+    payload: SessionDeletePayload;
+}
+
+export interface TrainingIndexCommand {
+    id?: string | null;
+    type: 'training:index';
+    payload?: Record<string, unknown> | null;
+}
+
+export interface TrainingSessionsCommand {
+    id?: string | null;
+    type: 'training:sessions';
+    payload?: Record<string, unknown> | null;
+}
+
+export interface TrainingSessionDetailCommand {
+    id?: string | null;
+    type: 'training:session_detail';
+    payload: TrainingSessionDetailPayload;
+}
+
+export interface TrainingCreateCommand {
+    id?: string | null;
+    type: 'training:create';
+    payload: TrainingSessionDraft;
+}
+
+export interface TrainingUpdateCommand {
+    id?: string | null;
+    type: 'training:update';
+    payload: TrainingUpdatePayload;
+}
+
+export interface TrainingDeleteCommand {
+    id?: string | null;
+    type: 'training:delete';
+    payload: TrainingDeletePayload;
+}
+
+export interface TrainingStartCommand {
+    id?: string | null;
+    type: 'training:start';
+    payload: TrainingStartPayload;
+}
+
+export interface TrainingRecordEdgeCommand {
+    id?: string | null;
+    type: 'training:record_edge';
+    payload: TrainingRecordEdgePayload;
+}
+
+export interface TrainingEndCommand {
+    id?: string | null;
+    type: 'training:end';
+    payload: TrainingEndPayload;
 }
 
 export interface HardwareUpdateMk2btCommand {
@@ -615,6 +840,54 @@ export interface TrainingEdgeMessage {
     payload: EdgingEdge;
 }
 
+export interface TrainingOverviewMessage {
+    id?: string | null;
+    type: 'training:overview';
+    payload: TrainingOverviewPayload;
+}
+
+export interface TrainingSessionsMessage {
+    id?: string | null;
+    type: 'training:sessions';
+    payload: EdgingSession[];
+}
+
+export interface TrainingSessionDetailMessage {
+    id?: string | null;
+    type: 'training:session_detail';
+    payload: TrainingSessionDetail;
+}
+
+export interface SessionInitMessage {
+    id?: string | null;
+    type: 'session:init';
+    payload: SessionInitPayload;
+}
+
+export interface SessionUpdateMessage {
+    id?: string | null;
+    type: 'session:update';
+    payload: Session;
+}
+
+export interface SessionsHistoryMessage {
+    id?: string | null;
+    type: 'sessions:history';
+    payload: SessionHistoryItem[];
+}
+
+export interface SessionsHistoryDetailMessage {
+    id?: string | null;
+    type: 'sessions:history_detail';
+    payload: SessionHistoryDetail;
+}
+
+export interface SessionsDeletedMessage {
+    id?: string | null;
+    type: 'sessions:deleted';
+    payload: SessionDeletedPayload;
+}
+
 export type Sensor = MotionSensor | SoundSensor;
 
 export type WebSocketClientMessage =
@@ -633,6 +906,20 @@ export type WebSocketClientMessage =
     | TriggerRulesCreateCommand
     | TriggerRulesEditCommand
     | TriggerRulesDeleteCommand
+    | SessionStartCommand
+    | SessionEndCommand
+    | SessionsHistoryCommand
+    | SessionsHistoryDetailCommand
+    | SessionsDeleteCommand
+    | TrainingIndexCommand
+    | TrainingSessionsCommand
+    | TrainingSessionDetailCommand
+    | TrainingCreateCommand
+    | TrainingUpdateCommand
+    | TrainingDeleteCommand
+    | TrainingStartCommand
+    | TrainingRecordEdgeCommand
+    | TrainingEndCommand
     | HardwareUpdateMk2btCommand
     | HardwareRescanMk2btCommand
     | HardwareUpdateBtSensorsCommand
@@ -666,7 +953,15 @@ export type WebSocketServerMessage =
     | TrainingInitMessage
     | TrainingSessionMessage
     | TrainingSessionDeletedMessage
-    | TrainingEdgeMessage;
+    | TrainingEdgeMessage
+    | TrainingOverviewMessage
+    | TrainingSessionsMessage
+    | TrainingSessionDetailMessage
+    | SessionInitMessage
+    | SessionUpdateMessage
+    | SessionsHistoryMessage
+    | SessionsHistoryDetailMessage
+    | SessionsDeletedMessage;
 
 /** Messages the client receives (alias of WebSocketServerMessage). */
 export type WebSocketIncomingMessage = WebSocketServerMessage;

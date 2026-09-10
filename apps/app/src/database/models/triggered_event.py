@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from datetime import datetime, timezone
-from typing import List
+from typing import List, Optional
 
 from sqlalchemy import DateTime, JSON, String
 from sqlalchemy.orm import Mapped, mapped_column
@@ -26,3 +26,5 @@ class TriggeredEvent(Base):
     )
     # Summary of which rules/actions were triggered (empty list = no rules matched or WOF)
     triggered_rules: Mapped[List] = mapped_column(JSON, default=list)
+    # Id of the active application session when the event fired (null = outside a session)
+    session_id: Mapped[Optional[str]] = mapped_column(String, nullable=True, index=True)

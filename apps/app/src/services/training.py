@@ -12,7 +12,7 @@ from typing import Optional
 from api.ws.websocket_notifier import ws_notifier
 from database.models import EdgingEdge, EdgingSession
 from database.repositories.edging_repo import EdgingRepo
-from typings import EdgeOutcome, EdgingGoalType
+from typings import EdgeDifficulty, EdgeOutcome, EdgingGoalType
 from utils import to_utc_iso
 
 SUCCESS_EDGE_OUTCOME = EdgeOutcome.SUCCESS.value
@@ -222,3 +222,247 @@ async def get_live_snapshot(repo: Optional[EdgingRepo] = None) -> dict:
         "session": serialize_session(session),
         "edges": [serialize_edge(e) for e in session.edges],
     }
+
+
+# ───────── Domain operations (moved from api/rest/training.py) ─────────
+#
+# These replace the former REST handlers; errors surface as `ValueError`
+# with user-facing messages, translated into CommandResult errors by the
+# WS command handlers.
+
+
+def _validate_goals(goals: list[dict]) -> list[dict]:
+    normalized: list[dict] = []
+    for goal in goals:
+        if goal.get("type") not in {g.value for g in EdgingGoalType}:
+            raise ValueError(f"Unknown goal type: {goal.get('type')}")
+        normalized.append({"type": goal["type"], "value": goal["value"]})
+    return normalized
+
+
+def _require_ended(session_status: str) -> None:
+    if session_status not in {"succeeded", "failed", "cancelled"}:
+        raise ValueError("Only allowed once the session ended")
+
+
+async def get_overview(repo: Optional[EdgingRepo] = None) -> dict:
+    """Stats for the whole Training module (one stats card per submodule)."""
+    repo = repo or EdgingRepo()
+    sessions = await repo.list_sessions(limit=1000)
+    return {
+        "edging": compute_overview_stats(sessions),
+        "recent_sessions": [serialize_session(s) for s in sessions[:5]],
+    }
+
+
+async def list_edging_sessions(repo: Optional[EdgingRepo] = None) -> list[dict]:
+    repo = repo or EdgingRepo()
+    sessions = await repo.list_sessions(limit=100)
+    return [serialize_session(s) for s in sessions]
+
+
+async def get_session_detail(
+    session_id: str, repo: Optional[EdgingRepo] = None
+) -> dict:
+    """One session + its edges + per-session stats."""
+    repo = repo or EdgingRepo()
+    session = await repo.get_session(session_id)
+    if session is None:
+        raise ValueError("Session not found")
+
+    all_sessions = await repo.list_sessions(limit=1000)
+    return {
+        "session": serialize_session(session),
+        "edges": [serialize_edge(e) for e in session.edges],
+        "stats": compute_session_stats(session, all_sessions),
+    }
+
+
+async def create_edging_session(
+    *,
+    name: str,
+    goals: list[dict],
+    auto_stop_on_goal: bool,
+    is_host: bool,
+    created_by: str,
+    repo: Optional[EdgingRepo] = None,
+) -> dict:
+    """Create (configure) a session. Hosts create for themselves; members
+    create a request the Host can start later."""
+    repo = repo or EdgingRepo()
+    session = await repo.create_session(
+        name=name,
+        goals=_validate_goals(goals),
+        auto_stop_on_goal=auto_stop_on_goal,
+        initiator="self" if is_host else "member",
+        initiator_user_id=created_by,
+        created_by=created_by,
+    )
+    broadcast_session(session)
+    return serialize_session(session)
+
+
+async def update_edging_session(
+    session_id: str,
+    *,
+    is_host: bool,
+    name: Optional[str] = None,
+    goals: Optional[list[dict]] = None,
+    auto_stop_on_goal: Optional[bool] = None,
+    notes: Optional[str] = None,
+    rating: Optional[int] = None,
+    repo: Optional[EdgingRepo] = None,
+) -> dict:
+    """Update config fields (MANAGE) or notes/rating (HOST, ended sessions only)."""
+    repo = repo or EdgingRepo()
+    session = await repo.get_session(session_id)
+    if session is None:
+        raise ValueError("Session not found")
+
+    fields: dict = {}
+
+    if name is not None or goals is not None or auto_stop_on_goal is not None:
+        if session.status != "configured":
+            raise ValueError(
+                "Goals and auto-stop can only be changed before the session starts"
+            )
+        if name is not None:
+            fields["name"] = name
+        if goals is not None:
+            fields["goals"] = _validate_goals(goals)
+        if auto_stop_on_goal is not None:
+            fields["auto_stop_on_goal"] = auto_stop_on_goal
+
+    if notes is not None or rating is not None:
+        if not is_host:
+            raise ValueError("Host only: notes and rating")
+        _require_ended(session.status)
+        if notes is not None:
+            fields["notes"] = notes
+        if rating is not None:
+            fields["rating"] = rating
+
+    if not fields:
+        return serialize_session(session)
+
+    updated = await repo.update_session(session_id, **fields)
+    if updated is None:
+        raise ValueError("Session not found")
+    broadcast_session(updated)
+    return serialize_session(updated)
+
+
+async def delete_edging_session(
+    session_id: str, repo: Optional[EdgingRepo] = None
+) -> bool:
+    repo = repo or EdgingRepo()
+    session = await repo.get_session(session_id)
+    if session is None:
+        raise ValueError("Session not found")
+    if session.status == "running":
+        raise ValueError("Cannot delete a running session — end it first")
+    if not await repo.delete_session(session_id):
+        raise ValueError("Session not found")
+    broadcast_session_deleted(session_id)
+    return True
+
+
+async def start_edging_session(
+    session_id: str, repo: Optional[EdgingRepo] = None
+) -> dict:
+    repo = repo or EdgingRepo()
+    session = await repo.get_session(session_id)
+    if session is None:
+        raise ValueError("Session not found")
+    if session.status != "configured":
+        raise ValueError(f"Session is {session.status}, not configured")
+
+    if await repo.get_running_session() is not None:
+        raise ValueError("A session is already running")
+
+    updated = await repo.update_session(
+        session_id, status="running", started_at=datetime.utcnow()
+    )
+    if updated is None:
+        raise ValueError("Session not found")
+    broadcast_session(updated)
+    return serialize_session(updated)
+
+
+async def record_edging_edge(
+    session_id: str,
+    *,
+    difficulty: str,
+    outcome: str,
+    recorded_by: str,
+    repo: Optional[EdgingRepo] = None,
+) -> dict:
+    """Record an edge on the running session. A failed edge ends the session."""
+    repo = repo or EdgingRepo()
+    if difficulty not in {d.value for d in EdgeDifficulty}:
+        raise ValueError(f"Unknown difficulty: {difficulty}")
+    if outcome not in {o.value for o in EdgeOutcome}:
+        raise ValueError(f"Unknown outcome: {outcome}")
+
+    session = await repo.get_session(session_id)
+    if session is None:
+        raise ValueError("Session not found")
+    if session.status != "running":
+        raise ValueError("Session is not running")
+
+    edge = await repo.add_edge(
+        session_id,
+        difficulty=difficulty,
+        outcome=outcome,
+        recorded_by=recorded_by,
+    )
+    if edge is None:
+        raise ValueError("Session not found")
+    broadcast_edge(edge)
+
+    now = datetime.utcnow()
+    session = await repo.get_session(session_id)
+    if session is None:
+        raise ValueError("Session not found")
+
+    if outcome == EdgeOutcome.FAIL.value:
+        session = await repo.update_session(session_id, status="failed", ended_at=now)
+    elif goals_met(session, now) and session.auto_stop_on_goal:
+        session = await repo.update_session(session_id, status="succeeded", ended_at=now)
+    if session is None:
+        raise ValueError("Session not found")
+
+    broadcast_session(session)
+
+    return {
+        "edge": serialize_edge(edge),
+        "session": serialize_session(session),
+    }
+
+
+async def end_edging_session(
+    session_id: str,
+    *,
+    status: str,
+    repo: Optional[EdgingRepo] = None,
+) -> dict:
+    """Host ends a running session: succeeded (goals must be met) or cancelled."""
+    repo = repo or EdgingRepo()
+    session = await repo.get_session(session_id)
+    if session is None:
+        raise ValueError("Session not found")
+    if session.status != "running":
+        raise ValueError("Session is not running")
+
+    if status == "succeeded" and not goals_met(session):
+        raise ValueError(
+            "Goals are not all reached yet — end as cancelled or keep going"
+        )
+
+    updated = await repo.update_session(
+        session_id, status=status, ended_at=datetime.utcnow()
+    )
+    if updated is None:
+        raise ValueError("Session not found")
+    broadcast_session(updated)
+    return serialize_session(updated)

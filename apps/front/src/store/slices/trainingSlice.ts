@@ -1,4 +1,10 @@
-import type { EdgingEdge, EdgingSession, TrainingInitPayload } from '@/types';
+import type {
+    EdgingEdge,
+    EdgingSession,
+    TrainingIndexResponse,
+    TrainingInitPayload,
+    TrainingSessionDetail,
+} from '@/types';
 import { createSlice, type PayloadAction } from '@reduxjs/toolkit';
 
 interface TrainingState {
@@ -8,12 +14,21 @@ interface TrainingState {
     liveEdges: EdgingEdge[];
     /** Last WS event timestamp per session id — pages poll this to refetch. */
     events: Record<string, number>;
+    /** Reply to `training:index`: module stats + recent sessions. */
+    overview: TrainingIndexResponse | null;
+    /** Reply to `training:sessions`: every edging session (null until loaded). */
+    sessions: EdgingSession[] | null;
+    /** Replies to `training:session_detail`, keyed by session id. */
+    details: Record<string, TrainingSessionDetail>;
 }
 
 const initialState: TrainingState = {
     liveSession: null,
     liveEdges: [],
     events: {},
+    overview: null,
+    sessions: null,
+    details: {},
 };
 
 const trainingSlice = createSlice({
@@ -45,11 +60,39 @@ const trainingSlice = createSlice({
             }
         },
         trainingSessionDeleted: (state, action: PayloadAction<string>) => {
-            state.events[action.payload] = Date.now();
-            if (state.liveSession?.id === action.payload) {
+            const sessionId = action.payload;
+            state.events[sessionId] = Date.now();
+            if (state.liveSession?.id === sessionId) {
                 state.liveSession = null;
                 state.liveEdges = [];
             }
+            if (state.sessions) {
+                state.sessions = state.sessions.filter(
+                    (session) => session.id !== sessionId,
+                );
+            }
+            delete state.details[sessionId];
+        },
+        /** Reply to `training:index`. */
+        trainingOverviewLoaded: (
+            state,
+            action: PayloadAction<TrainingIndexResponse>,
+        ) => {
+            state.overview = action.payload;
+        },
+        /** Reply to `training:sessions`. */
+        trainingSessionsLoaded: (
+            state,
+            action: PayloadAction<EdgingSession[]>,
+        ) => {
+            state.sessions = action.payload;
+        },
+        /** Reply to `training:session_detail`. */
+        trainingSessionDetailLoaded: (
+            state,
+            action: PayloadAction<TrainingSessionDetail>,
+        ) => {
+            state.details[action.payload.session.id] = action.payload;
         },
     },
 });
@@ -59,5 +102,8 @@ export const {
     trainingSessionUpdated,
     trainingEdgeAdded,
     trainingSessionDeleted,
+    trainingOverviewLoaded,
+    trainingSessionsLoaded,
+    trainingSessionDetailLoaded,
 } = trainingSlice.actions;
 export default trainingSlice.reducer;

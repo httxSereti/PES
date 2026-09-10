@@ -183,12 +183,13 @@ class Ramp(WireModel):
     field: str
     max_value: int
     timer: float
-    step: int
+    step: float
+    step_unit: str
     mode: RampMode
     duration: float
     elapsed: float
     paused: bool
-    progress: int
+    progress: float
     value: int
 
 
@@ -197,6 +198,9 @@ class CommandResult(WireModel):
     message: str | None = None
     # Present on trigger_rules:create / trigger_rules:edit replies
     rule: TriggerRule | None = None
+    # Present on training mutation replies (create/update/start/edge/end)
+    session: EdgingSession | None = None
+    edge: EdgingEdge | None = None
 
 
 class StatusMessage(WireModel):
@@ -242,6 +246,81 @@ class EdgingSession(WireModel):
     goals_met: bool
 
 
+class TrainingOverviewStats(WireModel):
+    """Aggregate stats for the whole Training module (see overview page)."""
+
+    total_sessions: int
+    ended_sessions: int
+    succeeded_sessions: int
+    failed_sessions: int
+    cancelled_sessions: int
+    total_edges: int
+    total_success_edges: int
+    total_failed_edges: int
+    total_duration_seconds: int
+    average_duration_seconds: float | None
+    average_edges_per_session: float | None
+    success_rate: float | None
+    average_rating: float | None
+    difficulty_counts: dict[str, int]
+
+
+class EdgingSessionStats(WireModel):
+    """Per-session stats, compared to the previous session and averages."""
+
+    duration_seconds: int | None
+    success_edges: int
+    failed_edges: int
+    edges_per_minute: float | None
+    edges_per_minute_previous: float | None
+    edges_per_minute_average: float | None
+    duration_previous_seconds: int | None
+    duration_average_seconds: float | None
+    edges_previous: int | None
+    edges_average: float | None
+    difficulty_counts: dict[str, int]
+
+
+# ─────────────────────────────── Session ───────────────────────────────
+
+
+SessionUnitId = Literal["UNIT1", "UNIT2", "UNIT3"]
+SessionSensorId = Literal["sound", "motion1", "motion2"]
+
+
+class Session(WireModel):
+    """An application session (lifecycle wrapper, not a training session)."""
+
+    id: str
+    type: Literal["testing", "solo_play", "multiplayer"]
+    name: str
+    description: str | None
+    unit_ids: list[SessionUnitId]
+    sensor_ids: list[SessionSensorId]
+    status: Literal["running", "ended"]
+    created_by: str
+    created_at: datetime
+    started_at: datetime | None
+    ended_at: datetime | None
+
+
+class SessionHistoryItem(Session):
+    """An application session with quick log counts for the history pages."""
+
+    duration_seconds: int | None
+    edging_session_count: int
+    event_count: int
+
+
+class SessionHistoryDetail(WireModel):
+    """One application session + the edging sessions and events logged in it."""
+
+    session: SessionHistoryItem
+    # null when the requester lacks the matching read permission
+    edging_sessions: list[EdgingSession] | None
+    events: list[TriggeredEvent] | None
+
+
 __all__ = [
     "UnitSettingsPatch",
     "SensorPatch",
@@ -265,4 +344,11 @@ __all__ = [
     "EdgingGoal",
     "EdgingEdge",
     "EdgingSession",
+    "TrainingOverviewStats",
+    "EdgingSessionStats",
+    "SessionUnitId",
+    "SessionSensorId",
+    "Session",
+    "SessionHistoryItem",
+    "SessionHistoryDetail",
 ]

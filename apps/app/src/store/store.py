@@ -53,9 +53,14 @@ class Store:
                 self._sensors_lock = threading.RLock()
                 self._users_lock = threading.RLock()
                 self._hardware_lock = threading.RLock()
+                self._session_lock = threading.RLock()
 
                 # Hardware enable flags + rescan counters (persisted)
                 self._init_hardware()
+
+                # Active application session + pre-session hardware snapshot
+                self._active_session: Optional[Dict] = None
+                self._hardware_snapshot: Optional[Dict[str, bool]] = None
 
                 self._initialized = True
 
@@ -315,6 +320,32 @@ class Store:
             if name not in self._hardware_rescan:
                 raise KeyError(f"Hardware device '{name}' doesn't exist")
             self._hardware_rescan[name] += 1
+
+    """
+        Session Functions (app-level lifecycle)
+    """
+
+    def get_active_session(self) -> Optional[Dict]:
+        with self._session_lock:
+            return self._active_session.copy() if self._active_session else None
+
+    def set_active_session(self, session: Optional[Dict]):
+        with self._session_lock:
+            self._active_session = session.copy() if session else None
+
+    def save_hardware_snapshot(self) -> None:
+        """Snapshot the current hardware enable flags (restored at session end)."""
+        with self._session_lock:
+            self._hardware_snapshot = self.get_hardware_settings()
+
+    def restore_hardware_snapshot(self) -> None:
+        """Restore hardware enable flags to the pre-session snapshot, then drop it."""
+        with self._session_lock:
+            snapshot = self._hardware_snapshot
+            self._hardware_snapshot = None
+        if snapshot is not None:
+            for name, enabled in snapshot.items():
+                self.set_hardware_enabled(name, enabled)
 
     """
         User Functions

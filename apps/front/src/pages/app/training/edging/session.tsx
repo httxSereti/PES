@@ -40,16 +40,9 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 
+import { useWebSocket } from "@/hooks/useWebSocket";
 import { useAppSelector } from "@/store/hooks";
 import { hasPermission } from "@/lib/permissions";
-import {
-  deleteTrainingSession,
-  endTrainingSession,
-  fetchTrainingSession,
-  recordTrainingEdge,
-  startTrainingSession,
-  updateTrainingSession,
-} from "@/lib/training-api";
 import { formatDateTime } from "@/lib/format-date";
 import { formatDuration } from "@/lib/training";
 import { TrainingStatusBadge } from "@/components/common/training/training-status-badge";
@@ -60,8 +53,9 @@ import { EdgeChart } from "@/components/common/training/edge-chart";
 import { SessionStats } from "@/components/common/training/session-stats";
 import { RatingStars } from "@/components/common/training/rating-stars";
 import { SessionForm } from "@/components/common/training/session-form";
+import { ConfirmDeleteDialog } from "@/components/common/dialogs/confirm-delete-dialog";
 import { Permission } from "@/types";
-import type { EdgeDifficulty, TrainingSessionDetail } from "@/types";
+import type { CommandResult, EdgeDifficulty } from "@/types";
 
 export function meta() {
   return [{ title: "PES | Training - Edging Session" }];
@@ -97,8 +91,11 @@ const EDGE_BUTTONS: {
 export default function EdgingSessionPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const token = useAppSelector((state) => state.auth.token);
+  const { sendCommand } = useWebSocket();
   const user = useAppSelector((state) => state.auth.user);
+  const detail = useAppSelector((state) =>
+    id ? state.training.details[id] : undefined,
+  );
   const eventTs = useAppSelector((state) =>
     id ? state.training.events[id] : undefined,
   );
@@ -106,27 +103,30 @@ export default function EdgingSessionPage() {
   const isHost = hasPermission(user, Permission.HOST);
   const canManage = hasPermission(user, Permission.TRAINING_EDGING_MANAGE);
 
-  const [detail, setDetail] = useState<TrainingSessionDetail | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [notes, setNotes] = useState("");
   const [notesDirty, setNotesDirty] = useState(false);
   const [editOpen, setEditOpen] = useState(false);
+  const [deleteOpen, setDeleteOpen] = useState(false);
 
   const load = useCallback(async () => {
-    if (!token || !id) return;
+    if (!id) return;
     try {
-      const data = await fetchTrainingSession(token, id);
-      setDetail(data);
-      setNotes(data.session.notes ?? "");
-      setNotesDirty(false);
-      setError(null);
+      const result = await sendCommand("training:session_detail", {
+        session_id: id,
+      });
+      if (result.status !== "ok") {
+        setError(result.message ?? "Failed to load the session");
+      } else {
+        setError(null);
+      }
     } catch (err) {
       setError(
         err instanceof Error ? err.message : "Failed to load the session",
       );
     }
-  }, [token, id]);
+  }, [sendCommand, id]);
 
   useEffect(() => {
     void load();
@@ -138,12 +138,26 @@ export default function EdgingSessionPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [eventTs]);
 
-  async function run(action: () => Promise<unknown>, successMessage?: string) {
-    if (!token || !id) return;
+  // Sync the notes editor with the loaded session (never clobber typing)
+  useEffect(() => {
+    if (detail && !notesDirty) {
+      setNotes(detail.session.notes ?? "");
+    }
+  }, [detail, notesDirty]);
+
+  async function run(
+    action: () => Promise<CommandResult>,
+    successMessage?: string,
+  ) {
+    if (!id) return;
     setBusy(true);
     setError(null);
     try {
-      await action();
+      const result = await action();
+      if (result.status !== "ok") {
+        setError(result.message ?? "Request failed");
+        return;
+      }
       if (successMessage)
         toast.success(successMessage, { position: "bottom-right" });
       await load();
@@ -175,47 +189,36 @@ export default function EdgingSessionPage() {
 
   async function handleStart() {
     await run(
-      () => startTrainingSession(token!, session.id),
+      () => sendCommand("training:start", { session_id: session.id }),
       "Session started!",
     );
   }
 
   async function handleEdge(difficulty: EdgeDifficulty) {
-    await run(async () => {
-      const res = await recordTrainingEdge(
-        token!,
-        session.id,
+    await run(() =>
+      sendCommand("training:record_edge", {
+        session_id: session.id,
         difficulty,
-        "success",
-      );
-      // Optimistic local update; the WS refetch replaces it shortly after.
-      setDetail((prev) =>
-        prev
-          ? { ...prev, session: res.session, edges: [...prev.edges, res.edge] }
-          : prev,
-      );
-    });
+        outcome: "success",
+      }),
+    );
   }
 
   async function handleFail() {
-    await run(async () => {
-      const res = await recordTrainingEdge(
-        token!,
-        session.id,
-        "normal",
-        "fail",
-      );
-      setDetail((prev) =>
-        prev
-          ? { ...prev, session: res.session, edges: [...prev.edges, res.edge] }
-          : prev,
-      );
-    }, "Session failed and stopped");
+    await run(
+      () =>
+        sendCommand("training:record_edge", {
+          session_id: session.id,
+          difficulty: "normal",
+          outcome: "fail",
+        }),
+      "Session failed and stopped",
+    );
   }
 
   async function handleEnd(status: "succeeded" | "cancelled") {
     await run(
-      () => endTrainingSession(token!, session.id, status),
+      () => sendCommand("training:end", { session_id: session.id, status }),
       status === "succeeded"
         ? "Session ended — goal reached!"
         : "Session cancelled",
@@ -223,35 +226,31 @@ export default function EdgingSessionPage() {
   }
 
   async function handleRating(rating: number) {
-    await run(async () => {
-      const updated = await updateTrainingSession(token!, session.id, {
-        rating,
-      });
-      setDetail((prev) => (prev ? { ...prev, session: updated } : prev));
-    });
+    await run(() =>
+      sendCommand("training:update", { session_id: session.id, rating }),
+    );
   }
 
   async function handleSaveNotes() {
     await run(async () => {
-      const updated = await updateTrainingSession(token!, session.id, {
+      const result = await sendCommand("training:update", {
+        session_id: session.id,
         notes,
       });
-      setDetail((prev) => (prev ? { ...prev, session: updated } : prev));
-      setNotesDirty(false);
+      if (result.status === "ok") setNotesDirty(false);
+      return result;
     }, "Notes saved");
   }
 
   async function handleDelete() {
-    if (
-      !window.confirm(
-        `Delete session '${session.name}'? This cannot be undone.`,
-      )
-    )
-      return;
     await run(async () => {
-      await deleteTrainingSession(token!, session.id);
-      navigate("/app/training/edging");
+      const result = await sendCommand("training:delete", {
+        session_id: session.id,
+      });
+      if (result.status === "ok") navigate("/app/training/edging");
+      return result;
     }, "Session deleted");
+    setDeleteOpen(false);
   }
 
   return (
@@ -275,7 +274,7 @@ export default function EdgingSessionPage() {
             )}
           </p>
         </div>
-        {configured && canManage && (
+        {((configured && canManage) || (isHost && !running)) && (
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button variant="outline" size="icon-sm">
@@ -284,12 +283,17 @@ export default function EdgingSessionPage() {
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
-              <DropdownMenuItem onSelect={() => setEditOpen(true)}>
-                <Pencil size={13} />
-                Edit session
-              </DropdownMenuItem>
-              {isHost && (
-                <DropdownMenuItem variant="destructive" onSelect={handleDelete}>
+              {configured && canManage && (
+                <DropdownMenuItem onSelect={() => setEditOpen(true)}>
+                  <Pencil size={13} />
+                  Edit session
+                </DropdownMenuItem>
+              )}
+              {isHost && !running && (
+                <DropdownMenuItem
+                  variant="destructive"
+                  onSelect={() => setDeleteOpen(true)}
+                >
                   <Trash2 size={13} />
                   Delete session
                 </DropdownMenuItem>
@@ -536,13 +540,28 @@ export default function EdgingSessionPage() {
             }}
             submitLabel="Save changes"
             onSubmit={async (fields) => {
-              await updateTrainingSession(token!, session.id, fields);
+              const result = await sendCommand("training:update", {
+                session_id: session.id,
+                ...fields,
+              });
+              if (result.status !== "ok") {
+                setError(result.message ?? "Failed to save the session");
+                return;
+              }
               setEditOpen(false);
               await load();
             }}
           />
         </DialogContent>
       </Dialog>
+
+      <ConfirmDeleteDialog
+        open={deleteOpen}
+        onOpenChange={setDeleteOpen}
+        title={`Delete session '${session.name}'?`}
+        busy={busy}
+        onConfirm={() => void handleDelete()}
+      />
     </div>
   );
 }

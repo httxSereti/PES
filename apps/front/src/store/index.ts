@@ -10,6 +10,8 @@ import eventsReducer from '@/store/slices/eventsSlice';
 import triggerRulesReducer from '@/store/slices/triggerRulesSlice';
 import triggerRuleLabelsReducer from '@/store/slices/triggerRuleLabelsSlice';
 import trainingReducer from '@/store/slices/trainingSlice';
+import sessionReducer from '@/store/slices/sessionSlice';
+import sessionHistoryReducer from '@/store/slices/sessionHistorySlice';
 
 import { createWebSocketMiddleware } from '@/store/middleware/websocketMiddleware';
 
@@ -41,6 +43,8 @@ export const store = configureStore({
         triggerRules: triggerRulesReducer,
         triggerRuleLabels: triggerRuleLabelsReducer,
         training: trainingReducer,
+        session: sessionReducer,
+        sessionHistory: sessionHistoryReducer,
     },
     middleware: (getDefaultMiddleware) =>
         getDefaultMiddleware({

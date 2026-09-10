@@ -18,11 +18,16 @@ from .models import (
     CommandResult,
     EdgingEdge,
     EdgingSession,
+    EdgingSessionStats,
     QueueStatus,
     Ramp,
     Sensor,
     SensorPatch,
+    Session,
+    SessionHistoryDetail,
+    SessionHistoryItem,
     StatusMessage,
+    TrainingOverviewStats,
     TriggeredEvent,
     TriggerRule,
     TriggerRuleLabel,
@@ -279,6 +284,95 @@ class TrainingEdgeMessage(ServerMessage):
     payload: EdgingEdge
 
 
+class TrainingOverviewPayload(WireModel):
+    """Personal reply to `training:index`: module stats + recent sessions."""
+
+    edging: TrainingOverviewStats
+    recent_sessions: list[EdgingSession]
+
+
+@server_message(audience=Permission.TRAINING_EDGING_READ)
+class TrainingOverviewMessage(ServerMessage):
+    type: Literal["training:overview"] = "training:overview"
+    payload: TrainingOverviewPayload
+
+
+@server_message(audience=Permission.TRAINING_EDGING_READ)
+class TrainingSessionsMessage(ServerMessage):
+    """Personal reply to `training:sessions`: every edging session."""
+
+    type: Literal["training:sessions"] = "training:sessions"
+    payload: list[EdgingSession]
+
+
+class TrainingSessionDetail(WireModel):
+    """Personal reply to `training:session_detail`."""
+
+    session: EdgingSession
+    edges: list[EdgingEdge]
+    stats: EdgingSessionStats
+
+
+@server_message(audience=Permission.TRAINING_EDGING_READ)
+class TrainingSessionDetailMessage(ServerMessage):
+    type: Literal["training:session_detail"] = "training:session_detail"
+    payload: TrainingSessionDetail
+
+
+# ─────────────────────────────── Session ───────────────────────────────
+
+
+class SessionInitPayload(WireModel):
+    """Snapshot sent on WS connect: the active application session (null when none)."""
+
+    session: Session | None
+
+
+@server_message(audience=Permission.SESSION_READ)
+class SessionInitMessage(ServerMessage):
+    type: Literal["session:init"] = "session:init"
+    payload: SessionInitPayload
+
+
+@server_message(audience=Permission.SESSION_READ)
+class SessionUpdateMessage(ServerMessage):
+    """Broadcast on any session lifecycle change (start/end)."""
+
+    type: Literal["session:update"] = "session:update"
+    payload: Session
+
+
+# ─────────────────────────────── Session history ───────────────────────────────
+
+
+@server_message(audience=Permission.SESSION_READ)
+class SessionsHistoryMessage(ServerMessage):
+    """Personal reply to `sessions:history`: every application session."""
+
+    type: Literal["sessions:history"] = "sessions:history"
+    payload: list[SessionHistoryItem]
+
+
+@server_message(audience=Permission.SESSION_READ)
+class SessionsHistoryDetailMessage(ServerMessage):
+    """Personal reply to `sessions:history_detail`: one session + its logs."""
+
+    type: Literal["sessions:history_detail"] = "sessions:history_detail"
+    payload: SessionHistoryDetail
+
+
+class SessionDeletedPayload(WireModel):
+    id: str
+
+
+@server_message(audience=Permission.SESSION_READ)
+class SessionsDeletedMessage(ServerMessage):
+    """Broadcast when an application session was deleted."""
+
+    type: Literal["sessions:deleted"] = "sessions:deleted"
+    payload: SessionDeletedPayload
+
+
 __all__ = [
     "ConnectedPayload",
     "ConnectedMessage",
@@ -317,4 +411,16 @@ __all__ = [
     "TrainingSessionDeletedPayload",
     "TrainingSessionDeletedMessage",
     "TrainingEdgeMessage",
+    "TrainingOverviewPayload",
+    "TrainingOverviewMessage",
+    "TrainingSessionsMessage",
+    "TrainingSessionDetail",
+    "TrainingSessionDetailMessage",
+    "SessionInitPayload",
+    "SessionInitMessage",
+    "SessionUpdateMessage",
+    "SessionsHistoryMessage",
+    "SessionsHistoryDetailMessage",
+    "SessionDeletedPayload",
+    "SessionsDeletedMessage",
 ]

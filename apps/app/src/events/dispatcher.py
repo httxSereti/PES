@@ -14,6 +14,7 @@ from events.registry import EventRegistry
 from events.queue import ActionQueue
 from database.models.triggered_event import TriggeredEvent
 from database.repositories.triggered_event_repo import TriggeredEventRepo
+from store import Store
 
 
 if TYPE_CHECKING:
@@ -21,6 +22,8 @@ if TYPE_CHECKING:
 
 logger = structlog.get_logger("pes")
 generate_id = cuid_wrapper()
+
+store = Store()
 
 
 class EventDispatcher:
@@ -161,6 +164,7 @@ class EventDispatcher:
         triggered_rules: list[dict],
     ) -> None:
         """Persist the event to DB and broadcast it to all WS clients."""
+        active_session = store.get_active_session()
         record = TriggeredEvent(
             id=event_id,
             event_type=event_type,
@@ -168,6 +172,7 @@ class EventDispatcher:
             event_data=event_data,
             triggered_at=triggered_at,
             triggered_rules=triggered_rules,
+            session_id=active_session["id"] if active_session else None,
         )
         await self._event_repo.save(record)
 

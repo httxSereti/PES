@@ -15,12 +15,14 @@ ROLE_PERMISSIONS: Dict[Role, Set[Permission]] = {
         Permission.READ_UNITS,
         Permission.READ_SENSORS,
         Permission.TRAINING_EDGING_READ,
+        Permission.SESSION_READ,
     },
     Role.USER: {
         Permission.READ_UNITS,
         Permission.READ_SENSORS,
         Permission.READ_PROFILES,
         Permission.READ_EVENTS,
+        Permission.SESSION_READ,
     },
     Role.OPERATOR: {
         Permission.READ_UNITS,
@@ -29,6 +31,7 @@ ROLE_PERMISSIONS: Dict[Role, Set[Permission]] = {
         Permission.READ_EVENTS,
         Permission.WRITE_UNITS,
         Permission.WRITE_SENSORS,
+        Permission.SESSION_READ,
     },
     Role.TRUSTED: {
         Permission.READ_UNITS,
@@ -41,6 +44,7 @@ ROLE_PERMISSIONS: Dict[Role, Set[Permission]] = {
         Permission.MANAGE_PROFILES,
         Permission.TRAINING_EDGING_READ,
         Permission.TRAINING_EDGING_MANAGE,
+        Permission.SESSION_READ,
     },
     Role.ADMIN: {
         Permission.READ_UNITS,
@@ -55,6 +59,7 @@ ROLE_PERMISSIONS: Dict[Role, Set[Permission]] = {
         Permission.MANAGE_PROFILES,
         Permission.TRAINING_EDGING_READ,
         Permission.TRAINING_EDGING_MANAGE,
+        Permission.SESSION_READ,
         Permission.ADMIN,
     },
     Role.HOST: set(Permission),  # Toutes les permissions

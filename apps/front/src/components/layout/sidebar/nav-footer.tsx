@@ -1,9 +1,11 @@
 import { useWebSocket } from "@/hooks/useWebSocket"
+import { Card } from "@pes/ui/components/card"
 import { SidebarGroup, SidebarGroupContent, SidebarMenu, SidebarMenuButton, SidebarMenuItem } from "@pes/ui/components/sidebar"
 import { CirclePower, type LucideIcon } from "lucide-react"
 import * as React from "react"
 import { Link } from "react-router"
 import { toast } from "sonner"
+import { SessionCard } from "./session/session-card"
 
 export function NavFooter({
     items,
@@ -42,30 +44,34 @@ export function NavFooter({
     };
 
     return (
-        <SidebarGroup {...props}>
-            <SidebarGroupContent>
-                <SidebarMenu>
-                    {items.map((item) => (
-                        <SidebarMenuItem key={item.title}>
-                            <SidebarMenuButton asChild>
-                                <Link to={item.url}>
-                                    <item.icon />
-                                    <span>{item.title}</span>
-                                </Link>
+        <div className="mt-auto">
+            <SidebarGroup >
+                <SidebarGroupContent>
+                    <SidebarMenu>
+                        <SessionCard />
+
+                        {items.map((item) => (
+                            <SidebarMenuItem key={item.title}>
+                                <SidebarMenuButton asChild>
+                                    <Link to={item.url}>
+                                        <item.icon />
+                                        <span>{item.title}</span>
+                                    </Link>
+                                </SidebarMenuButton>
+                            </SidebarMenuItem>
+                        ))}
+                        {/* Emergency Stop all devices. */}
+                        <SidebarMenuItem>
+                            <SidebarMenuButton tooltip={"Stop"} className="cursor-pointer" onClick={stopApplication}>
+                                <>
+                                    <CirclePower className="h-[1.2rem] w-[1.2rem] scale-100" />
+                                    <span className="justify-center text-center">Stop</span>
+                                </>
                             </SidebarMenuButton>
                         </SidebarMenuItem>
-                    ))}
-                    {/* Emergency Stop all devices. */}
-                    <SidebarMenuItem>
-                        <SidebarMenuButton className="cursor-pointer" onClick={stopApplication}>
-                            <>
-                                <CirclePower className="h-[1.2rem] w-[1.2rem] scale-100" />
-                                <span className="justify-center text-center">Stop</span>
-                            </>
-                        </SidebarMenuButton>
-                    </SidebarMenuItem>
-                </SidebarMenu>
-            </SidebarGroupContent>
-        </SidebarGroup>
+                    </SidebarMenu>
+                </SidebarGroupContent>
+            </SidebarGroup>
+        </div>
     )
 }

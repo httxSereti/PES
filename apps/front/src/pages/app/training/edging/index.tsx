@@ -9,15 +9,17 @@ import {
   CardTitle,
 } from "@pes/ui/components/card";
 import { Skeleton } from "@pes/ui/components/skeleton";
-import { List, Plus, Star } from "lucide-react";
+import { List, Plus, Star, Trash2 } from "lucide-react";
+import { toast } from "sonner";
 
+import { useWebSocket } from "@/hooks/useWebSocket";
 import { useAppSelector } from "@/store/hooks";
 import { hasPermission } from "@/lib/permissions";
-import { fetchTrainingSessions } from "@/lib/training-api";
 import { formatDuration } from "@/lib/training";
 import { formatDateTime } from "@/lib/format-date";
 import { TrainingStatusBadge } from "@/components/common/training/training-status-badge";
 import { TrainingTimer } from "@/components/common/training/training-timer";
+import { ConfirmDeleteDialog } from "@/components/common/dialogs/confirm-delete-dialog";
 import type { EdgingSession } from "@/types";
 import { Permission } from "@/types";
 
@@ -26,22 +28,25 @@ export function meta() {
 }
 
 export default function EdgingSessionsPage() {
-  const token = useAppSelector((state) => state.auth.token);
+  const { sendCommand } = useWebSocket();
   const user = useAppSelector((state) => state.auth.user);
   const events = useAppSelector((state) => state.training.events);
+  const sessions = useAppSelector((state) => state.training.sessions);
 
-  const [sessions, setSessions] = useState<EdgingSession[] | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const load = useCallback(async () => {
-    if (!token) return;
     try {
-      setSessions(await fetchTrainingSessions(token));
-      setError(null);
+      const result = await sendCommand("training:sessions");
+      if (result.status !== "ok") {
+        setError(result.message ?? "Failed to load sessions");
+      } else {
+        setError(null);
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to load sessions");
     }
-  }, [token]);
+  }, [sendCommand]);
 
   useEffect(() => {
     void load();
@@ -55,6 +60,30 @@ export default function EdgingSessionsPage() {
   }, [latestEvent]);
 
   const canManage = hasPermission(user, Permission.TRAINING_EDGING_MANAGE);
+  const isHost = hasPermission(user, Permission.HOST);
+  const [deleteTarget, setDeleteTarget] = useState<EdgingSession | null>(null);
+
+  async function handleDelete() {
+    if (!deleteTarget) return;
+    const target = deleteTarget;
+    try {
+      const result = await sendCommand("training:delete", {
+        session_id: target.id,
+      });
+      if (result.status !== "ok") {
+        setError(result.message ?? "Failed to delete the session");
+        return;
+      }
+      toast.success("Session deleted", { position: "bottom-right" });
+      void load();
+    } catch (err) {
+      setError(
+        err instanceof Error ? err.message : "Failed to delete the session",
+      );
+    } finally {
+      setDeleteTarget(null);
+    }
+  }
 
   return (
     <div className="px-4 md:px-5 space-y-4">
@@ -101,7 +130,7 @@ export default function EdgingSessionsPage() {
                 <li key={session.id}>
                   <Link
                     to={`/app/training/edging/${session.id}`}
-                    className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3 rounded-md px-2 py-3 -mx-2 transition-colors hover:bg-accent/40 sm:grid-cols-[minmax(0,1fr)_auto_auto_auto_auto]"
+                    className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3 rounded-md px-2 py-3 -mx-2 transition-colors hover:bg-accent/40 sm:grid-cols-[minmax(0,1fr)_auto_auto_auto_auto_auto]"
                   >
                     <div className="flex min-w-0 items-center gap-2.5">
                       <TrainingStatusBadge status={session.status} />
@@ -138,6 +167,24 @@ export default function EdgingSessionsPage() {
                         "—"
                       )}
                     </span>
+                    {isHost && session.status !== "running" && (
+                      <span
+                        onClick={(event) => {
+                          event.preventDefault();
+                          event.stopPropagation();
+                          setDeleteTarget(session);
+                        }}
+                      >
+                        <Button
+                          variant="ghost"
+                          size="icon-sm"
+                          className="text-muted-foreground/70 hover:text-destructive"
+                          aria-label={`Delete session ${session.name}`}
+                        >
+                          <Trash2 size={13} />
+                        </Button>
+                      </span>
+                    )}
                   </Link>
                 </li>
               ))}
@@ -145,6 +192,15 @@ export default function EdgingSessionsPage() {
           )}
         </CardContent>
       </Card>
+
+      <ConfirmDeleteDialog
+        open={deleteTarget !== null}
+        onOpenChange={(open) => {
+          if (!open) setDeleteTarget(null);
+        }}
+        title={`Delete session '${deleteTarget?.name ?? ""}'?`}
+        onConfirm={() => void handleDelete()}
+      />
     </div>
   );
 }

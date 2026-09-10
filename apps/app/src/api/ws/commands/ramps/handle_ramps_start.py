@@ -24,9 +24,11 @@ async def handle_ramps_start(
             p.field,
             timer=p.timer,
             step=p.step,
+            step_unit=p.step_unit,
             mode=p.mode,
             duration=p.duration,
             max_value=p.max_value,
+            start_value=p.start_value,
         )
     except ValueError as err:
         logger.warning(f"[WS|ramps:start] Rejected: {err}")

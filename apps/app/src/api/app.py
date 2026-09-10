@@ -9,9 +9,8 @@ import structlog
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from api.rest import users, auth, admin
+from api.rest import admin, auth, users
 from api.rest import trigger_rules as trigger_rules_router
-from api.rest import training as training_router
 from api.rest.webhooks import chaster as chaster_webhooks
 from api.ws.endpoint import router as ws_router
 from api.ws.websocket_notifier import ws_notifier
@@ -79,6 +78,7 @@ async def lifespan(app: FastAPI):
     from database.models.user import UserModel  # noqa: F401
     from database.models.edging_session import EdgingSession  # noqa: F401
     from database.models.edging_edge import EdgingEdge  # noqa: F401
+    from database.models.app_session import AppSession  # noqa: F401
 
     async with db._engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
@@ -108,7 +108,6 @@ app.include_router(auth.router)
 app.include_router(admin.router)
 app.include_router(chaster_webhooks.router)
 app.include_router(trigger_rules_router.router)
-app.include_router(training_router.router)
 app.include_router(ws_router)
 
 app.add_middleware(
