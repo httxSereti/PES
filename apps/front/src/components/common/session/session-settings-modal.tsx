@@ -158,15 +158,15 @@ export function SessionSettingsModal() {
 
     return (
         <Dialog open={open} onOpenChange={handleOpenChange}>
-            <DialogContent className="gap-0 p-0 sm:max-w-2xl lg:max-w-3xl">
-                <DialogHeader className="border-b px-5 py-3">
+            <DialogContent className="flex max-h-[calc(100dvh-2rem)] flex-col gap-0 overflow-hidden p-0 sm:max-w-2xl lg:max-w-3xl">
+                <DialogHeader className="border-b px-5 py-3 pr-10">
                     <DialogTitle>Session settings</DialogTitle>
                     <DialogDescription>
                         Configure the session lifecycle before starting.
                     </DialogDescription>
                 </DialogHeader>
 
-                <div className="grid gap-0 md:grid-cols-[170px_1fr]">
+                <div className="flex min-h-0 flex-1 flex-col gap-0 md:grid md:grid-cols-[170px_1fr]">
                     {/* Stepper sidebar */}
                     <SessionStepper step={step} onStepClick={setStep} />
 
@@ -174,9 +174,9 @@ export function SessionSettingsModal() {
                     <form
                         id="session-settings-form"
                         onSubmit={handleFormSubmit}
-                        className="flex min-h-[300px] flex-col"
+                        className="flex min-h-0 flex-col overflow-hidden"
                     >
-                        <div className="flex flex-1 flex-col gap-4 px-5 py-4">
+                        <div className="flex flex-1 flex-col gap-4 overflow-y-auto px-5 py-4">
                             {step === 0 && <StepCore form={form} />}
 
                             {step === 1 && (
@@ -199,7 +199,7 @@ export function SessionSettingsModal() {
                         </div>
 
                         {/* Footer navigation */}
-                        <div className="flex items-center justify-between border-t px-5 py-3">
+                        <div className="flex flex-wrap items-center justify-between gap-2 border-t px-5 py-3">
                             <Button
                                 type="button"
                                 variant="outline"

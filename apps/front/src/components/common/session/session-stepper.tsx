@@ -12,6 +12,25 @@ interface SessionStepperProps {
 }
 
 export function SessionStepper({ step, onStepClick }: SessionStepperProps) {
+    const renderCircle = (i: number) => {
+        const done = i < step
+        const active = i === step
+        return (
+            <span
+                className={cn(
+                    "flex h-6 w-6 shrink-0 items-center justify-center rounded-full border text-xs font-medium",
+                    done
+                        ? "border-primary bg-primary text-primary-foreground"
+                        : active
+                            ? "border-primary text-primary"
+                            : "border-border text-muted-foreground"
+                )}
+            >
+                {done ? <Check className="size-3.5" /> : i + 1}
+            </span>
+        )
+    }
+
     return (
         <aside className="flex flex-col gap-1 border-b px-4 py-4 md:border-r md:border-b-0">
             <p className="font-mono-dm text-xs uppercase tracking-wide text-muted-foreground">
@@ -25,48 +44,65 @@ export function SessionStepper({ step, onStepClick }: SessionStepperProps) {
                     }}
                 />
             </div>
-            {STEPS.map((s, i) => {
-                const done = i < step
-                const active = i === step
-                return (
+
+            {/* Mobile: compact horizontal steps */}
+            <div className="flex items-center gap-3 md:hidden">
+                {STEPS.map((s, i) => (
                     <button
                         key={s.id}
                         type="button"
                         disabled={i > step}
                         onClick={() => onStepClick(i)}
+                        aria-current={i === step ? "step" : undefined}
+                        aria-label={`Step ${i + 1}: ${s.title}`}
                         className={cn(
-                            "flex items-center gap-3 rounded-lg border px-3 py-2 text-left transition-colors",
-                            active
-                                ? "border-primary/30 bg-primary/5"
-                                : "border-transparent",
+                            "flex items-center rounded-full transition-opacity",
                             i <= step
-                                ? "cursor-pointer hover:bg-muted"
+                                ? "cursor-pointer hover:opacity-80"
                                 : "cursor-not-allowed opacity-50"
                         )}
                     >
-                        <span
+                        {renderCircle(i)}
+                    </button>
+                ))}
+                <span className="min-w-0 truncate text-sm font-medium">
+                    {STEPS[step]!.title}
+                </span>
+            </div>
+
+            {/* Desktop: vertical steps */}
+            <div className="hidden flex-col gap-1 md:flex">
+                {STEPS.map((s, i) => {
+                    const active = i === step
+                    return (
+                        <button
+                            key={s.id}
+                            type="button"
+                            disabled={i > step}
+                            onClick={() => onStepClick(i)}
                             className={cn(
-                                "flex h-6 w-6 shrink-0 items-center justify-center rounded-full border text-xs font-medium",
-                                done
-                                    ? "border-primary bg-primary text-primary-foreground"
-                                    : active
-                                        ? "border-primary text-primary"
-                                        : "border-border text-muted-foreground"
+                                "flex items-center gap-3 rounded-lg border px-3 py-2 text-left transition-colors",
+                                active
+                                    ? "border-primary/30 bg-primary/5"
+                                    : "border-transparent",
+                                i <= step
+                                    ? "cursor-pointer hover:bg-muted"
+                                    : "cursor-not-allowed opacity-50"
                             )}
                         >
-                            {done ? <Check className="size-3.5" /> : i + 1}
-                        </span>
-                        <span className="flex flex-col">
-                            <span className="text-sm font-medium">
-                                {s.title}
+                            {renderCircle(i)}
+                            <span className="flex flex-col">
+                                <span className="text-sm font-medium">
+                                    {s.title}
+                                </span>
+                                <span className="text-xs text-muted-foreground">
+                                    {s.description}
+                                </span>
                             </span>
-                            <span className="text-xs text-muted-foreground">
-                                {s.description}
-                            </span>
-                        </span>
-                    </button>
-                )
-            })}
+                        </button>
+                    )
+                })}
+            </div>
         </aside>
     )
 }
