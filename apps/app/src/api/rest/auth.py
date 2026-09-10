@@ -1,10 +1,10 @@
-from fastapi import APIRouter, HTTPException, Depends
 from datetime import timedelta
+from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 
 from api.helpers import (
-    create_access_token,
     TokenResponse,
+    create_access_token,
     get_current_user,
 )
 from models import User
@@ -17,6 +17,10 @@ router = APIRouter(prefix="/auth", tags=["auth"])
 
 class LoginBody(BaseModel):
     magic_token: str
+
+
+class GuestBody(BaseModel):
+    display_name: str | None = None
 
 
 def _issue_token(user: User) -> dict:
@@ -41,9 +45,10 @@ async def login(body: LoginBody):
 
 
 @router.post("/guest", response_model=TokenResponse)
-async def guest_login():
-    """Issue a JWT for the ephemeral, read-only guest identity."""
-    return _issue_token(user_service.get_or_create_guest())
+async def guest_login(body: GuestBody | None = None):
+    """Issue a JWT for an ephemeral, read-only guest identity."""
+    display_name = body.display_name if body else None
+    return _issue_token(user_service.get_or_create_guest(display_name))
 
 
 @router.get("/me")

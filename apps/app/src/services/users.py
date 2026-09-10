@@ -148,16 +148,22 @@ class UserService:
         logger.info("[Users] HOST magic link rotated", user_id=user.id)
         return link
 
-    def get_or_create_guest(self) -> User:
-        """Ephemeral shared guest identity — never persisted."""
-        user = self._store.get_user(GUEST_USER_ID)
+    def get_or_create_guest(self, display_name: Optional[str] = None) -> User:
+        """Ephemeral, per-name guest identity — never persisted. Guests are
+        keyed by their chosen name so distinct guests don't overwrite each
+        other in the Store cache."""
+        name = (display_name or "").strip() or "Guest"
+        guest_id = f"{GUEST_USER_ID}:{name.lower()}"
+        user = self._store.get_user(guest_id)
         if user is None:
             user = User(
-                id=GUEST_USER_ID,
-                display_name="Guest",
+                id=guest_id,
+                display_name=name,
                 role=Role.GUEST,
             )
             self._store.add_user(user)
+        else:
+            user.display_name = name
         return user
 
     # ── Authentication ──

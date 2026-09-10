@@ -80,13 +80,16 @@ export const login = createAsyncThunk<
 );
 
 export const guestLogin = createAsyncThunk<
-    { access_token: string; token_type: string; user: User }
+    { access_token: string; token_type: string; user: User },
+    { display_name: string }
 >(
     'auth/guestLogin',
-    async (_, { rejectWithValue }) => {
+    async (credentials, { rejectWithValue }) => {
         try {
             const response = await fetch(`${API_URL}/auth/guest`, {
                 method: 'POST',
+                headers: { 'Content-Type': 'application/json', "ngrok-skip-browser-warning": "69420" },
+                body: JSON.stringify({ display_name: credentials.display_name }),
             });
 
             if (!response.ok) {
