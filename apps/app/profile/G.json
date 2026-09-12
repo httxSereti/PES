@@ -3,22 +3,11 @@
   "threads_settings": {
     "UNIT1": {
       "ch_A": 15,
-      "ch_A_ramp_phase": 0,
-      "ch_A_ramp_prct": 70,
       "ch_B": 18,
-      "ch_B_ramp_phase": 0,
-      "ch_B_ramp_prct": 70,
-      "ramp_time": 120,
-      "ramp_wave": true,
-      "ramp_progress": 0,
       "ch_A_use": "perineum",
       "ch_B_use": "cheeks",
       "adj_1": 70,
-      "adj_1_ramp_phase": 0,
-      "adj_1_ramp_prct": 100,
       "adj_2": 20,
-      "adj_2_ramp_phase": 0,
-      "adj_2_ramp_prct": 100,
       "adj_3": 0,
       "adj_4": 0,
       "ch_link": false,
@@ -29,26 +18,33 @@
       "mode": 6,
       "cnx_ok": true,
       "sync": true,
-      "updated": false
+      "updated": false,
+      "ramps": {
+        "ch_A": {
+          "timer": 2,
+          "step": 0.89,
+          "mode": "wave",
+          "duration": -1,
+          "max": 15,
+          "start": 11
+        },
+        "ch_B": {
+          "timer": 2,
+          "step": 0.93,
+          "mode": "wave",
+          "duration": -1,
+          "max": 18,
+          "start": 13
+        }
+      }
     },
     "UNIT2": {
       "ch_A": 15,
-      "ch_A_ramp_phase": 0,
-      "ch_A_ramp_prct": 70,
       "ch_B": 13,
-      "ch_B_ramp_phase": 0,
-      "ch_B_ramp_prct": 70,
-      "ramp_time": 120,
-      "ramp_wave": true,
-      "ramp_progress": 0,
       "ch_A_use": "nipples",
       "ch_B_use": "balls",
       "adj_1": 70,
-      "adj_1_ramp_phase": 0,
-      "adj_1_ramp_prct": 100,
       "adj_2": 20,
-      "adj_2_ramp_phase": 0,
-      "adj_2_ramp_prct": 100,
       "adj_3": 0,
       "adj_4": 0,
       "ch_link": false,
@@ -59,26 +55,33 @@
       "mode": 6,
       "cnx_ok": true,
       "sync": false,
-      "updated": true
+      "updated": true,
+      "ramps": {
+        "ch_A": {
+          "timer": 2,
+          "step": 0.89,
+          "mode": "wave",
+          "duration": -1,
+          "max": 15,
+          "start": 11
+        },
+        "ch_B": {
+          "timer": 2,
+          "step": 0.77,
+          "mode": "wave",
+          "duration": -1,
+          "max": 13,
+          "start": 10
+        }
+      }
     },
     "UNIT3": {
       "ch_A": 20,
-      "ch_A_ramp_phase": 0,
-      "ch_A_ramp_prct": 70,
       "ch_B": 30,
-      "ch_B_ramp_phase": 0,
-      "ch_B_ramp_prct": 70,
-      "ramp_time": 120,
-      "ramp_wave": true,
-      "ramp_progress": 0,
       "ch_A_use": "cage",
       "ch_B_use": "plug",
       "adj_1": 70,
-      "adj_1_ramp_phase": 0,
-      "adj_1_ramp_prct": 100,
       "adj_2": 20,
-      "adj_2_ramp_phase": 0,
-      "adj_2_ramp_prct": 100,
       "adj_3": 0,
       "adj_4": 0,
       "ch_link": false,
@@ -89,7 +92,25 @@
       "mode": 6,
       "cnx_ok": true,
       "sync": true,
-      "updated": false
+      "updated": false,
+      "ramps": {
+        "ch_A": {
+          "timer": 2,
+          "step": 1.0,
+          "mode": "wave",
+          "duration": -1,
+          "max": 20,
+          "start": 14
+        },
+        "ch_B": {
+          "timer": 2,
+          "step": 1.0,
+          "mode": "wave",
+          "duration": -1,
+          "max": 30,
+          "start": 21
+        }
+      }
     }
   }
 }

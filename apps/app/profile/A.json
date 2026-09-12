@@ -3,20 +3,9 @@
   "threads_settings": {
     "UNIT1": {
       "ch_A": 0,
-      "ch_A_ramp_prct": 100,
-      "ch_A_ramp_phase": 0,
       "ch_B": 0,
-      "ch_B_ramp_prct": 100,
-      "ch_B_ramp_phase": 0,
       "adj_1": 50,
-      "adj_1_ramp_prct": 100,
-      "adj_1_ramp_phase": 0,
       "adj_2": 50,
-      "adj_2_ramp_prct": 100,
-      "adj_2_ramp_phase": 0,
-      "ramp_time": 120,
-      "ramp_wave": true,
-      "ramp_progress": 0,
       "ch_A_use": "perineum",
       "ch_B_use": "cheeks",
       "adj_3": 0,
@@ -33,20 +22,9 @@
     },
     "UNIT2": {
       "ch_A": 0,
-      "ch_A_ramp_prct": 100,
-      "ch_A_ramp_phase": 0,
       "ch_B": 0,
-      "ch_B_ramp_prct": 100,
-      "ch_B_ramp_phase": 0,
       "adj_1": 50,
-      "adj_1_ramp_prct": 100,
-      "adj_1_ramp_phase": 0,
       "adj_2": 50,
-      "adj_2_ramp_prct": 100,
-      "adj_2_ramp_phase": 0,
-      "ramp_time": 120,
-      "ramp_wave": true,
-      "ramp_progress": 0,
       "ch_A_use": "nipples",
       "ch_B_use": "balls",
       "adj_3": 0,
@@ -63,20 +41,9 @@
     },
     "UNIT3": {
       "ch_A": 46,
-      "ch_A_ramp_prct": 70,
-      "ch_A_ramp_phase": 0,
       "ch_B": 0,
-      "ch_B_ramp_prct": 100,
-      "ch_B_ramp_phase": 0,
       "adj_1": 70,
-      "adj_1_ramp_prct": 50,
-      "adj_1_ramp_phase": 0,
       "adj_2": 30,
-      "adj_2_ramp_prct": 100,
-      "adj_2_ramp_phase": 0,
-      "ramp_time": 30,
-      "ramp_wave": true,
-      "ramp_progress": 0,
       "ch_A_use": "cage",
       "ch_B_use": "plug",
       "adj_3": 0,
@@ -89,7 +56,25 @@
       "mode": 1,
       "cnx_ok": true,
       "sync": false,
-      "updated": true
+      "updated": true,
+      "ramps": {
+        "ch_A": {
+          "timer": 2,
+          "step": 3.77,
+          "mode": "wave",
+          "duration": -1,
+          "max": 46,
+          "start": 33
+        },
+        "adj_1": {
+          "timer": 2,
+          "step": 6.67,
+          "mode": "wave",
+          "duration": -1,
+          "max": 70,
+          "start": 35
+        }
+      }
     }
   }
 }
