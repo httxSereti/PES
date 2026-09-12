@@ -53,16 +53,22 @@ export function StepResume({ form, unitIds, sensorIds }: StepResumeProps) {
                     <p className="font-mono-dm text-xs uppercase tracking-wide text-muted-foreground">
                         Units
                     </p>
-                    <ul className="mt-1 flex flex-wrap gap-1.5">
-                        {unitIds.map((id) => (
-                            <li
-                                key={id}
-                                className="rounded-full bg-muted px-2 py-0.5 text-xs"
-                            >
-                                {id}
-                            </li>
-                        ))}
-                    </ul>
+                    {unitIds.length > 0 ? (
+                        <ul className="mt-1 flex flex-wrap gap-1.5">
+                            {unitIds.map((id) => (
+                                <li
+                                    key={id}
+                                    className="rounded-full bg-muted px-2 py-0.5 text-xs"
+                                >
+                                    {id}
+                                </li>
+                            ))}
+                        </ul>
+                    ) : (
+                        <p className="mt-1 text-sm text-muted-foreground">
+                            None
+                        </p>
+                    )}
                 </div>
                 <div className="rounded-lg border p-3">
                     <p className="font-mono-dm text-xs uppercase tracking-wide text-muted-foreground">

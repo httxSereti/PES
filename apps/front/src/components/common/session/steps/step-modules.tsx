@@ -1,21 +1,10 @@
 "use client"
 
-import type { UseFormReturn } from "react-hook-form"
-
-import {
-    Field,
-    FieldContent,
-    FieldError,
-    FieldLabel,
-} from "@pes/ui/components/field"
+import { Field, FieldContent, FieldLabel } from "@pes/ui/components/field"
 import { cn } from "@pes/ui/lib/utils"
 
 import { SENSORS, UNITS } from "../session.constants"
-import type {
-    SessionFormValues,
-    SessionSensorId,
-    SessionUnitId,
-} from "../session-form"
+import type { SessionSensorId, SessionUnitId } from "../session-form"
 
 function UnitServerIcon({ className }: { className?: string }) {
     return (
@@ -52,7 +41,6 @@ function SelectDot({ selected }: { selected: boolean }) {
 }
 
 interface StepModulesProps {
-    form: UseFormReturn<SessionFormValues>
     unitIds: SessionUnitId[]
     sensorIds: SessionSensorId[]
     toggleUnit: (unitId: SessionUnitId) => void
@@ -60,7 +48,6 @@ interface StepModulesProps {
 }
 
 export function StepModules({
-    form,
     unitIds,
     sensorIds,
     toggleUnit,
@@ -68,7 +55,7 @@ export function StepModules({
 }: StepModulesProps) {
     return (
         <>
-            <Field data-invalid={!!form.formState.errors.unitIds}>
+            <Field>
                 <FieldLabel>Active units</FieldLabel>
                 <FieldContent>
                     <div className="grid gap-2.5 sm:grid-cols-3">
@@ -104,11 +91,6 @@ export function StepModules({
                             )
                         })}
                     </div>
-                    {form.formState.errors.unitIds && (
-                        <FieldError
-                            errors={[form.formState.errors.unitIds]}
-                        />
-                    )}
                 </FieldContent>
             </Field>
 

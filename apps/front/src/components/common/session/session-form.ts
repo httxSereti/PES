@@ -9,9 +9,7 @@ export const sessionFormSchema = z.object({
     type: z.enum(["testing", "solo_play", "multiplayer"]),
     name: z.string().min(1, "Name is required").max(64, "Name is too long"),
     description: z.string().max(512, "Description is too long"),
-    unitIds: z
-        .array(z.enum(["UNIT1", "UNIT2", "UNIT3"]))
-        .min(1, "Select at least one unit"),
+    unitIds: z.array(z.enum(["UNIT1", "UNIT2", "UNIT3"])),
     sensorIds: z.array(z.enum(["sound", "motion1", "motion2"])),
 })
 

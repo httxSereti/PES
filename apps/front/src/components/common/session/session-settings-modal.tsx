@@ -181,7 +181,6 @@ export function SessionSettingsModal() {
 
                             {step === 1 && (
                                 <StepModules
-                                    form={form}
                                     unitIds={unitIds}
                                     sensorIds={sensorIds}
                                     toggleUnit={toggleUnit}
