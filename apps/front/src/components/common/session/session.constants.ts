@@ -12,7 +12,7 @@ import type { SessionSensorId, SessionUnitId } from "./session-form"
 export const STEPS = [
     { id: "core", title: "Core", description: "Type & identity" },
     { id: "modules", title: "Modules", description: "Units & sensors" },
-    { id: "resume", title: "Resume", description: "Review & start" },
+    { id: "resume", title: "Resume", description: "Start session" },
 ] as const
 
 export const SESSION_TYPE_META: {
@@ -21,25 +21,25 @@ export const SESSION_TYPE_META: {
     description: string
     icon: LucideIcon
 }[] = [
-    {
-        value: "testing",
-        label: "Testing",
-        description: "Development and testings",
-        icon: FlaskConical,
-    },
-    {
-        value: "solo_play",
-        label: "Solo Play",
-        description: "Solo play",
-        icon: PersonStanding,
-    },
-    {
-        value: "multiplayer",
-        label: "Multiplayer",
-        description: "Someone controlling the app",
-        icon: Users,
-    },
-]
+        {
+            value: "testing",
+            label: "Testing",
+            description: "Development and testings",
+            icon: FlaskConical,
+        },
+        {
+            value: "solo_play",
+            label: "Solo Play",
+            description: "Solo play",
+            icon: PersonStanding,
+        },
+        {
+            value: "multiplayer",
+            label: "Multiplayer",
+            description: "Someone controlling the app",
+            icon: Users,
+        },
+    ]
 
 export const UNITS: { id: SessionUnitId; label: string }[] = [
     { id: "UNIT1", label: "Unit 1" },
@@ -52,18 +52,18 @@ export const SENSORS: {
     label: string
     events: string[]
 }[] = [
-    { id: "sound", label: "Sound Sensor", events: ["sensor_sound_alarm"] },
-    {
-        id: "motion1",
-        label: "Motion Sensor 1",
-        events: ["sensor_position_alarm", "sensor_move_alarm"],
-    },
-    {
-        id: "motion2",
-        label: "Motion Sensor 2",
-        events: ["sensor_position_alarm", "sensor_move_alarm"],
-    },
-]
+        { id: "sound", label: "Sound Sensor", events: ["sensor_sound_alarm"] },
+        {
+            id: "motion1",
+            label: "Motion Sensor 1",
+            events: ["sensor_position_alarm", "sensor_move_alarm"],
+        },
+        {
+            id: "motion2",
+            label: "Motion Sensor 2",
+            events: ["sensor_position_alarm", "sensor_move_alarm"],
+        },
+    ]
 
 export const SESSION_TYPE_LABELS: Record<Session["type"], string> = {
     testing: "Testing",

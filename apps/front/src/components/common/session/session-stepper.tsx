@@ -22,7 +22,7 @@ export function SessionStepper({ step, onStepClick }: SessionStepperProps) {
                     done
                         ? "border-primary bg-primary text-primary-foreground"
                         : active
-                            ? "border-primary text-primary"
+                            ? "border-purple-500 text-primary"
                             : "border-border text-muted-foreground"
                 )}
             >
@@ -32,13 +32,13 @@ export function SessionStepper({ step, onStepClick }: SessionStepperProps) {
     }
 
     return (
-        <aside className="flex flex-col gap-1 border-b px-4 py-4 md:border-r md:border-b-0">
+        <aside className="flex flex-col gap-1 border-b px-2 py-4 md:border-r md:border-b-0">
             <p className="font-mono-dm text-xs uppercase tracking-wide text-muted-foreground">
-                Setup progress
+                Setup ({step + 1} of {STEPS.length})
             </p>
             <div className="mb-3 mt-2 h-1 w-full overflow-hidden rounded-full bg-muted">
                 <div
-                    className="h-full rounded-full bg-primary transition-all duration-300"
+                    className="h-full rounded-full bg-purple-500 transition-all duration-300"
                     style={{
                         width: `${((step + 1) / STEPS.length) * 100}%`,
                     }}
@@ -46,28 +46,34 @@ export function SessionStepper({ step, onStepClick }: SessionStepperProps) {
             </div>
 
             {/* Mobile: compact horizontal steps */}
-            <div className="flex items-center gap-3 md:hidden">
-                {STEPS.map((s, i) => (
-                    <button
-                        key={s.id}
-                        type="button"
-                        disabled={i > step}
-                        onClick={() => onStepClick(i)}
-                        aria-current={i === step ? "step" : undefined}
-                        aria-label={`Step ${i + 1}: ${s.title}`}
-                        className={cn(
-                            "flex items-center rounded-full transition-opacity",
-                            i <= step
-                                ? "cursor-pointer hover:opacity-80"
-                                : "cursor-not-allowed opacity-50"
-                        )}
-                    >
-                        {renderCircle(i)}
-                    </button>
-                ))}
-                <span className="min-w-0 truncate text-sm font-medium">
-                    {STEPS[step]!.title}
-                </span>
+            <div className="flex justify-between items-center gap-3 md:hidden">
+                <div>
+                    <span className="min-w-0 truncate text-sm font-medium">
+                        {STEPS[step]!.title}
+                    </span>
+                </div>
+                <div className="flex gap-2">
+                    {STEPS.map((s, i) => (
+                        <button
+                            key={s.id}
+                            type="button"
+                            disabled={i > step}
+                            onClick={() => onStepClick(i)}
+                            aria-current={i === step ? "step" : undefined}
+                            aria-label={`Step ${i + 1}: ${s.title}`}
+                            className={cn(
+                                "flex items-center rounded-full transition-opacity",
+                                i <= step
+                                    ? "cursor-pointer hover:opacity-80"
+                                    : "cursor-not-allowed opacity-50"
+                            )}
+                        >
+                            {renderCircle(i)}
+                        </button>
+                    ))}
+
+                </div>
+
             </div>
 
             {/* Desktop: vertical steps */}

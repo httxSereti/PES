@@ -158,11 +158,11 @@ export function SessionSettingsModal() {
 
     return (
         <Dialog open={open} onOpenChange={handleOpenChange}>
-            <DialogContent className="flex max-h-[calc(100dvh-2rem)] flex-col gap-0 overflow-hidden p-0 sm:max-w-2xl lg:max-w-3xl">
-                <DialogHeader className="border-b px-5 py-3 pr-10">
+            <DialogContent showCloseButton={true} className="flex max-h-[calc(100dvh-2rem)] flex-col gap-0 overflow-hidden p-0 sm:max-w-2xl lg:max-w-4xl">
+                <DialogHeader className="border-b px-5 py-4 pr-10">
                     <DialogTitle>Session settings</DialogTitle>
                     <DialogDescription>
-                        Configure the session lifecycle before starting.
+                        Configure the session before starting.
                     </DialogDescription>
                 </DialogHeader>
 

@@ -27,7 +27,6 @@ export function StepCore({ form }: StepCoreProps) {
                 control={form.control}
                 render={({ field }) => (
                     <Field>
-                        <FieldLabel>Session type</FieldLabel>
                         <FieldContent>
                             <div className="grid gap-2.5 sm:grid-cols-3">
                                 {SESSION_TYPE_META.map((meta) => {
@@ -40,9 +39,9 @@ export function StepCore({ form }: StepCoreProps) {
                                                 field.onChange(meta.value)
                                             }
                                             className={cn(
-                                                "flex flex-col items-start gap-1.5 rounded-lg border p-3 text-left transition-colors",
+                                                "flex flex-col items-center gap-1.5 rounded-lg border p-3 text-left transition-colors",
                                                 selected
-                                                    ? "border-primary bg-primary/5 ring-1 ring-primary"
+                                                    ? "border-purple-500 bg-purple-500/5 ring-1 ring-purple-500/10"
                                                     : "border-border hover:border-primary/50"
                                             )}
                                         >
@@ -57,9 +56,9 @@ export function StepCore({ form }: StepCoreProps) {
                                             <span className="text-sm font-medium">
                                                 {meta.label}
                                             </span>
-                                            <span className="text-xs text-muted-foreground">
+                                            {/* <span className="text-xs text-muted-foreground">
                                                 {meta.description}
-                                            </span>
+                                            </span> */}
                                         </button>
                                     )
                                 })}
