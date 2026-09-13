@@ -1,7 +1,11 @@
 import { useWebSocket } from "@/hooks/useWebSocket"
+import { hasPermission } from "@/lib/permissions"
+import { useAppDispatch, useAppSelector } from "@/store/hooks"
+import { openProfileSave } from "@/store/slices/profilesSlice"
+import { Permission } from "@/types"
 import { Card } from "@pes/ui/components/card"
 import { SidebarGroup, SidebarGroupContent, SidebarMenu, SidebarMenuButton, SidebarMenuItem } from "@pes/ui/components/sidebar"
-import { CirclePower, type LucideIcon } from "lucide-react"
+import { BookmarkPlus, CirclePower, type LucideIcon } from "lucide-react"
 import * as React from "react"
 import { Link } from "react-router"
 import { toast } from "sonner"
@@ -18,6 +22,9 @@ export function NavFooter({
     }[]
 } & React.ComponentPropsWithoutRef<typeof SidebarGroup>) {
     const { sendCommand } = useWebSocket()
+    const dispatch = useAppDispatch()
+    const user = useAppSelector((state) => state.auth.user)
+    const canWriteProfiles = hasPermission(user, Permission.WRITE_PROFILES)
 
     const stopApplication = async () => {
         try {
@@ -60,6 +67,21 @@ export function NavFooter({
                                 </SidebarMenuButton>
                             </SidebarMenuItem>
                         ))}
+                        {/* Snapshot the current unit settings into a profile. */}
+                        {canWriteProfiles && (
+                            <SidebarMenuItem>
+                                <SidebarMenuButton
+                                    tooltip={"Save profile"}
+                                    className="cursor-pointer"
+                                    onClick={() => dispatch(openProfileSave())}
+                                >
+                                    <>
+                                        <BookmarkPlus className="h-[1.2rem] w-[1.2rem] scale-100" />
+                                        <span className="justify-center text-center">Save profile</span>
+                                    </>
+                                </SidebarMenuButton>
+                            </SidebarMenuItem>
+                        )}
                         {/* Emergency Stop all devices. */}
                         <SidebarMenuItem>
                             <SidebarMenuButton tooltip={"Stop"} className="cursor-pointer" onClick={stopApplication}>

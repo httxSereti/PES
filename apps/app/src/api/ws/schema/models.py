@@ -190,7 +190,19 @@ class Ramp(WireModel):
     elapsed: float
     paused: bool
     progress: float
+    start_value: int
     value: int
+
+
+class ProfileSummary(WireModel):
+    """Catalog entry for a saved profile file (see services/profiles.py)."""
+
+    name: str
+    description: str | None = None
+    builtin: bool = False
+    unit_count: int = 0
+    ramp_count: int = 0
+    modified_at: str | None = None
 
 
 class CommandResult(WireModel):
@@ -339,6 +351,7 @@ __all__ = [
     "TriggeredEvent",
     "QueueStatus",
     "Ramp",
+    "ProfileSummary",
     "CommandResult",
     "StatusMessage",
     "EdgingGoal",

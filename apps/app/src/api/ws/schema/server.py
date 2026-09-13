@@ -19,6 +19,7 @@ from .models import (
     EdgingEdge,
     EdgingSession,
     EdgingSessionStats,
+    ProfileSummary,
     QueueStatus,
     Ramp,
     Sensor,
@@ -190,6 +191,30 @@ class EventsTriggeredMessage(ServerMessage):
 class QueueUpdateMessage(ServerMessage):
     type: Literal["queue:update"] = "queue:update"
     payload: QueueStatus
+
+
+# ─────────────────────────────── Profiles ───────────────────────────────
+
+
+@server_message(audience=Permission.READ_PROFILES)
+class ProfilesLoadMessage(ServerMessage):
+    """Connect snapshot / personal reply to `profiles:list`."""
+
+    type: Literal["profiles:load"] = "profiles:load"
+    payload: list[ProfileSummary]
+
+
+class ProfileSavedPayload(WireModel):
+    profile: ProfileSummary
+    created: bool
+
+
+@server_message(audience=Permission.READ_PROFILES)
+class ProfilesSavedMessage(ServerMessage):
+    """Broadcast when a profile was created or overwritten."""
+
+    type: Literal["profiles:saved"] = "profiles:saved"
+    payload: ProfileSavedPayload
 
 
 # ─────────────────────────────── Trigger rules ───────────────────────────────
@@ -396,6 +421,9 @@ __all__ = [
     "EventsHistoryMessage",
     "EventsTriggeredMessage",
     "QueueUpdateMessage",
+    "ProfilesLoadMessage",
+    "ProfileSavedPayload",
+    "ProfilesSavedMessage",
     "TriggerRulesLoadMessage",
     "TriggerRulesLoadLabelsMessage",
     "TriggerRuleBroadcastPayload",

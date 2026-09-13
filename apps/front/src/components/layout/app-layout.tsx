@@ -11,6 +11,7 @@ import { AppHeader } from "@/components/layout/headers/common/app-header";
 import { AppSidebar } from "@/components/layout/sidebar/app-sidebar";
 import { MobileTabBar } from "@/components/layout/mobile-tab-bar";
 import { SessionSettingsModal } from "@/components/common/session/session-settings-modal";
+import { SaveProfileDialog } from "@/components/common/profiles/save-profile-dialog";
 import type { RouteHandle } from "@/types/route-handle";
 import { SensorHeader } from "@/components/layout/headers/sensors/header";
 import { AdminUsersHeader } from "@/components/layout/headers/admin/users/header";
@@ -91,6 +92,7 @@ export default function AppLayout() {
         >
             <AppSidebar />
             <SessionSettingsModal />
+            <SaveProfileDialog />
             <SidebarInset>
                 {renderHeader()}
                 <div className="flex flex-1 flex-col">

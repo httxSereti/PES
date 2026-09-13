@@ -1,8 +1,6 @@
 from __future__ import annotations
 
-import json
 import os
-import pathlib
 import random
 import re
 import structlog
@@ -13,15 +11,12 @@ import aiohttp
 from .enums import ActionType
 from .models import QueueItem
 from hardware.ramp import RampMode, ramp_manager
+from services.profiles import ProfileError, load_profile
 from store import Store
 from constants import BT_UNITS
 
 if TYPE_CHECKING:
     from api.ws.websocket_notifier import WebSocketNotifier
-
-# Directories from env
-_DIR_PROFILE = pathlib.Path(os.getenv("DIR_PROFILE", "profiles"))
-_DIR_TMP = pathlib.Path(os.getenv("DIR_TMP", "tmp"))
 
 # Chaster API
 _CHASTER_URL = os.getenv("CHASTER_URL", "")
@@ -178,19 +173,14 @@ class ActionExecutor:
         if profile_name == "X":
             profile_name = random.choice("ABCDEFGHIJ")
 
-        filename = profile_name + ".json"
-        profile_path = _DIR_PROFILE / filename
-
-        if not profile_path.is_file():
-            logger.error(f"[Executor] Profile file {profile_path} not found")
+        try:
+            profile_data = load_profile(profile_name)
+        except ProfileError as err:
+            logger.error(f"[Executor] {err}")
             return {"type": "profile", "units": {}}
 
         # Snapshot current state
         snapshot = {"type": "profile", "units": self._store.get_all_units_settings()}
-
-        # Load and apply profile
-        with open(profile_path, "r") as f:
-            profile_data = json.load(f)
 
         bck_settings = profile_data.get("threads_settings", {})
 

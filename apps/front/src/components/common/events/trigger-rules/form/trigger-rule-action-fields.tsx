@@ -10,6 +10,8 @@ import { Switch } from "@pes/ui/components/switch";
 import { Separator } from "@pes/ui/components/separator";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@pes/ui/components/select";
 
+import { useAppSelector } from "@/store/hooks";
+import { profilesSelectors } from "@/store/slices/profilesSlice";
 import { ActionType } from "@/types/events.types";
 import { type FormValues } from "./schema";
 
@@ -26,6 +28,8 @@ export default function TriggerRuleActionFields({
     onTypeChange: (type: ActionType) => void;
     onRemove: () => void;
 }) {
+    const profiles = useAppSelector(profilesSelectors.selectAll);
+
     return (
         <Card className="bg-muted/20">
             <CardHeader className="flex flex-row items-center justify-between py-3">
@@ -72,13 +76,40 @@ export default function TriggerRuleActionFields({
                             <Controller
                                 name={`actions.${index}.profile`}
                                 control={control}
-                                render={({ field, fieldState }) => (
-                                    <Field data-invalid={fieldState.invalid}>
-                                        <FieldLabel>Profile</FieldLabel>
-                                        <Input {...field} aria-invalid={fieldState.invalid} placeholder="A-J or X (random)" autoComplete="off" />
-                                        {fieldState.invalid && <FieldError errors={[fieldState.error]} />}
-                                    </Field>
-                                )}
+                                render={({ field, fieldState }) => {
+                                    // Keep a manually authored letter selectable even
+                                    // when it is not part of the current catalog.
+                                    const missingOption =
+                                        field.value &&
+                                        field.value !== "X" &&
+                                        !profiles.some((profile) => profile.name === field.value);
+
+                                    return (
+                                        <Field data-invalid={fieldState.invalid}>
+                                            <FieldLabel>Profile</FieldLabel>
+                                            <Select value={field.value} onValueChange={field.onChange}>
+                                                <SelectTrigger aria-invalid={fieldState.invalid}>
+                                                    <SelectValue placeholder="Select a profile" />
+                                                </SelectTrigger>
+                                                <SelectContent position="item-aligned">
+                                                    <SelectItem value="X">X — random</SelectItem>
+                                                    {missingOption && (
+                                                        <SelectItem value={field.value}>
+                                                            {field.value}
+                                                        </SelectItem>
+                                                    )}
+                                                    {profiles.map((profile) => (
+                                                        <SelectItem key={profile.name} value={profile.name}>
+                                                            {profile.name}
+                                                            {profile.description ? ` — ${profile.description}` : ""}
+                                                        </SelectItem>
+                                                    ))}
+                                                </SelectContent>
+                                            </Select>
+                                            {fieldState.invalid && <FieldError errors={[fieldState.error]} />}
+                                        </Field>
+                                    );
+                                }}
                             />
                             <Controller
                                 name={`actions.${index}.level_pct`}

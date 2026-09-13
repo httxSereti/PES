@@ -240,6 +240,31 @@ class SessionsDeleteCommand(ClientMessage):
     payload: SessionDeletePayload
 
 
+# ─────────────────────────────── Profiles ───────────────────────────────
+
+
+class ProfilesListCommand(ClientMessage):
+    """Request the saved-profile catalog (personal reply `profiles:load`)."""
+
+    type: Literal["profiles:list"] = "profiles:list"
+    payload: dict[str, Any] | None = None
+
+
+class ProfileSavePayload(WireModel):
+    name: str = Field(min_length=1, max_length=32, pattern=r"^[A-Za-z0-9_-]+$")
+    description: str | None = Field(default=None, max_length=200)
+    include_ramps: bool = True
+    # required to replace an existing profile (e.g. a built-in letter)
+    overwrite: bool = False
+
+
+class ProfilesSaveCommand(ClientMessage):
+    """Snapshot the current unit state as a new profile file."""
+
+    type: Literal["profiles:save"] = "profiles:save"
+    payload: ProfileSavePayload
+
+
 # ─────────────────────────────── Training ───────────────────────────────
 
 
@@ -414,6 +439,9 @@ __all__ = [
     "SessionsHistoryDetailCommand",
     "SessionDeletePayload",
     "SessionsDeleteCommand",
+    "ProfilesListCommand",
+    "ProfileSavePayload",
+    "ProfilesSaveCommand",
     "TrainingIndexCommand",
     "TrainingSessionsCommand",
     "TrainingSessionDetailPayload",

@@ -2,7 +2,7 @@
 // by apps/app/scripts/generate_ws_types.py — DO NOT EDIT.
 // Regenerate with: pnpm codegen:ws
 
-export const WS_SCHEMA_VERSION = 4;
+export const WS_SCHEMA_VERSION = 5;
 
 export enum ActionType {
     PROFILE = "PROFILE",
@@ -85,6 +85,13 @@ export interface SessionHistoryDetailPayload {
 
 export interface SessionDeletePayload {
     session_id: string;
+}
+
+export interface ProfileSavePayload {
+    name: string;
+    description?: string | null;
+    include_ramps: boolean;
+    overwrite: boolean;
 }
 
 export interface TrainingSessionDetailPayload {
@@ -284,6 +291,7 @@ export interface Ramp {
     elapsed: number;
     paused: boolean;
     progress: number;
+    start_value: number;
     value: number;
 }
 
@@ -330,6 +338,20 @@ export interface QueueStatus {
     total_in_queue: number;
     total_done: number;
     total_cancelled: number;
+}
+
+export interface ProfileSummary {
+    name: string;
+    description?: string | null;
+    builtin: boolean;
+    unit_count: number;
+    ramp_count: number;
+    modified_at?: string | null;
+}
+
+export interface ProfileSavedPayload {
+    profile: ProfileSummary;
+    created: boolean;
 }
 
 export interface TriggerRuleBroadcastPayload {
@@ -597,6 +619,18 @@ export interface SessionsDeleteCommand {
     payload: SessionDeletePayload;
 }
 
+export interface ProfilesListCommand {
+    id?: string | null;
+    type: 'profiles:list';
+    payload?: Record<string, unknown> | null;
+}
+
+export interface ProfilesSaveCommand {
+    id?: string | null;
+    type: 'profiles:save';
+    payload: ProfileSavePayload;
+}
+
 export interface TrainingIndexCommand {
     id?: string | null;
     type: 'training:index';
@@ -780,6 +814,18 @@ export interface QueueUpdateMessage {
     payload: QueueStatus;
 }
 
+export interface ProfilesLoadMessage {
+    id?: string | null;
+    type: 'profiles:load';
+    payload: ProfileSummary[];
+}
+
+export interface ProfilesSavedMessage {
+    id?: string | null;
+    type: 'profiles:saved';
+    payload: ProfileSavedPayload;
+}
+
 export interface TriggerRulesLoadMessage {
     id?: string | null;
     type: 'trigger_rules:load';
@@ -911,6 +957,8 @@ export type WebSocketClientMessage =
     | SessionsHistoryCommand
     | SessionsHistoryDetailCommand
     | SessionsDeleteCommand
+    | ProfilesListCommand
+    | ProfilesSaveCommand
     | TrainingIndexCommand
     | TrainingSessionsCommand
     | TrainingSessionDetailCommand
@@ -944,6 +992,8 @@ export type WebSocketServerMessage =
     | EventsHistoryMessage
     | EventsTriggeredMessage
     | QueueUpdateMessage
+    | ProfilesLoadMessage
+    | ProfilesSavedMessage
     | TriggerRulesLoadMessage
     | TriggerRulesLoadLabelsMessage
     | TriggerRulesUpdateMessage

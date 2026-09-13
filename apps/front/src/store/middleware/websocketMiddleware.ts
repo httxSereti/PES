@@ -14,6 +14,7 @@ import { triggerRuleLabelsInitialized, triggerRuleLabelAdded } from '@/store/sli
 import { trainingInit, trainingSessionUpdated, trainingEdgeAdded, trainingSessionDeleted, trainingOverviewLoaded, trainingSessionsLoaded, trainingSessionDetailLoaded } from '@/store/slices/trainingSlice';
 import { sessionInit, sessionUpdated } from '@/store/slices/sessionSlice';
 import { sessionHistoryLoaded, sessionHistoryDetailLoaded, sessionHistoryDeleted } from '@/store/slices/sessionHistorySlice';
+import { profilesLoaded, profileSaved } from '@/store/slices/profilesSlice';
 
 export function createWebSocketMiddleware(config: WebSocketConfig): Middleware {
     const {
@@ -284,6 +285,17 @@ export function createWebSocketMiddleware(config: WebSocketConfig): Middleware {
 
                     case 'session:update':
                         dispatch(sessionUpdated(message.payload));
+                        break;
+
+                    /**
+                     * @Profiles (saved EStim settings)
+                     */
+                    case 'profiles:load':
+                        dispatch(profilesLoaded(message.payload));
+                        break;
+
+                    case 'profiles:saved':
+                        dispatch(profileSaved(message.payload));
                         break;
 
                     /**

@@ -100,6 +100,12 @@ async def _send_init_sequence(websocket: WebSocket, user) -> None:
             {"type": "session:init", "payload": await get_live_snapshot()}
         )
 
+    # Saved profiles catalog (profile readers)
+    if allowed("profiles:load"):
+        from api.ws.loaders import profiles_loader
+
+        await profiles_loader(user.id, store.websocket)
+
     # Load trigger rules + labels (admins only)
     if allowed("trigger_rules:load"):
         await ws_notifier.load_datas(user.id, store.websocket)

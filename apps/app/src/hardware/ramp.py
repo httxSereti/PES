@@ -144,6 +144,9 @@ class Ramp:
             "elapsed": round(self.elapsed, 1),
             "paused": self.paused,
             "progress": round(self.progress, 2),
+            "start_value": max(
+                0, min(100, round(self.max_value * self.start_progress / 100))
+            ),
             "value": self.output_value(),
         }
 
