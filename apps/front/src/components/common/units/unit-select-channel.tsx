@@ -2,11 +2,12 @@ import { type FC } from "react"
 import { Button } from "@pes/ui/components/button"
 import { useAppSelector } from "@/store/hooks"
 import { unitsSelectors } from "@/store/slices/unitsSlice"
+import type { UnitChannel } from "@/store/slices/unitsUiSlice"
 
 type UnitSelectChannelProps = {
     unitId: string;
-    currentChannel: string;
-    setCurrentChannel: React.Dispatch<React.SetStateAction<"channelA" | "channelB">>;
+    currentChannel: UnitChannel;
+    setCurrentChannel: (channel: UnitChannel) => void;
 };
 
 export const UnitSelectChannel: FC<UnitSelectChannelProps> = ({ unitId, currentChannel, setCurrentChannel }) => {

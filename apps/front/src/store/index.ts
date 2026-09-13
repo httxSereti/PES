@@ -3,6 +3,7 @@ import authReducer from '@/store/slices/authSlice';
 import websocketReducer from '@/store/slices/websocketSlice';
 import sensorsReducer from '@/store/slices/sensorsSlice';
 import unitsReducer from '@/store/slices/unitsSlice';
+import unitsUiReducer, { saveUnitsUiState } from '@/store/slices/unitsUiSlice';
 import rampsReducer from '@/store/slices/rampsSlice';
 import hardwareReducer from '@/store/slices/hardwareSlice';
 import unitsHistorySlice from '@/store/slices/unitsHistorySlice';
@@ -36,6 +37,7 @@ export const store = configureStore({
         websocket: websocketReducer,
         sensors: sensorsReducer,
         units: unitsReducer,
+        unitsUi: unitsUiReducer,
         ramps: rampsReducer,
         hardware: hardwareReducer,
         unitsHistory: unitsHistorySlice,
@@ -56,3 +58,14 @@ export const store = configureStore({
 
 export type RootState = ReturnType<typeof store.getState>;
 export type AppDispatch = typeof store.dispatch;
+
+// Persist the units UI selection/channels whenever that slice changes.
+let lastUnitsUi = store.getState().unitsUi;
+store.subscribe(() => {
+    const nextUnitsUi = store.getState().unitsUi;
+    if (nextUnitsUi === lastUnitsUi)
+        return;
+
+    lastUnitsUi = nextUnitsUi;
+    saveUnitsUiState(nextUnitsUi);
+});

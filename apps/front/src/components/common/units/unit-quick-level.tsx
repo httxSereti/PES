@@ -1,7 +1,8 @@
 import { type FC } from "react"
 import { Button } from "@pes/ui/components/button"
-import { useAppSelector } from "@/store/hooks"
+import { useAppDispatch, useAppSelector } from "@/store/hooks"
 import { unitsSelectors } from "@/store/slices/unitsSlice"
+import { undoPushed } from "@/store/slices/unitsUiSlice"
 import { useWebSocket } from "@/hooks/useWebSocket"
 
 type UnitQuickLevelProps = {
@@ -10,6 +11,7 @@ type UnitQuickLevelProps = {
 };
 
 export const UnitQuickLevel: FC<UnitQuickLevelProps> = ({ unitId, selectedChannel }) => {
+    const dispatch = useAppDispatch();
     const { sendCommand } = useWebSocket();
     const unit = useAppSelector(state => unitsSelectors.selectById(state, unitId));
 
@@ -19,6 +21,11 @@ export const UnitQuickLevel: FC<UnitQuickLevelProps> = ({ unitId, selectedChanne
             return
 
         try {
+            dispatch(undoPushed({
+                unitId,
+                channel: selectedChannel,
+                previous: selectedChannel === "channelA" ? unit.ch_A : unit.ch_B,
+            }));
 
             await sendCommand('units:update_level', {
                 [unitId]: {

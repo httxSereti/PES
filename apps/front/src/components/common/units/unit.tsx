@@ -1,4 +1,4 @@
-import { useState, type FC } from "react"
+import { type FC } from "react"
 import { Button } from "@pes/ui/components/button"
 import {
     Card,
@@ -6,8 +6,11 @@ import {
     CardHeader,
     CardTitle,
 } from "@pes/ui/components/card"
-import { useAppSelector } from "@/store/hooks"
+import { Kbd } from "@pes/ui/components/kbd"
+import { cn } from "@pes/ui/lib/utils"
+import { useAppDispatch, useAppSelector } from "@/store/hooks"
 import { unitsSelectors } from "@/store/slices/unitsSlice"
+import { channelSet, selectUnitChannel, unitSelected, type UnitChannel } from "@/store/slices/unitsUiSlice"
 import { UnitDropdown } from "@/components/common/units/unit-dropdown"
 import { Computer } from "lucide-react"
 import { UnitGraph } from "@/components/common/units/unit-graph"
@@ -23,9 +26,18 @@ type UnitProps = {
 };
 
 export const Unit: FC<UnitProps> = ({ unitId }) => {
-    const [currentChannel, setCurrentChannel] = useState<"channelA" | "channelB">("channelA");
+    const dispatch = useAppDispatch();
     const unit = useAppSelector(state => unitsSelectors.selectById(state, unitId));
     const enabled = useAppSelector(state => state.hardware[unitId] ?? true);
+    const currentChannel = useAppSelector(state => selectUnitChannel(state, unitId));
+    const selected = useAppSelector(state => state.unitsUi.selectedUnitIds.includes(unitId));
+    const highlighted = useAppSelector(state => state.unitsUi.highlightedUnitId === unitId);
+
+    const shortcutNumber = unitId.replace(/\D/g, "");
+
+    const setCurrentChannel = (channel: UnitChannel) => {
+        dispatch(channelSet({ unitIds: [unitId], channel }));
+    };
 
     const dotColor =
         enabled !== true
@@ -35,15 +47,30 @@ export const Unit: FC<UnitProps> = ({ unitId }) => {
                 : "bg-red-500";
 
     return (
-        <Card className="">
+        <Card
+            onClick={(event) => dispatch(unitSelected({ unitId, additive: event.altKey }))}
+            className={cn(
+                "cursor-pointer transition-all",
+                highlighted && "border-primary/60 shadow-md",
+                selected && "ring-2 ring-violet-500/70",
+            )}
+        >
             <CardHeader className="flex flex-row justify-between items-center">
                 <CardTitle className="flex gap-2">
                     <div className="p-2 rounded-lg accent-tile" >
                         <Computer size={18} className="accent-tile-icon" />
                     </div>
                     <div className="flex flex-col justify-center">
-                        <div className="flex text-sm">
+                        <div className="flex items-center gap-2 text-sm">
                             {unit?.id}
+                            <Kbd
+                                className={cn(
+                                    "font-mono",
+                                    selected && "bg-violet-500! text-white!",
+                                )}
+                            >
+                                {shortcutNumber}
+                            </Kbd>
                         </div>
                     </div>
                 </CardTitle>
