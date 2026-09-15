@@ -265,6 +265,79 @@ class ProfilesSaveCommand(ClientMessage):
     payload: ProfileSavePayload
 
 
+class ProfileApplyPayload(WireModel):
+    name: str = Field(min_length=1, max_length=32)
+    level_pct: int = Field(default=100, ge=0, le=150)
+    duration: int = Field(default=-1, ge=-1)  # seconds, -1 = permanent
+
+
+class ProfilesApplyCommand(ClientMessage):
+    """Queue a profile apply (reversible, duration-aware)."""
+
+    type: Literal["profiles:apply"] = "profiles:apply"
+    payload: ProfileApplyPayload
+
+
+class ProfileUpdatePayload(WireModel):
+    name: str = Field(min_length=1, max_length=32)
+    # None = keep the current description; "" clears it
+    description: str | None = Field(default=None, max_length=200)
+    rename_to: str | None = Field(
+        default=None, min_length=1, max_length=32, pattern=r"^[A-Za-z0-9_-]+$"
+    )
+    # replace the stored unit settings with the current live state
+    from_current: bool = False
+    include_ramps: bool = True
+
+
+class ProfilesUpdateCommand(ClientMessage):
+    """Edit a profile: description, content snapshot and/or name."""
+
+    type: Literal["profiles:update"] = "profiles:update"
+    payload: ProfileUpdatePayload
+
+
+class ProfileDuplicatePayload(WireModel):
+    name: str = Field(min_length=1, max_length=32)
+    new_name: str = Field(min_length=1, max_length=32, pattern=r"^[A-Za-z0-9_-]+$")
+
+
+class ProfilesDuplicateCommand(ClientMessage):
+    """Copy an existing profile under a new name."""
+
+    type: Literal["profiles:duplicate"] = "profiles:duplicate"
+    payload: ProfileDuplicatePayload
+
+
+class ProfileDeletePayload(WireModel):
+    name: str = Field(min_length=1, max_length=32)
+
+
+class ProfilesDeleteCommand(ClientMessage):
+    """Delete a profile file (manage permission)."""
+
+    type: Literal["profiles:delete"] = "profiles:delete"
+    payload: ProfileDeletePayload
+
+
+class ProfileExportPayload(WireModel):
+    name: str = Field(min_length=1, max_length=32)
+
+
+class ProfilesExportCommand(ClientMessage):
+    """Request the raw profile document (personal reply `profiles:exported`)."""
+
+    type: Literal["profiles:export"] = "profiles:export"
+    payload: ProfileExportPayload
+
+
+class ProfilesStopCommand(ClientMessage):
+    """Stop the currently applied profile (reverses it)."""
+
+    type: Literal["profiles:stop"] = "profiles:stop"
+    payload: dict[str, Any] | None = None
+
+
 # ─────────────────────────────── Training ───────────────────────────────
 
 
@@ -442,6 +515,17 @@ __all__ = [
     "ProfilesListCommand",
     "ProfileSavePayload",
     "ProfilesSaveCommand",
+    "ProfileApplyPayload",
+    "ProfilesApplyCommand",
+    "ProfileUpdatePayload",
+    "ProfilesUpdateCommand",
+    "ProfileDuplicatePayload",
+    "ProfilesDuplicateCommand",
+    "ProfileDeletePayload",
+    "ProfilesDeleteCommand",
+    "ProfileExportPayload",
+    "ProfilesExportCommand",
+    "ProfilesStopCommand",
     "TrainingIndexCommand",
     "TrainingSessionsCommand",
     "TrainingSessionDetailPayload",

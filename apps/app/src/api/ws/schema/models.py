@@ -192,6 +192,7 @@ class Ramp(WireModel):
     progress: float
     start_value: int
     value: int
+    owner: str | None = None
 
 
 class ProfileSummary(WireModel):
@@ -203,6 +204,16 @@ class ProfileSummary(WireModel):
     unit_count: int = 0
     ramp_count: int = 0
     modified_at: str | None = None
+
+
+class ActiveProfile(WireModel):
+    """The profile currently applied by the action executor (None when idle)."""
+
+    name: str
+    level_pct: int
+    queue_item_id: str
+    started_at: str
+    ends_at: str | None = None
 
 
 class CommandResult(WireModel):
@@ -352,6 +363,7 @@ __all__ = [
     "QueueStatus",
     "Ramp",
     "ProfileSummary",
+    "ActiveProfile",
     "CommandResult",
     "StatusMessage",
     "EdgingGoal",

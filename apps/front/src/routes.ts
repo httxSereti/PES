@@ -10,6 +10,7 @@ export default [
     route("app", "components/layout/app-layout.tsx", [
         index("pages/home.tsx"),
         route("units", "pages/app/units.tsx"),
+        route("profiles", "pages/app/profiles.tsx"),
         route("sensors", "pages/app/sensors.tsx"),
 
         route("events", "components/layout/events-layout.tsx", [

@@ -117,7 +117,7 @@ export default function TriggerRuleActionFields({
                                 render={({ field, fieldState }) => (
                                     <Field data-invalid={fieldState.invalid}>
                                         <FieldLabel>Level %</FieldLabel>
-                                        <Input {...field} type="number" aria-invalid={fieldState.invalid} placeholder="100" />
+                                        <Input {...field} type="number" min={0} max={150} aria-invalid={fieldState.invalid} placeholder="100" />
                                         {fieldState.invalid && <FieldError errors={[fieldState.error]} />}
                                     </Field>
                                 )}

@@ -125,23 +125,8 @@ def list_profiles() -> list[dict]:
     return profiles
 
 
-def save_profile(
-    name: str,
-    *,
-    description: str | None,
-    include_ramps: bool,
-    created_by: str,
-    overwrite: bool = False,
-) -> dict:
-    """
-    Snapshot the current unit settings (and active ramps) as a profile file.
-
-    Returns the saved profile's catalog summary.
-    """
-    path = profile_path(name)
-    if path.exists() and not overwrite:
-        raise ProfileError(f"Profile '{name}' already exists")
-
+def capture_threads_settings(include_ramps: bool) -> dict:
+    """Current unit settings (and optionally active ramps) as profile content."""
     store = Store()
     unit_settings = store.get_all_units_settings()
     ramps = ramp_manager.get_all()
@@ -175,6 +160,27 @@ def save_profile(
 
         threads_settings[unit_name] = unit_profile
 
+    return threads_settings
+
+
+def save_profile(
+    name: str,
+    *,
+    description: str | None,
+    include_ramps: bool,
+    created_by: str,
+    overwrite: bool = False,
+) -> dict:
+    """
+    Snapshot the current unit settings (and active ramps) as a profile file.
+
+    Returns the saved profile's catalog summary.
+    """
+    path = profile_path(name)
+    if path.exists() and not overwrite:
+        raise ProfileError(f"Profile '{name}' already exists")
+
+    threads_settings = capture_threads_settings(include_ramps)
     if not threads_settings:
         raise ProfileError("No unit settings to save yet")
 
@@ -188,6 +194,70 @@ def save_profile(
     _write_document(path, document)
     logger.info(f"[Profiles] Saved profile '{name}'", created_by=created_by)
     return summarize(name, document)
+
+
+def update_profile(
+    name: str,
+    *,
+    description: str | None = None,
+    rename_to: str | None = None,
+    from_current: bool = False,
+    include_ramps: bool = True,
+    updated_by: str,
+) -> dict:
+    """
+    Update a profile in place: description, content snapshot and/or name.
+
+    Returns the updated profile's catalog summary.
+    """
+    document = load_profile(name)
+
+    if description is not None:
+        document["comment"] = description
+
+    if from_current:
+        threads_settings = capture_threads_settings(include_ramps)
+        if not threads_settings:
+            raise ProfileError("No unit settings to save yet")
+        document["threads_settings"] = threads_settings
+
+    target_name = rename_to or name
+    target_path = profile_path(target_name)
+    if target_name != name and target_path.exists():
+        raise ProfileError(f"Profile '{target_name}' already exists")
+
+    document["updated_by"] = updated_by
+    document["updated_at"] = to_utc_iso(datetime.now(UTC))
+
+    _write_document(target_path, document)
+    if target_name != name:
+        profile_path(name).unlink(missing_ok=True)
+
+    logger.info(f"[Profiles] Updated profile '{name}'", updated_by=updated_by)
+    return summarize(target_name, document)
+
+
+def duplicate_profile(name: str, new_name: str, created_by: str) -> dict:
+    """Copy a profile under a new name. Returns the copy's summary."""
+    document = load_profile(name)
+    target_path = profile_path(new_name)
+    if target_path.exists():
+        raise ProfileError(f"Profile '{new_name}' already exists")
+
+    document["created_by"] = created_by
+    document["created_at"] = to_utc_iso(datetime.now(UTC))
+
+    _write_document(target_path, document)
+    logger.info(f"[Profiles] Duplicated '{name}' to '{new_name}'", created_by=created_by)
+    return summarize(new_name, document)
+
+
+def delete_profile(name: str) -> None:
+    path = profile_path(name)
+    if not path.is_file():
+        raise ProfileError(f"Profile '{name}' not found")
+    path.unlink()
+    logger.info(f"[Profiles] Deleted profile '{name}'")
 
 
 def _write_document(path: pathlib.Path, document: dict) -> None:

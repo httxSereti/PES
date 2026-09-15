@@ -5,7 +5,12 @@ import {
     type EntityState,
     type PayloadAction,
 } from '@reduxjs/toolkit';
-import type { ProfileSavedPayload, ProfileSummary } from '@/types';
+import type {
+    ActiveProfile,
+    ProfileDeletedPayload,
+    ProfileSavedPayload,
+    ProfileSummary,
+} from '@/types';
 import type { RootState } from '@/store';
 
 const profilesAdapter = createEntityAdapter<ProfileSummary, string>({
@@ -23,12 +28,15 @@ export interface ProfilesState extends EntityState<ProfileSummary, string> {
     initialized: boolean;
     /** Whether the save-profile dialog is currently open. */
     saveDialogOpen: boolean;
+    /** The profile currently applied by the executor, null when idle. */
+    activeProfile: ActiveProfile | null;
 }
 
 const initialState: ProfilesState = {
     ...profilesAdapter.getInitialState(),
     initialized: false,
     saveDialogOpen: false,
+    activeProfile: null,
 };
 
 const profilesSlice = createSlice({
@@ -40,9 +48,20 @@ const profilesSlice = createSlice({
             profilesAdapter.setAll(state, action.payload);
             state.initialized = true;
         },
-        /** A profile was created or overwritten (broadcast). */
+        /** A profile was created, overwritten or edited (broadcast). */
         profileSaved: (state, action: PayloadAction<ProfileSavedPayload>) => {
             profilesAdapter.upsertOne(state, action.payload.profile);
+        },
+        /** A profile was deleted or renamed away (broadcast). */
+        profileDeleted: (state, action: PayloadAction<ProfileDeletedPayload>) => {
+            profilesAdapter.removeOne(state, action.payload.name);
+        },
+        /** The executor started/stopped a profile (`profiles:active`). */
+        activeProfileUpdated: (
+            state,
+            action: PayloadAction<ActiveProfile | null>
+        ) => {
+            state.activeProfile = action.payload;
         },
         /** Sidebar button / external trigger. */
         openProfileSave: (state) => {
@@ -57,9 +76,14 @@ const profilesSlice = createSlice({
 export const profilesSelectors: EntitySelectors<ProfileSummary, RootState, string> =
     profilesAdapter.getSelectors((state: RootState) => state.profiles);
 
+export const selectActiveProfile = (state: RootState) =>
+    state.profiles.activeProfile;
+
 export const {
     profilesLoaded,
     profileSaved,
+    profileDeleted,
+    activeProfileUpdated,
     openProfileSave,
     closeProfileSave,
 } = profilesSlice.actions;

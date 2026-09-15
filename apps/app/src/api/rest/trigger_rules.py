@@ -150,7 +150,7 @@ async def list_action_types(current_user: dict = Depends(get_current_user)):
     schemas = {
         ActionType.PROFILE: {
             "profile": "string (A-J or X for random)",
-            "level_pct": "integer (percentage, default 100)",
+            "level_pct": "integer (percentage 0-150, default 100)",
         },
         ActionType.LEVEL: {
             "units": "string (e.g. '123', '12RM', '23RO')",

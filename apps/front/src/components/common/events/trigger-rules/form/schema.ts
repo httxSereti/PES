@@ -12,7 +12,7 @@ export const actionSchema = z.discriminatedUnion("action_type", [
     baseAction.extend({
         action_type: z.literal(ActionType.PROFILE),
         profile: z.string().min(1, "Profile is required"),
-        level_pct: z.coerce.number().int().min(0).max(200),
+        level_pct: z.coerce.number().int().min(0).max(150, "Max 150"),
     }),
     baseAction.extend({
         action_type: z.literal(ActionType.LEVEL),

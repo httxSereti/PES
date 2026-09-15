@@ -61,6 +61,11 @@ with open("configurations/init_settings.json") as json_file:
     DEFAULT_USAGE_SETTING = json.load(json_file)
 
 
+def resolve_usage_limit(usage: str) -> dict:
+    """Level limits ({start, warn, max}) for a channel usage name."""
+    return USAGE_LIMIT.get(usage, USAGE_LIMIT["default"])
+
+
 class UnitConnect:
     """
     Manage the connexion to the 2B unit with the serial over BT

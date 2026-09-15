@@ -88,6 +88,7 @@ class Ramp:
     last_step_at: float = 0.0  # monotonic time of the last step
     last_seen: float = 0.0  # monotonic time of the last tick
     last_output: int = -1  # last value written to the store
+    owner: Optional[str] = None  # e.g. "profile:<queue item id>", None = user
 
     def increment(self) -> float:
         """Progress increment of one step, in percent of max_value."""
@@ -148,6 +149,7 @@ class Ramp:
                 0, min(100, round(self.max_value * self.start_progress / 100))
             ),
             "value": self.output_value(),
+            "owner": self.owner,
         }
 
 
@@ -170,6 +172,7 @@ class RampManager:
         duration: float = DURATION_PERMANENT,
         max_value: Optional[Union[int, str]] = None,
         start_value: Optional[Union[int, str]] = None,
+        owner: Optional[str] = None,
     ) -> Ramp:
         """
         Start a ramp on (unit, field), replacing any existing one.
@@ -196,6 +199,9 @@ class RampManager:
                 point of RESET/WAVE cycles), defaults to the field's current
                 level; int or "[low-high]" range string resolved once at
                 start
+            owner: optional owner tag (e.g. "profile:<queue item id>") so
+                owners can stop only their own ramps (see stop_owned); None
+                for user-started ramps
 
         Returns:
             The new Ramp.
@@ -260,6 +266,7 @@ class RampManager:
             reset_pending=reset_pending,
             last_step_at=now,
             last_seen=now,
+            owner=owner,
         )
         with self._lock:
             self._ramps[(unit, field)] = ramp
@@ -330,6 +337,19 @@ class RampManager:
         """Stop every ramp of a unit."""
         with self._lock:
             fields = [field for ramp_unit, field in self._ramps if ramp_unit is unit]
+        for field in fields:
+            self.stop(unit, field, restore=restore)
+
+    def stop_owned(
+        self, unit: UnitDict, owner: str, restore: bool = False
+    ) -> None:
+        """Stop only the ramps of a unit started by `owner`."""
+        with self._lock:
+            fields = [
+                field
+                for (ramp_unit, field), ramp in self._ramps.items()
+                if ramp_unit is unit and ramp.owner == owner
+            ]
         for field in fields:
             self.stop(unit, field, restore=restore)
 

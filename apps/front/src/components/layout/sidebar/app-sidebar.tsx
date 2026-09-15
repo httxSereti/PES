@@ -2,6 +2,7 @@ import * as React from "react"
 import {
   Archive,
   BellIcon,
+  Bookmark,
   Crown,
   Dumbbell,
   Frame,
@@ -44,6 +45,11 @@ const data = {
       title: "Units",
       url: "/app/units",
       icon: HardDrive,
+    },
+    {
+      title: "Profiles",
+      url: "/app/profiles",
+      icon: Bookmark,
     },
     {
       title: "Sensors",

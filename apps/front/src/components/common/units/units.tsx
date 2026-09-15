@@ -10,6 +10,7 @@ import {
     selectionReconciled,
 } from "@/store/slices/unitsUiSlice";
 import { useUnitHotkeys } from "@/hooks/useUnitHotkeys";
+import { ActiveProfileBanner } from "@/components/common/profiles/active-profile-banner";
 import { Wifi } from "lucide-react";
 
 export const Units: FC = () => {
@@ -88,6 +89,10 @@ export const Units: FC = () => {
                     <kbd className="rounded bg-muted px-1 font-sans">?</kbd>{" "}
                     for shortcuts
                 </span>
+            </div>
+
+            <div className="px-5">
+                <ActiveProfileBanner />
             </div>
 
             <div className="w-full px-5 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5 mb-5">

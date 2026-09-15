@@ -14,7 +14,7 @@ import { triggerRuleLabelsInitialized, triggerRuleLabelAdded } from '@/store/sli
 import { trainingInit, trainingSessionUpdated, trainingEdgeAdded, trainingSessionDeleted, trainingOverviewLoaded, trainingSessionsLoaded, trainingSessionDetailLoaded } from '@/store/slices/trainingSlice';
 import { sessionInit, sessionUpdated } from '@/store/slices/sessionSlice';
 import { sessionHistoryLoaded, sessionHistoryDetailLoaded, sessionHistoryDeleted } from '@/store/slices/sessionHistorySlice';
-import { profilesLoaded, profileSaved } from '@/store/slices/profilesSlice';
+import { profilesLoaded, profileSaved, profileDeleted, activeProfileUpdated } from '@/store/slices/profilesSlice';
 
 export function createWebSocketMiddleware(config: WebSocketConfig): Middleware {
     const {
@@ -296,6 +296,14 @@ export function createWebSocketMiddleware(config: WebSocketConfig): Middleware {
 
                     case 'profiles:saved':
                         dispatch(profileSaved(message.payload));
+                        break;
+
+                    case 'profiles:deleted':
+                        dispatch(profileDeleted(message.payload));
+                        break;
+
+                    case 'profiles:active':
+                        dispatch(activeProfileUpdated(message.payload ?? null));
                         break;
 
                     /**

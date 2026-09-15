@@ -2,7 +2,7 @@
 // by apps/app/scripts/generate_ws_types.py — DO NOT EDIT.
 // Regenerate with: pnpm codegen:ws
 
-export const WS_SCHEMA_VERSION = 5;
+export const WS_SCHEMA_VERSION = 8;
 
 export enum ActionType {
     PROFILE = "PROFILE",
@@ -92,6 +92,33 @@ export interface ProfileSavePayload {
     description?: string | null;
     include_ramps: boolean;
     overwrite: boolean;
+}
+
+export interface ProfileApplyPayload {
+    name: string;
+    level_pct: number;
+    duration: number;
+}
+
+export interface ProfileUpdatePayload {
+    name: string;
+    description?: string | null;
+    rename_to?: string | null;
+    from_current: boolean;
+    include_ramps: boolean;
+}
+
+export interface ProfileDuplicatePayload {
+    name: string;
+    new_name: string;
+}
+
+export interface ProfileDeletePayload {
+    name: string;
+}
+
+export interface ProfileExportPayload {
+    name: string;
 }
 
 export interface TrainingSessionDetailPayload {
@@ -293,6 +320,7 @@ export interface Ramp {
     progress: number;
     start_value: number;
     value: number;
+    owner?: string | null;
 }
 
 export interface RampRemovePayload {
@@ -352,6 +380,23 @@ export interface ProfileSummary {
 export interface ProfileSavedPayload {
     profile: ProfileSummary;
     created: boolean;
+}
+
+export interface ProfileDeletedPayload {
+    name: string;
+}
+
+export interface ProfileExportedPayload {
+    name: string;
+    document: Record<string, unknown>;
+}
+
+export interface ActiveProfile {
+    name: string;
+    level_pct: number;
+    queue_item_id: string;
+    started_at: string;
+    ends_at?: string | null;
 }
 
 export interface TriggerRuleBroadcastPayload {
@@ -631,6 +676,42 @@ export interface ProfilesSaveCommand {
     payload: ProfileSavePayload;
 }
 
+export interface ProfilesApplyCommand {
+    id?: string | null;
+    type: 'profiles:apply';
+    payload: ProfileApplyPayload;
+}
+
+export interface ProfilesUpdateCommand {
+    id?: string | null;
+    type: 'profiles:update';
+    payload: ProfileUpdatePayload;
+}
+
+export interface ProfilesDuplicateCommand {
+    id?: string | null;
+    type: 'profiles:duplicate';
+    payload: ProfileDuplicatePayload;
+}
+
+export interface ProfilesDeleteCommand {
+    id?: string | null;
+    type: 'profiles:delete';
+    payload: ProfileDeletePayload;
+}
+
+export interface ProfilesExportCommand {
+    id?: string | null;
+    type: 'profiles:export';
+    payload: ProfileExportPayload;
+}
+
+export interface ProfilesStopCommand {
+    id?: string | null;
+    type: 'profiles:stop';
+    payload?: Record<string, unknown> | null;
+}
+
 export interface TrainingIndexCommand {
     id?: string | null;
     type: 'training:index';
@@ -826,6 +907,24 @@ export interface ProfilesSavedMessage {
     payload: ProfileSavedPayload;
 }
 
+export interface ProfilesDeletedMessage {
+    id?: string | null;
+    type: 'profiles:deleted';
+    payload: ProfileDeletedPayload;
+}
+
+export interface ProfilesExportedMessage {
+    id?: string | null;
+    type: 'profiles:exported';
+    payload: ProfileExportedPayload;
+}
+
+export interface ProfilesActiveMessage {
+    id?: string | null;
+    type: 'profiles:active';
+    payload: ActiveProfile | null;
+}
+
 export interface TriggerRulesLoadMessage {
     id?: string | null;
     type: 'trigger_rules:load';
@@ -959,6 +1058,12 @@ export type WebSocketClientMessage =
     | SessionsDeleteCommand
     | ProfilesListCommand
     | ProfilesSaveCommand
+    | ProfilesApplyCommand
+    | ProfilesUpdateCommand
+    | ProfilesDuplicateCommand
+    | ProfilesDeleteCommand
+    | ProfilesExportCommand
+    | ProfilesStopCommand
     | TrainingIndexCommand
     | TrainingSessionsCommand
     | TrainingSessionDetailCommand
@@ -994,6 +1099,9 @@ export type WebSocketServerMessage =
     | QueueUpdateMessage
     | ProfilesLoadMessage
     | ProfilesSavedMessage
+    | ProfilesDeletedMessage
+    | ProfilesExportedMessage
+    | ProfilesActiveMessage
     | TriggerRulesLoadMessage
     | TriggerRulesLoadLabelsMessage
     | TriggerRulesUpdateMessage

@@ -62,6 +62,10 @@ class Store:
                 self._active_session: Optional[Dict] = None
                 self._hardware_snapshot: Optional[Dict[str, bool]] = None
 
+                # Currently applied EStim profile (set by the action executor)
+                self._active_profile: Optional[Dict] = None
+                self._profile_lock = threading.RLock()
+
                 self._initialized = True
 
     """
@@ -346,6 +350,34 @@ class Store:
         if snapshot is not None:
             for name, enabled in snapshot.items():
                 self.set_hardware_enabled(name, enabled)
+
+    """
+        Profile Functions (currently applied EStim profile)
+    """
+
+    def get_active_profile(self) -> Optional[Dict]:
+        with self._profile_lock:
+            return self._active_profile.copy() if self._active_profile else None
+
+    def set_active_profile(self, profile: Optional[Dict]):
+        with self._profile_lock:
+            self._active_profile = profile.copy() if profile else None
+
+    def clear_active_profile(self, queue_item_id: Optional[str] = None) -> bool:
+        """
+        Clear the active profile, or only when it belongs to `queue_item_id`.
+        Returns True when the profile was cleared.
+        """
+        with self._profile_lock:
+            if self._active_profile is None:
+                return False
+            if (
+                queue_item_id is not None
+                and self._active_profile.get("queue_item_id") != queue_item_id
+            ):
+                return False
+            self._active_profile = None
+            return True
 
     """
         User Functions

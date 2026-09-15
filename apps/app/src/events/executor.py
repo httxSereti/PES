@@ -3,17 +3,21 @@ from __future__ import annotations
 import os
 import random
 import re
-import structlog
+from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING
 
 import aiohttp
+import structlog
+
+from constants import BT_UNITS
+from hardware.ramp import RampMode, ramp_manager
+from hardware.units import resolve_usage_limit
+from services.profiles import ProfileError, load_profile
+from store import Store
+from utils import to_utc_iso
 
 from .enums import ActionType
 from .models import QueueItem
-from hardware.ramp import RampMode, ramp_manager
-from services.profiles import ProfileError, load_profile
-from store import Store
-from constants import BT_UNITS
 
 if TYPE_CHECKING:
     from api.ws.websocket_notifier import WebSocketNotifier
@@ -26,6 +30,11 @@ _CHASTER_HEADERS = {
     "Authorization": f"Bearer {_CHASTER_TOKEN}",
     "Content-Type": "application/json",
 }
+
+# Upper bound for the profile level multiplier. Enforced here (not just in
+# the WS contract) so every path is capped: trigger rules, manual applies
+# and Chaster WOF codes (which can encode levels above 200%).
+_MAX_PROFILE_LEVEL_PCT = 150
 
 # Fields used for profile backup/restore
 _PROFILE_FIELDS = [
@@ -71,7 +80,7 @@ class ActionExecutor:
         if action_type == ActionType.LEVEL:
             return await self._apply_level(payload)
         elif action_type == ActionType.PROFILE:
-            return await self._apply_profile(payload)
+            return await self._apply_profile(item)
         elif action_type == ActionType.MULT:
             self._apply_mult(payload)
             return None
@@ -99,7 +108,7 @@ class ActionExecutor:
         if item.action_type == ActionType.LEVEL:
             self._reverse_level(item.snapshot_data)
         elif item.action_type == ActionType.PROFILE:
-            self._reverse_profile(item.snapshot_data)
+            self._reverse_profile(item)
 
     # ───────── LEVEL ─────────
 
@@ -161,13 +170,23 @@ class ActionExecutor:
 
     # ───────── PROFILE ─────────
 
-    async def _apply_profile(self, payload: dict) -> dict:
-        """Apply a profile and return snapshot of all unit settings."""
-        # TODO: refactor here profile
+    async def _apply_profile(self, item: QueueItem) -> dict:
+        """
+        Apply a profile and return a per-field snapshot for reversal.
+
+        The snapshot tracks, for every field it touches, the value before
+        the profile and the value the profile applied, so restoration can
+        skip fields that changed since (user edits, other actions).
+        """
         from typings import UnitDict
 
+        payload = item.payload
         profile_name = payload.get("profile", "")
-        level_pct = payload.get("level_pct", 100)
+        try:
+            level_pct = int(payload.get("level_pct", 100))
+        except (TypeError, ValueError):
+            level_pct = 100
+        level_pct = min(_MAX_PROFILE_LEVEL_PCT, max(0, level_pct))
 
         # Random profile
         if profile_name == "X":
@@ -177,33 +196,76 @@ class ActionExecutor:
             profile_data = load_profile(profile_name)
         except ProfileError as err:
             logger.error(f"[Executor] {err}")
-            return {"type": "profile", "units": {}}
+            return {
+                "type": "profile",
+                "profile": profile_name,
+                "queue_item_id": item.id,
+                "units": {},
+            }
 
-        # Snapshot current state
-        snapshot = {"type": "profile", "units": self._store.get_all_units_settings()}
+        owner = f"profile:{item.id}"
+        snapshot = {
+            "type": "profile",
+            "profile": profile_name,
+            "level_pct": level_pct,
+            "queue_item_id": item.id,
+            "units": {},
+        }
 
         bck_settings = profile_data.get("threads_settings", {})
 
         for unit_name, unit_profile in bck_settings.items():
             unit = UnitDict(unit_name)
+            current = self._store.get_unit_dict(unit)
+            unit_snapshot: dict = {"usages": {}, "fields": {}}
 
-            # Profile owns the ramps of its units: kill any orphan ramp so it
-            # can't fight the profile values (ramps start at the field's
-            # current value).
-            ramp_manager.stop_unit(unit, restore=False)
+            # Take back only the ramps this profile started; user ramps and
+            # other profiles keep ownership of their fields.
+            ramp_manager.stop_owned(unit, owner, restore=False)
 
-            changes = {"sync": False, "updated": True}
+            # Usages first: re-resolve the channel limits so the levels
+            # below clamp against the new usage, not the old one.
+            usage_changes: dict = {}
+            for ch in ("A", "B"):
+                use_field = f"ch_{ch}_use"
+                usage = unit_profile.get(use_field)
+                if usage is None or usage == current.get(use_field):
+                    continue
+                unit_snapshot["usages"][ch] = {
+                    "before_use": current.get(use_field),
+                    "applied_use": usage,
+                    "before_limit": current.get(f"ch_{ch}_limit"),
+                    "applied_limit": resolve_usage_limit(usage),
+                }
+                usage_changes[use_field] = usage
+                usage_changes[f"ch_{ch}_limit"] = resolve_usage_limit(usage)
+            if usage_changes:
+                self._store.update_unit_dict(unit, usage_changes)
+
+            changes: dict = {"sync": False, "updated": True}
 
             for field, value in unit_profile.items():
                 if field not in _PROFILE_FIELDS:
                     continue
                 if field in ("ch_A", "ch_B"):
                     new_val = round(int(value) * int(level_pct) / 100)
-                    changes[field] = min(100, max(0, new_val))
+                    new_val = min(100, max(0, new_val))
                 else:
-                    changes[field] = value
+                    new_val = value
+                unit_snapshot["fields"][field] = {
+                    "before": current.get(field),
+                    "applied": new_val,
+                    "ramped": False,
+                }
+                changes[field] = new_val
 
             self._store.update_unit_dict(unit, changes)
+
+            # Record what actually landed in the store: channel values are
+            # clamped to the usage limit, so the requested value may differ.
+            applied_state = self._store.get_unit_dict(unit)
+            for field, info in unit_snapshot["fields"].items():
+                info["applied"] = applied_state.get(field)
 
             # Optional per-unit ramps block, e.g.
             #   "ramps": {"ch_A": {"timer": 1.2, "step": 2, "step_unit": "absolute",
@@ -213,6 +275,7 @@ class ActionExecutor:
             # and may be a "[25-35]" range string; ramps start at the
             # field's current value unless `start` is set. Invalid entries
             # are logged and skipped (profiles are hand-edited JSON).
+            # Ramps are owned by this profile item (see stop_owned).
             for field, ramp_cfg in unit_profile.get("ramps", {}).items():
                 try:
                     ramp_manager.start(
@@ -225,41 +288,116 @@ class ActionExecutor:
                         duration=ramp_cfg.get("duration", -1),
                         max_value=ramp_cfg.get("max"),
                         start_value=ramp_cfg.get("start"),
+                        owner=owner,
                     )
                 except (KeyError, TypeError, ValueError) as err:
                     logger.warning(
                         f"[Executor] Skipped invalid ramp '{unit_name}.{field}': {err}"
                     )
+                    continue
 
-        logger.info(
-            f"[Executor] Profile '{profile_name}' applied at {level_pct}%",
-            changes=changes,
-            snapshot=snapshot,
-        )
+                # Ramped fields are restored unconditionally on reverse
+                # (the ramp owns them, so the "unchanged since apply" check
+                # does not apply).
+                field_snapshot = unit_snapshot["fields"].setdefault(
+                    field,
+                    {
+                        "before": current.get(field),
+                        "applied": current.get(field),
+                    },
+                )
+                field_snapshot["ramped"] = True
+
+            snapshot["units"][unit_name] = unit_snapshot
+
+        now = datetime.now(UTC)
+        active_profile = {
+            "name": profile_name,
+            "level_pct": int(level_pct),
+            "queue_item_id": item.id,
+            "started_at": to_utc_iso(now),
+            "ends_at": to_utc_iso(now + timedelta(seconds=item.duration))
+            if item.duration != -1
+            else None,
+        }
+        self._store.set_active_profile(active_profile)
+        self._notify_active_profile(active_profile)
+
+        logger.info(f"[Executor] Profile '{profile_name}' applied at {level_pct}%")
         return snapshot
 
-    def _reverse_profile(self, snapshot: dict) -> None:
-        """Reverse profile by restoring all unit settings from snapshot."""
+    def _reverse_profile(self, item: QueueItem) -> None:
+        """
+        Reverse a profile: restore only the fields it still owns.
+
+        A field is restored when it is driven by one of the profile's ramps
+        (stopped here) or when it still holds the value the profile applied.
+        Fields modified since (manual edits, other actions) are left alone.
+        """
         from typings import UnitDict
 
+        snapshot = item.snapshot_data or {}
+        owner = f"profile:{item.id}"
         units_data = snapshot.get("units", {})
+
         for unit_name, unit_data in units_data.items():
             unit = UnitDict(unit_name)
 
-            # stop ramps first (they own the fields while active and would
-            # overwrite the restored values on their next tick)
-            ramp_manager.stop_unit(unit, restore=False)
+            # Stop only this profile's ramps; they would overwrite the
+            # restored values on their next tick.
+            ramp_manager.stop_owned(unit, owner, restore=False)
 
-            changes = {
-                field: value
-                for field, value in unit_data.items()
-                if field in _PROFILE_FIELDS
-            }
-            if changes:
-                changes.update({"sync": False, "updated": True})
+            # Restore usages/limits first: the level restore below must
+            # clamp against the restored limits, not the profile's.
+            usage_restore: dict = {}
+            for ch, info in unit_data.get("usages", {}).items():
+                if info.get("before_use") is None:
+                    continue
+                current_use = self._store.get_unit_setting(unit, f"ch_{ch}_use")
+                if current_use != info.get("applied_use"):
+                    continue
+                usage_restore[f"ch_{ch}_use"] = info["before_use"]
+                if info.get("before_limit") is not None:
+                    usage_restore[f"ch_{ch}_limit"] = info["before_limit"]
+            if usage_restore:
+                self._store.update_unit_dict(unit, usage_restore)
+
+            changes: dict = {"sync": False, "updated": True}
+            for field, info in unit_data.get("fields", {}).items():
+                before = info.get("before")
+                if before is None:
+                    continue
+                if info.get("ramped") or self._same_value(
+                    self._store.get_unit_setting(unit, field), info.get("applied")
+                ):
+                    changes[field] = before
+
+            if len(changes) > 2:
                 self._store.update_unit_dict(unit, changes)
 
+        # Only clear the active profile when it is still this item's
+        if self._store.clear_active_profile(queue_item_id=item.id):
+            self._notify_active_profile(None)
+
         logger.info("[Executor] Profile reversed to previous state")
+
+    @staticmethod
+    def _same_value(current, applied) -> bool:
+        """Exact comparison tolerant of int/float representations."""
+        if isinstance(current, bool) or isinstance(applied, bool):
+            return bool(current) == bool(applied)
+        try:
+            return float(current) == float(applied)
+        except (TypeError, ValueError):
+            return current == applied
+
+    def _notify_active_profile(self, profile: dict | None) -> None:
+        if self._ws_notifier is None:
+            return
+        try:
+            self._ws_notifier.notify("profiles:active", profile)
+        except RuntimeError as err:
+            logger.warning(f"[Executor] Failed to broadcast active profile: {err}")
 
     # ───────── MULT ─────────
 

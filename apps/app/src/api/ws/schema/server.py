@@ -9,12 +9,13 @@ the audience-filtered broadcast, and the generated TypeScript contract.
 
 from __future__ import annotations
 
-from typing import Literal
+from typing import Any, Literal
 
 from typings import Permission
 
 from .base import ServerMessage, WireModel, server_message
 from .models import (
+    ActiveProfile,
     CommandResult,
     EdgingEdge,
     EdgingSession,
@@ -211,10 +212,43 @@ class ProfileSavedPayload(WireModel):
 
 @server_message(audience=Permission.READ_PROFILES)
 class ProfilesSavedMessage(ServerMessage):
-    """Broadcast when a profile was created or overwritten."""
+    """Broadcast when a profile was created, overwritten or edited."""
 
     type: Literal["profiles:saved"] = "profiles:saved"
     payload: ProfileSavedPayload
+
+
+class ProfileDeletedPayload(WireModel):
+    name: str
+
+
+@server_message(audience=Permission.READ_PROFILES)
+class ProfilesDeletedMessage(ServerMessage):
+    """Broadcast when a profile was deleted (or renamed away)."""
+
+    type: Literal["profiles:deleted"] = "profiles:deleted"
+    payload: ProfileDeletedPayload
+
+
+class ProfileExportedPayload(WireModel):
+    name: str
+    document: dict[str, Any]
+
+
+@server_message(audience=Permission.READ_PROFILES)
+class ProfilesExportedMessage(ServerMessage):
+    """Personal reply to `profiles:export`: the raw profile document."""
+
+    type: Literal["profiles:exported"] = "profiles:exported"
+    payload: ProfileExportedPayload
+
+
+@server_message(audience=Permission.READ_UNITS)
+class ProfilesActiveMessage(ServerMessage):
+    """The profile currently applied, or null when none is running."""
+
+    type: Literal["profiles:active"] = "profiles:active"
+    payload: ActiveProfile | None
 
 
 # ─────────────────────────────── Trigger rules ───────────────────────────────
@@ -424,6 +458,11 @@ __all__ = [
     "ProfilesLoadMessage",
     "ProfileSavedPayload",
     "ProfilesSavedMessage",
+    "ProfileDeletedPayload",
+    "ProfilesDeletedMessage",
+    "ProfileExportedPayload",
+    "ProfilesExportedMessage",
+    "ProfilesActiveMessage",
     "TriggerRulesLoadMessage",
     "TriggerRulesLoadLabelsMessage",
     "TriggerRuleBroadcastPayload",
