@@ -1,4 +1,4 @@
-import * as React from "react"
+import * as React from "react";
 import {
   Archive,
   BellIcon,
@@ -11,13 +11,11 @@ import {
   History,
   Home,
   Map,
-  MessageCircleQuestion,
   PieChart,
   Settings2,
   SquareTerminal,
   Wifi,
-} from "lucide-react"
-
+} from "lucide-react";
 
 import {
   Sidebar,
@@ -25,13 +23,12 @@ import {
   SidebarFooter,
   SidebarHeader,
   SidebarRail,
-} from "@pes/ui/components/sidebar"
-import { NavMain } from "@/components/layout/sidebar/nav-main"
-import { NavPlayground } from "@/components/layout/sidebar/nav-playground"
-import { NavUser } from "@/components/layout/sidebar/nav-user"
-import { AppSidebarHeader } from "@/components/layout/sidebar/app-sidebar-header"
-import { NavFooter } from "@/components/layout/sidebar/nav-footer"
-import { NavAdmin } from "@/components/layout/sidebar/nav-admin"
+} from "@pes/ui/components/sidebar";
+import { NavMain } from "@/components/layout/sidebar/nav-main";
+import { NavPlayground } from "@/components/layout/sidebar/nav-playground";
+import { AppSidebarHeader } from "@/components/layout/sidebar/app-sidebar-header";
+import { ControlPanel } from "@/components/layout/sidebar/control-panel";
+import { NavAdmin } from "@/components/layout/sidebar/nav-admin";
 
 // This is sample data.
 const data = {
@@ -130,14 +127,7 @@ const data = {
       icon: Map,
     },
   ],
-  navFooter: [
-    {
-      title: "Guide",
-      url: "#",
-      icon: MessageCircleQuestion,
-    },
-  ],
-}
+};
 
 export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
   return (
@@ -150,12 +140,11 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
         <NavAdmin items={data.navAdmin} />
         {/* <NavPlayground items={data.navPlayground} /> */}
         {/* <NavProjects projects={data.projects} /> */}
-        <NavFooter items={data.navFooter} className="mt-auto" />
       </SidebarContent>
       <SidebarFooter>
-        <NavUser />
+        <ControlPanel />
       </SidebarFooter>
       <SidebarRail />
     </Sidebar>
-  )
+  );
 }
