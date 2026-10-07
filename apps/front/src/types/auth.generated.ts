@@ -43,6 +43,7 @@ export const SERVER_MESSAGE_AUDIENCE: Record<WebSocketServerMessage['type'], Per
     'sensors:update': Permission.READ_SENSORS,
     'units:init': Permission.READ_UNITS,
     'units:update': Permission.READ_UNITS,
+    'units:reset': Permission.READ_UNITS,
     'ramps:init': Permission.READ_UNITS,
     'ramps:update': Permission.READ_UNITS,
     'ramps:remove': Permission.READ_UNITS,

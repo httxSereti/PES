@@ -14,6 +14,7 @@ import structlog
 
 from api.ws.websocket_notifier import ws_notifier
 from constants import BT_UNITS
+from hardware.ramp import ramp_manager
 from store import Store
 from typings import UnitDict
 
@@ -113,14 +114,17 @@ class UnitConnect:
 
     def parse_reply(self, reply_raw: bytes) -> Optional[str]:
         """
-        parse the data returned by the 2B, if it's fail the serial connexion is reinitialized
+        Parse the data returned by the 2B.
+
         Args:
             reply_raw: raw data from serial reply of the 2B
 
         Returns:
-            Firmware version off the 2B if successful
+            Firmware version of the 2B if successful, None when the reply is
+            not a valid 2B status line. The caller decides what to do next
+            (reset + reconnect at runtime, retry while detecting).
         """
-        reply = reply_raw.decode().rstrip("\r\n")
+        reply = reply_raw.decode("utf-8", errors="replace").rstrip("\r\n")
 
         self.logger.debug("Received reply from 2B unit", reply=reply)
 
@@ -142,9 +146,59 @@ class UnitConnect:
             self.settings_return["adj_3"] = int(m[12])
 
             return str(m[13])  # return firmware version
-        self.logger.info("Fail to parse the 2B reply -> reconnecting", reply=reply)
-        self.detect()
+
+        if reply:
+            self.logger.warning("Unable to parse 2B reply", reply=reply)
+        else:
+            self.logger.debug("Empty reply from 2B (serial timeout)")
         return None
+
+    def reset_to_init(self, reason: str) -> None:
+        """
+        Reset the unit settings to their initial values
+        (configurations/init_settings.json), log the error and warn clients.
+
+        Args:
+            reason: why the reset was triggered (logged and sent to the UI)
+        """
+        unit = UnitDict(self.name)
+        init_settings = DEFAULT_USAGE_SETTING[self.name]
+
+        reset_values = {
+            "mode": int(init_settings["mode"]),
+            "adj_1": int(init_settings["adj_1"]),
+            "adj_2": int(init_settings["adj_2"]),
+            "adj_3": int(init_settings["adj_3"]),
+            "adj_4": int(init_settings["adj_4"]),
+            "level_h": bool(init_settings["level_h"]),
+            "level_d": False,
+            "level_map": 0,
+            "power_bias": 0,
+        }
+
+        # an active ramp would overwrite the reset adj values on its next tick
+        for field in ("adj_1", "adj_2"):
+            if ramp_manager.get(unit, field) is not None:
+                ramp_manager.stop(unit, field, restore=False)
+
+        changes = {**reset_values, "sync": False, "updated": True}
+        store.update_unit_dict(unit, changes)
+
+        # keep the running thread's target in sync with the reset values
+        self.settings_target.update(reset_values)
+        self.settings_target["sync"] = False
+
+        self.logger.error(
+            "Unable to parse 2B reply -> unit reset to initial settings",
+            reason=reason,
+            reset_values=reset_values,
+        )
+
+        ws_notifier.notify("units:update", {"id": self.name, "changes": changes})
+        ws_notifier.notify(
+            "units:reset",
+            {"id": self.name, "reason": reason},
+        )
 
     def detect(self):
         """
@@ -258,7 +312,14 @@ class UnitConnect:
             True if settings match the target
         """
         self.serial_dev.write(b"\n\r")
-        self.parse_reply(self.serial_dev.readline())
+        status_reply = self.serial_dev.readline()
+        if self.parse_reply(status_reply) is None:
+            self.reset_to_init(
+                reason=f"status reply could not be parsed: {status_reply!r}"
+            )
+            self.detect()
+            return False
+
         no_updated = True
         updated_fields: dict = {}
 
@@ -266,26 +327,45 @@ class UnitConnect:
         for field in FW_2B_CMD.keys():
             # check if update is needed
             if self.settings_return[field] != self.settings_target[field]:
+                # the 2B firmware only accepts integer arguments, a float
+                # (e.g. 50.0 coming from the store) would be rejected
+                try:
+                    value = int(self.settings_target[field])
+                except (TypeError, ValueError):
+                    self.logger.error(
+                        "Invalid 2B setting value, can't sync",
+                        field=field,
+                        value=self.settings_target[field],
+                    )
+                    self.settings_target["sync"] = False
+                    no_updated = False
+                    continue
+
                 self.logger.info(
                     "Adjust 2B Settings",
                     field=field,
                     previous=self.settings_return[field],
-                    new=self.settings_target[field],
+                    new=value,
                 )
 
-                updated_fields[field] = self.settings_target[field]
+                updated_fields[field] = value
                 # the update command can be fixed value or an argument
                 if len(FW_2B_CMD[field]) == 1:
-                    cmd = "{}{}".format(FW_2B_CMD[field], self.settings_target[field])
+                    cmd = "{}{}".format(FW_2B_CMD[field], value)
                 else:
-                    cmd = FW_2B_CMD[field].split("-")[int(self.settings_target[field])]
+                    cmd = FW_2B_CMD[field].split("-")[value]
                 # if something to do
                 if cmd != "":
                     self.logger.debug("Sending 2B command", cmd=cmd)
                     # check if target and 2B synchronized on the next call
                     self.settings_target["sync"] = False
                     no_updated = False
-                    self.send_cmd(cmd)
+                    if self.send_cmd(cmd) is None:
+                        self.reset_to_init(
+                            reason=f"reply to command '{cmd}' could not be parsed"
+                        )
+                        self.detect()
+                        return False
         # if no change it is synchronized !
         if no_updated:
             self.settings_target["sync"] = True

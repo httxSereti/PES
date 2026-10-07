@@ -72,8 +72,9 @@ class UnitsUpdatePowerModeCommand(ClientMessage):
 
 
 class UnitAdjChange(WireModel):
-    adj_1: float | None = None
-    adj_2: float | None = None
+    # the 2B firmware only accepts integer adj commands
+    adj_1: int | None = None
+    adj_2: int | None = None
 
 
 class UnitsUpdateAdjCommand(ClientMessage):

@@ -1,4 +1,5 @@
 
+import { toast } from 'sonner';
 import type { AppDispatch, RootState } from '@/store';
 import { logout, verifyToken } from '@/store/slices/authSlice';
 import { sensorsInitialized, sensorUpdated } from '@/store/slices/sensorsSlice';
@@ -179,6 +180,12 @@ export function createWebSocketMiddleware(config: WebSocketConfig): Middleware {
                             id: message.payload.id,
                             changes: message.payload.changes
                         }))
+                        break;
+                    case 'units:reset':
+                        toast.error(`${message.payload.id} has been reset to initial settings`, {
+                            description: message.payload.reason,
+                            duration: 10000,
+                        })
                         break;
 
                     /**

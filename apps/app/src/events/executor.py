@@ -51,6 +51,17 @@ _PROFILE_FIELDS = [
     "level_map",
 ]
 
+# Numeric 2B settings: the firmware only accepts integer command arguments
+_INT_PROFILE_FIELDS = (
+    "adj_1",
+    "adj_2",
+    "adj_3",
+    "adj_4",
+    "power_bias",
+    "level_map",
+    "mode",
+)
+
 logger = structlog.get_logger("pes")
 
 
@@ -250,6 +261,15 @@ class ActionExecutor:
                 if field in ("ch_A", "ch_B"):
                     new_val = round(int(value) * int(level_pct) / 100)
                     new_val = min(100, max(0, new_val))
+                elif field in _INT_PROFILE_FIELDS:
+                    try:
+                        new_val = round(float(value))
+                    except (TypeError, ValueError):
+                        logger.warning(
+                            f"[Executor] Skipped invalid profile value "
+                            f"'{unit_name}.{field}={value!r}'"
+                        )
+                        continue
                 else:
                     new_val = value
                 unit_snapshot["fields"][field] = {

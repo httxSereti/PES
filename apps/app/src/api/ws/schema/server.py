@@ -119,6 +119,19 @@ class UnitsUpdateMessage(ServerMessage):
     payload: UnitUpdatePayload
 
 
+class UnitResetPayload(WireModel):
+    id: str
+    reason: str
+
+
+@server_message(audience=Permission.READ_UNITS)
+class UnitsResetMessage(ServerMessage):
+    """A unit was reset to its initial settings (unreadable 2B reply)."""
+
+    type: Literal["units:reset"] = "units:reset"
+    payload: UnitResetPayload
+
+
 # ─────────────────────────────── Ramps ───────────────────────────────
 
 
@@ -445,6 +458,8 @@ __all__ = [
     "UnitsInitMessage",
     "UnitUpdatePayload",
     "UnitsUpdateMessage",
+    "UnitResetPayload",
+    "UnitsResetMessage",
     "RampsInitMessage",
     "RampsUpdateMessage",
     "RampRemovePayload",

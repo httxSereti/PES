@@ -2,7 +2,7 @@
 // by apps/app/scripts/generate_ws_types.py — DO NOT EDIT.
 // Regenerate with: pnpm codegen:ws
 
-export const WS_SCHEMA_VERSION = 8;
+export const WS_SCHEMA_VERSION = 9;
 
 export enum ActionType {
     PROFILE = "PROFILE",
@@ -304,6 +304,11 @@ export interface UsageLimit {
 export interface UnitUpdatePayload {
     id: string;
     changes: Partial<UnitSettings>;
+}
+
+export interface UnitResetPayload {
+    id: string;
+    reason: string;
 }
 
 export interface Ramp {
@@ -841,6 +846,12 @@ export interface UnitsUpdateMessage {
     payload: UnitUpdatePayload;
 }
 
+export interface UnitsResetMessage {
+    id?: string | null;
+    type: 'units:reset';
+    payload: UnitResetPayload;
+}
+
 export interface RampsInitMessage {
     id?: string | null;
     type: 'ramps:init';
@@ -1088,6 +1099,7 @@ export type WebSocketServerMessage =
     | SensorsUpdateMessage
     | UnitsInitMessage
     | UnitsUpdateMessage
+    | UnitsResetMessage
     | RampsInitMessage
     | RampsUpdateMessage
     | RampsRemoveMessage
