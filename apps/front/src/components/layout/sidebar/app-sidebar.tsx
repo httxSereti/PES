@@ -29,6 +29,7 @@ import { NavPlayground } from "@/components/layout/sidebar/nav-playground";
 import { AppSidebarHeader } from "@/components/layout/sidebar/app-sidebar-header";
 import { ControlPanel } from "@/components/layout/sidebar/control-panel";
 import { NavAdmin } from "@/components/layout/sidebar/nav-admin";
+import { Separator } from "@pes/ui/components/separator";
 
 // This is sample data.
 const data = {
@@ -39,9 +40,9 @@ const data = {
       icon: Home,
     },
     {
-      title: "Units",
-      url: "/app/units",
-      icon: HardDrive,
+      title: "Events",
+      url: "/app/events",
+      icon: Archive,
     },
     {
       title: "Profiles",
@@ -49,24 +50,26 @@ const data = {
       icon: Bookmark,
     },
     {
+      title: "Units",
+      url: "/app/units",
+      icon: HardDrive,
+    },
+    {
       title: "Sensors",
       url: "/app/sensors",
       icon: Wifi,
     },
+  ],
+  navSecondary: [
     {
-      title: "Events",
-      url: "/app/events",
-      icon: Archive,
+      title: "Sessions",
+      url: "/app/sessions",
+      icon: History,
     },
     {
       title: "Training",
       url: "/app/training",
       icon: Dumbbell,
-    },
-    {
-      title: "Sessions",
-      url: "/app/sessions",
-      icon: History,
     },
   ],
   navPlayground: [
@@ -137,6 +140,10 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
       </SidebarHeader>
       <SidebarContent>
         <NavMain items={data.navMain} />
+        <div className="mx-2">
+          <Separator />
+        </div>
+        <NavMain items={data.navSecondary} />
         <NavAdmin items={data.navAdmin} />
         {/* <NavPlayground items={data.navPlayground} /> */}
         {/* <NavProjects projects={data.projects} /> */}
