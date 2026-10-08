@@ -2,7 +2,7 @@
 // by apps/app/scripts/generate_ws_types.py — DO NOT EDIT.
 // Regenerate with: pnpm codegen:ws
 
-export const WS_SCHEMA_VERSION = 9;
+export const WS_SCHEMA_VERSION = 10;
 
 export enum ActionType {
     PROFILE = "PROFILE",
@@ -402,6 +402,7 @@ export interface ActiveProfile {
     queue_item_id: string;
     started_at: string;
     ends_at?: string | null;
+    units?: string[] | null;
 }
 
 export interface TriggerRuleBroadcastPayload {

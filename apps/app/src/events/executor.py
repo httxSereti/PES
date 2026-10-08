@@ -339,6 +339,7 @@ class ActionExecutor:
             "ends_at": to_utc_iso(now + timedelta(seconds=item.duration))
             if item.duration != -1
             else None,
+            "units": list(bck_settings.keys()),
         }
         self._store.set_active_profile(active_profile)
         self._notify_active_profile(active_profile)

@@ -1,7 +1,11 @@
-import { SESSION_TYPE_META } from "@/components/common/session/session.constants";
+import {
+  SESSION_TYPE_META,
+  UNITS,
+} from "@/components/common/session/session.constants";
 import { useWebSocket } from "@/hooks/useWebSocket";
 import { hasPermission } from "@/lib/permissions";
 import { useAppDispatch, useAppSelector } from "@/store/hooks";
+import { selectActiveProfile } from "@/store/slices/profilesSlice";
 import { openSessionSettings } from "@/store/slices/sessionSlice";
 import { sensorsSelectors } from "@/store/slices/sensorsSlice";
 import { unitsSelectors } from "@/store/slices/unitsSlice";
@@ -36,6 +40,7 @@ import {
 } from "@pes/ui/components/tooltip";
 import { cn } from "@pes/ui/lib/utils";
 import {
+  Bookmark,
   ChevronsUpDown,
   CircleDashed,
   CircleStop,
@@ -46,13 +51,14 @@ import {
   RefreshCw,
   Settings,
   Shapes,
+  Square,
   VideoOff,
 } from "lucide-react";
 import { useState } from "react";
 import { Link } from "react-router";
 import { toast } from "sonner";
 
-import { SessionTimer } from "./session/session-timer";
+import { CountdownTimer, SessionTimer } from "./session/session-timer";
 import { UserMenuContent } from "./user-menu-content";
 
 const STATUS_META = {
@@ -68,12 +74,14 @@ export function ControlPanel() {
   const dispatch = useAppDispatch();
   const user = useAppSelector((state) => state.auth.user);
   const activeSession = useAppSelector((state) => state.session.activeSession);
+  const activeProfile = useAppSelector(selectActiveProfile);
   const units = useAppSelector(unitsSelectors.selectAll);
   const sensors = useAppSelector(sensorsSelectors.selectAll);
 
   const [camera, setCamera] = useState(false);
   const [sharing, setSharing] = useState(false);
   const [stopConfirmOpen, setStopConfirmOpen] = useState(false);
+  const [stoppingProfile, setStoppingProfile] = useState(false);
 
   const isLive =
     activeSession?.status === "running" && !!activeSession.started_at;
@@ -121,6 +129,37 @@ export function ControlPanel() {
         closeButton: true,
       });
       console.error("End session failed", error);
+    }
+  };
+
+  const stopProfile = async () => {
+    setStoppingProfile(true);
+    try {
+      const data = await sendCommand("profiles:stop");
+
+      if (data.status === "ok") {
+        toast.success("Profile stopped", {
+          description: "Previous settings were restored",
+          position: "bottom-right",
+          closeButton: true,
+        });
+        return;
+      }
+
+      toast.error("Failed to stop profile", {
+        description: data.message ?? undefined,
+        position: "bottom-right",
+        closeButton: true,
+      });
+    } catch (error) {
+      toast.error("Failed to stop profile", {
+        description: "The server did not answer",
+        position: "bottom-right",
+        closeButton: true,
+      });
+      console.error("Stop profile failed", error);
+    } finally {
+      setStoppingProfile(false);
     }
   };
 
@@ -226,6 +265,65 @@ export function ControlPanel() {
 
   return (
     <div className="flex flex-col gap-2">
+      {/* Active profile */}
+      {activeProfile && (
+        <div className="rounded-lg border border-violet-500/30 bg-violet-500/5 p-2">
+          <div className="flex items-center gap-2">
+            <div className="grid size-8 shrink-0 place-items-center rounded-md bg-violet-500/15 text-violet-600 dark:text-violet-400">
+              <Bookmark className="size-4" />
+            </div>
+            <div className="min-w-0 flex-1">
+              <div className="truncate text-sm font-medium">
+                {activeProfile.name}
+              </div>
+              <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                <span className="flex items-center gap-1">
+                  {UNITS.map((unit) => (
+                    <span
+                      key={unit.id}
+                      title={unit.label}
+                      className={cn(
+                        "size-2 rounded-full",
+                        activeProfile.units?.includes(unit.id)
+                          ? "bg-violet-500"
+                          : "bg-muted-foreground/30",
+                      )}
+                    />
+                  ))}
+                </span>
+                <CountdownTimer endsAt={activeProfile.ends_at} />
+              </div>
+            </div>
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              title="Stop profile"
+              disabled={stoppingProfile}
+              className="text-muted-foreground hover:text-destructive"
+              onClick={() => void stopProfile()}
+            >
+              <Square />
+            </Button>
+            <div className="flex shrink-0 items-center gap-1.5">
+              <span className="text-xs font-medium text-violet-600 tabular-nums dark:text-violet-400">
+                {activeProfile.level_pct}%
+              </span>
+              <div
+                className="flex h-9 w-1.5 flex-col justify-end overflow-hidden rounded-full bg-violet-500/15"
+                title={`Level ${activeProfile.level_pct}%`}
+              >
+                <div
+                  className="w-full rounded-full bg-violet-500"
+                  style={{
+                    height: `${Math.min(100, activeProfile.level_pct * 0.7)}%`,
+                  }}
+                />
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Activity: live session */}
       <div className="rounded-lg border bg-sidebar-accent/50 p-2">
         <div className="flex items-center gap-2">

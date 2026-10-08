@@ -214,6 +214,8 @@ class ActiveProfile(WireModel):
     queue_item_id: str
     started_at: str
     ends_at: str | None = None
+    # Units the profile targets (keys of its threads_settings block)
+    units: list[str] | None = None
 
 
 class CommandResult(WireModel):
