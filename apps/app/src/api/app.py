@@ -19,8 +19,10 @@ from database.seed import seed_from_json
 from events.dispatcher import EventDispatcher
 from events.queue import ActionQueue
 from hardware.sensors import sensor_alarm_check
+from services.profiles import list_profiles
 from services.users import user_service
 from store import Store
+from utils import send_discord_startup_message
 
 logger = structlog.get_logger("pes")
 
@@ -92,6 +94,9 @@ async def lifespan(app: FastAPI):
 
     # Inject into routers
     chaster_webhooks.setup(EventDispatcher.get_instance())
+
+    # Notify Discord that the app started successfully
+    await send_discord_startup_message(profile_count=len(list_profiles()))
 
     yield
 
