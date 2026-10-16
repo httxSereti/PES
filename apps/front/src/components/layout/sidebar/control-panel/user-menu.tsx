@@ -63,7 +63,7 @@ export function UserMenu({ collapsed = false }: UserMenuProps) {
                 </span>
                 <span className="truncate text-xs">{capitalizedRole}</span>
               </div>
-              {!collapsed && <ChevronsUpDown className="ml-auto size-4" />}
+              {/* {!collapsed && <ChevronsUpDown className="ml-auto size-4" />} */}
             </SidebarMenuButton>
           </DropdownMenuTrigger>
           <UserMenuContent />
