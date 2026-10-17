@@ -33,9 +33,11 @@ import { Permission } from "@/types";
 
 import { ActiveProfileBanner } from "./active-profile-banner";
 import { ProfileCard } from "./profile-card";
+import { ProfilesList } from "./profiles-list";
 
 type ProfileTypeFilter = "all" | "builtin" | "custom";
 type ProfileSort = "newest" | "name" | "ramps";
+type ProfileView = "grid" | "list";
 
 const TYPE_FILTERS: Array<{ key: ProfileTypeFilter; label: string }> = [
     { key: "all", label: "All" },
@@ -102,6 +104,7 @@ export function Profiles() {
     const [query, setQuery] = useState("");
     const [type, setType] = useState<ProfileTypeFilter>("all");
     const [sort, setSort] = useState<ProfileSort>("newest");
+    const [view, setView] = useState<ProfileView>("grid");
     const searchRef = useRef<HTMLInputElement>(null);
 
     const canApply = hasPermission(user, Permission.WRITE_UNITS);
@@ -295,17 +298,28 @@ export function Profiles() {
                         <button
                             type="button"
                             aria-label="Grid view"
-                            aria-pressed="true"
-                            className="grid h-8 w-8 cursor-pointer place-items-center rounded-md bg-muted text-foreground"
+                            aria-pressed={view === "grid"}
+                            onClick={() => setView("grid")}
+                            className={cn(
+                                "grid h-8 w-8 cursor-pointer place-items-center rounded-md transition",
+                                view === "grid"
+                                    ? "bg-muted text-foreground"
+                                    : "text-muted-foreground/60 hover:text-foreground",
+                            )}
                         >
                             <LayoutGrid className="h-3.5 w-3.5" />
                         </button>
                         <button
                             type="button"
                             aria-label="List view"
-                            disabled
-                            title="List view is coming soon"
-                            className="grid h-8 w-8 place-items-center rounded-md text-muted-foreground disabled:cursor-not-allowed disabled:opacity-40"
+                            aria-pressed={view === "list"}
+                            onClick={() => setView("list")}
+                            className={cn(
+                                "grid h-8 w-8 cursor-pointer place-items-center rounded-md transition",
+                                view === "list"
+                                    ? "bg-muted text-foreground"
+                                    : "text-muted-foreground/60 hover:text-foreground",
+                            )}
                         >
                             <List className="h-3.5 w-3.5" />
                         </button>
@@ -346,6 +360,14 @@ export function Profiles() {
                         </Button>
                     )}
                 </div>
+            ) : view === "list" ? (
+                <ProfilesList
+                    profiles={filtered}
+                    canApply={canApply}
+                    canWrite={canWrite}
+                    canDelete={canDelete}
+                    onExport={handleExport}
+                />
             ) : (
                 <div className="grid grid-cols-1 gap-3 px-5 pb-5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
                     {filtered.map((profile) => (

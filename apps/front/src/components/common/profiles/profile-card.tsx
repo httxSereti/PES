@@ -11,7 +11,6 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 
-import { Badge } from "@pes/ui/components/badge";
 import { Button } from "@pes/ui/components/button";
 import { Card } from "@pes/ui/components/card";
 import {
@@ -21,7 +20,6 @@ import {
     DropdownMenuSeparator,
     DropdownMenuTrigger,
 } from "@pes/ui/components/dropdown-menu";
-import { cn } from "@pes/ui/lib/utils";
 
 import { ConfirmDeleteDialog } from "@/components/common/dialogs/confirm-delete-dialog";
 import { useWebSocket } from "@/hooks/useWebSocket";
@@ -31,6 +29,7 @@ import type { ProfileSummary } from "@/types";
 import { ApplyProfileDialog } from "./apply-profile-dialog";
 import { DuplicateProfileDialog } from "./duplicate-profile-dialog";
 import { EditProfileDialog } from "./edit-profile-dialog";
+import { ProfileMonogram, ProfileTypeBadge } from "./profile-badges";
 
 type ProfileCardProps = {
     profile: ProfileSummary;
@@ -84,32 +83,17 @@ export function ProfileCard({
     return (
         <Card className="flex min-h-[170px] flex-col gap-2.5 p-4">
             <div className="flex items-center gap-2.5">
-                <span
-                    className={cn(
-                        "flex h-7 w-7 shrink-0 items-center justify-center rounded-lg font-mono text-[13px] font-semibold",
-                        profile.builtin
-                            ? "bg-muted text-foreground/80"
-                            : "bg-purple-500/15 text-purple-700 dark:text-purple-200",
-                    )}
-                >
-                    {profile.name.charAt(0).toUpperCase()}
-                </span>
+                <ProfileMonogram
+                    name={profile.name}
+                    builtin={profile.builtin}
+                    className="h-7 w-7 rounded-lg text-[13px]"
+                />
 
                 <span className="line-clamp-2 min-w-0 text-[13px] font-medium">
                     {profile.name}
                 </span>
 
-                <Badge
-                    variant="secondary"
-                    className={cn(
-                        "shrink-0 rounded-full border px-2 py-[3px] font-mono text-[10px] font-medium",
-                        profile.builtin
-                            ? "border-slate-500/30 bg-slate-500/15 text-slate-700 dark:text-slate-300"
-                            : "border-purple-500/30 bg-purple-500/15 text-purple-700 dark:text-purple-200",
-                    )}
-                >
-                    {profile.builtin ? "built-in" : "custom"}
-                </Badge>
+                <ProfileTypeBadge builtin={profile.builtin} />
 
                 <DropdownMenu>
                     <DropdownMenuTrigger asChild>
