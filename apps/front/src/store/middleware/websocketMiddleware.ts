@@ -16,6 +16,7 @@ import { trainingInit, trainingSessionUpdated, trainingEdgeAdded, trainingSessio
 import { sessionInit, sessionUpdated } from '@/store/slices/sessionSlice';
 import { sessionHistoryLoaded, sessionHistoryDetailLoaded, sessionHistoryDeleted } from '@/store/slices/sessionHistorySlice';
 import { profilesLoaded, profileSaved, profileDeleted, activeProfileUpdated } from '@/store/slices/profilesSlice';
+import { queueUpdated } from '@/store/slices/queueSlice';
 
 export function createWebSocketMiddleware(config: WebSocketConfig): Middleware {
     const {
@@ -292,6 +293,13 @@ export function createWebSocketMiddleware(config: WebSocketConfig): Middleware {
 
                     case 'session:update':
                         dispatch(sessionUpdated(message.payload));
+                        break;
+
+                    /**
+                     * @Queue (ADMIN/HOST connections only)
+                     */
+                    case 'queue:update':
+                        dispatch(queueUpdated(message.payload));
                         break;
 
                     /**

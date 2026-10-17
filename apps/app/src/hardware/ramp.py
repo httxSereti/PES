@@ -31,8 +31,10 @@ restores the field to the max value (pass ``restore=False`` to keep the
 current ramped value instead).
 
 Lifecycle changes are broadcast over WebSocket (``ramps:update`` on
-start/pause/resume, ``ramps:remove`` on stop); the ramped field values reach
-clients through the usual ``units:update`` flow.
+start/pause/resume, ``ramps:remove`` on stop). Ramped field values are
+broadcast as ``units:update`` from ``RampManager._write`` — the hardware
+thread does it when the value reaches the 2B, but broadcasting at the source
+keeps clients live when no unit is connected (or it is disabled).
 
 ``thread_ramp()`` must run in a daemon thread (wired in ``main.py``); ramps
 are controlled through the ``ramp_manager`` singleton.
@@ -409,10 +411,20 @@ class RampManager:
         return ramp
 
     def _write(self, ramp: Ramp) -> None:
-        """Push the ramp's current output value to the store."""
+        """
+        Push the ramp's current output value to the store and broadcast it.
+
+        The hardware thread forwards store changes to clients once the value
+        reached the 2B; broadcasting here as well keeps clients live when no
+        unit is connected (or its hardware is disabled).
+        """
         value = ramp.output_value()
         ramp.last_output = value
         self._store.update_unit_dict(ramp.unit, {ramp.field: value, "updated": True})
+        ws_notifier.notify(
+            "units:update",
+            {"id": ramp.unit.value, "changes": {ramp.field: value}},
+        )
 
 
 # singleton, wired in main.py

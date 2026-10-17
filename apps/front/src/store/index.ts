@@ -14,6 +14,7 @@ import trainingReducer from '@/store/slices/trainingSlice';
 import sessionReducer from '@/store/slices/sessionSlice';
 import sessionHistoryReducer from '@/store/slices/sessionHistorySlice';
 import profilesReducer from '@/store/slices/profilesSlice';
+import queueReducer from '@/store/slices/queueSlice';
 
 import { createWebSocketMiddleware } from '@/store/middleware/websocketMiddleware';
 
@@ -49,6 +50,7 @@ export const store = configureStore({
         session: sessionReducer,
         sessionHistory: sessionHistoryReducer,
         profiles: profilesReducer,
+        queue: queueReducer,
     },
     middleware: (getDefaultMiddleware) =>
         getDefaultMiddleware({

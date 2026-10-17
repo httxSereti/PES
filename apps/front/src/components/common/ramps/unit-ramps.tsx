@@ -1,7 +1,5 @@
-import type { RampTarget } from "@/types"
+import { RAMP_FIELDS } from "./ramp.constants"
 import { RampFieldRow } from "./ramp-field-row"
-
-const RAMP_FIELDS: RampTarget["field"][] = ["ch_A", "ch_B", "adj_1", "adj_2"];
 
 type UnitRampsProps = {
     unitId: string;

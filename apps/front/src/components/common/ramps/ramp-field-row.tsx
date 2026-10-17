@@ -7,14 +7,8 @@ import { unitsSelectors } from "@/store/slices/unitsSlice"
 import { rampsSelectors } from "@/store/slices/rampsSlice"
 import { useWebSocket } from "@/hooks/useWebSocket"
 import { type RampStartPayload } from "@/types"
+import { FIELD_LABELS } from "./ramp.constants"
 import { RampStartDialog } from "./ramp-start-dialog"
-
-const FIELD_LABELS: Record<RampStartPayload["field"], string> = {
-    ch_A: "Channel A",
-    ch_B: "Channel B",
-    adj_1: "Adj 1",
-    adj_2: "Adj 2",
-};
 
 type RampFieldRowProps = {
     unitId: string;

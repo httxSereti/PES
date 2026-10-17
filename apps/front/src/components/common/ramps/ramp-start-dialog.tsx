@@ -3,6 +3,7 @@ import { useForm, type Resolver } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
 import * as z from "zod"
 import { toast } from "sonner"
+import { BookmarkPlus } from "lucide-react"
 
 import { Button } from "@pes/ui/components/button"
 import { Input } from "@pes/ui/components/input"
@@ -23,7 +24,11 @@ import {
 } from "@pes/ui/components/dialog"
 
 import { useWebSocket } from "@/hooks/useWebSocket"
+import { useRampDefaults, type RampDefaults } from "@/hooks/useRampDefaults"
+import { useRampPresets } from "@/hooks/useRampPresets"
 import { RampMode, type RampStartPayload } from "@/types"
+import { FIELD_LABELS } from "./ramp.constants"
+import { describeDefaults } from "./ramp-format"
 
 const rampSchema = z.object({
     timer: z.coerce.number().positive("Timer must be greater than 0"),
@@ -51,6 +56,29 @@ const rampSchema = z.object({
 
 type FormValues = z.infer<typeof rampSchema>;
 
+const DEFAULT_FORM_VALUES: FormValues = {
+    timer: 1,
+    step: 1,
+    step_unit: "percent",
+    mode: RampMode.RESET,
+    duration: -1,
+    max_value: "",
+    start_value: "",
+};
+
+/** Normalize validated form values into the persisted ramp settings shape. */
+function formValuesToDefaults(values: FormValues): RampDefaults {
+    return {
+        timer: values.timer,
+        step: values.step,
+        step_unit: values.step_unit,
+        mode: values.mode,
+        duration: values.duration,
+        max_value: values.max_value === "" ? null : values.max_value,
+        start_value: values.start_value === "" ? null : values.start_value,
+    };
+}
+
 type RampStartDialogProps = {
     unitId: RampStartPayload["unit"];
     field: RampStartPayload["field"];
@@ -67,38 +95,87 @@ export function RampStartDialog({
     onOpenChange,
 }: RampStartDialogProps) {
     const { sendCommand } = useWebSocket();
+    const { getDefaults, saveDefaults } = useRampDefaults();
+    const { savePreset } = useRampPresets();
+
+    const [presetOpen, setPresetOpen] = React.useState(false);
+    const [presetName, setPresetName] = React.useState("");
 
     const form = useForm<FormValues>({
         resolver: zodResolver(rampSchema) as unknown as Resolver<FormValues>,
-        defaultValues: {
-            timer: 1,
-            step: 1,
-            step_unit: "percent",
-            mode: RampMode.RESET,
-            duration: -1,
-            max_value: "",
-            start_value: "",
-        },
+        defaultValues: DEFAULT_FORM_VALUES,
     });
 
+    // Prefill with the user's remembered settings for this channel.
+    React.useEffect(() => {
+        if (!open) return;
+        setPresetOpen(false);
+        setPresetName("");
+        const stored = getDefaults(unitId, field);
+        form.reset(
+            stored
+                ? {
+                      timer: stored.timer,
+                      step: stored.step,
+                      step_unit: stored.step_unit,
+                      mode: stored.mode,
+                      duration: stored.duration,
+                      max_value: stored.max_value ?? "",
+                      start_value: stored.start_value ?? "",
+                  }
+                : DEFAULT_FORM_VALUES,
+        );
+    }, [open, unitId, field, getDefaults, form]);
+
+    const stopRamp = async () => {
+        try {
+            const result = await sendCommand("ramps:stop", {
+                unit: unitId,
+                field,
+                restore: true,
+            });
+            if (result.status === "error") {
+                toast.error(result.message ?? "Failed to stop ramp");
+            }
+        } catch (error) {
+            console.error("Failed to stop ramp:", error);
+            toast.error("Failed to stop ramp");
+        }
+    };
+
+    const handleSavePreset = async () => {
+        const valid = await form.trigger();
+        if (!valid) {
+            toast.error("Fix the highlighted fields before saving a preset");
+            return;
+        }
+        const parsed = rampSchema.safeParse(form.getValues());
+        if (!parsed.success) return;
+        const saved = savePreset(presetName, formValuesToDefaults(parsed.data));
+        if (!saved) return;
+        toast.success(`Preset "${saved.name}" saved`);
+        setPresetName("");
+        setPresetOpen(false);
+    };
+
     const onSubmit = async (values: FormValues) => {
+        const defaults = formValuesToDefaults(values);
         try {
             const result = await sendCommand("ramps:start", {
                 unit: unitId,
                 field,
-                timer: values.timer,
-                step: values.step,
-                step_unit: values.step_unit,
-                mode: values.mode,
-                duration: values.duration,
-                max_value: values.max_value === "" ? null : values.max_value,
-                start_value: values.start_value === "" ? null : values.start_value,
+                ...defaults,
             });
             if (result.status === "error") {
                 toast.error(result.message ?? "Failed to start ramp");
                 return;
             }
-            toast.success(`Ramp started on ${field}`);
+            saveDefaults(unitId, field, defaults);
+            toast.success(`Ramp started on ${FIELD_LABELS[field]}`, {
+                description: `${unitId} — ${describeDefaults(defaults)}`,
+                action: { label: "Stop", onClick: () => void stopRamp() },
+                closeButton: true,
+            });
             onOpenChange(false);
         } catch (error) {
             console.error("Failed to start ramp:", error);
@@ -202,6 +279,60 @@ export function RampStartDialog({
                             )}
                         </Field>
                     </FieldGroup>
+
+                    <p className="text-[10px] text-muted-foreground/60">
+                        These values are saved as your defaults for this channel
+                        — the next Start uses them directly.
+                    </p>
+
+                    {presetOpen ? (
+                        <div className="flex gap-2">
+                            <Input
+                                type="text"
+                                placeholder="Preset name"
+                                className="h-8 flex-1"
+                                value={presetName}
+                                onChange={(event) => setPresetName(event.target.value)}
+                                onKeyDown={(event) => {
+                                    if (event.key === "Enter") {
+                                        event.preventDefault();
+                                        void handleSavePreset();
+                                    }
+                                }}
+                            />
+                            <Button
+                                type="button"
+                                variant="outline"
+                                size="sm"
+                                disabled={!presetName.trim()}
+                                onClick={() => void handleSavePreset()}
+                            >
+                                Save
+                            </Button>
+                            <Button
+                                type="button"
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => {
+                                    setPresetOpen(false);
+                                    setPresetName("");
+                                }}
+                            >
+                                Cancel
+                            </Button>
+                        </div>
+                    ) : (
+                        <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            className="-ml-3 self-start text-muted-foreground"
+                            onClick={() => setPresetOpen(true)}
+                        >
+                            <BookmarkPlus />
+                            Save as preset…
+                        </Button>
+                    )}
 
                     <Button type="submit" className="w-full">
                         Start ramp

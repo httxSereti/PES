@@ -80,6 +80,17 @@ async def _send_init_sequence(websocket: WebSocket, user) -> None:
             {"type": "hardware:init", "payload": store.get_hardware_settings()}
         )
 
+    # Current action queue state (admins only)
+    if allowed("queue:update"):
+        from events.queue import ActionQueue
+
+        await websocket.send_json(
+            {
+                "type": "queue:update",
+                "payload": ActionQueue.get_instance().get_status(),
+            }
+        )
+
     # Replay the last 250 triggered events (members only)
     if allowed("events:history"):
         await ws_notifier.send_history(user.id, store.websocket)
