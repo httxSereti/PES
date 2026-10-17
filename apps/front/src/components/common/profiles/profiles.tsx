@@ -103,7 +103,7 @@ export function Profiles() {
     const initialized = useAppSelector((state) => state.profiles.initialized);
     const [query, setQuery] = useState("");
     const [type, setType] = useState<ProfileTypeFilter>("all");
-    const [sort, setSort] = useState<ProfileSort>("newest");
+    const [sort, setSort] = useState<ProfileSort>("name");
     const [view, setView] = useState<ProfileView>("grid");
     const searchRef = useRef<HTMLInputElement>(null);
 
@@ -209,7 +209,7 @@ export function Profiles() {
                 <div className="ml-auto flex flex-wrap items-center gap-2">
                     {canWrite && (
                         <Button
-                            className="bg-purple-500 text-white hover:bg-purple-500/90"
+                            className="border border-purple-500/30 bg-purple-500/15 text-purple-700 hover:bg-purple-500/25 dark:text-purple-200"
                             onClick={() => dispatch(openProfileSave())}
                         >
                             <BookmarkPlus className="h-4 w-4" /> Save current

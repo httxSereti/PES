@@ -83,8 +83,8 @@ function ProfileListRow({
                 className={cn(
                     "flex h-12 cursor-pointer items-center gap-4 border-l-2 px-4 transition",
                     selected
-                        ? "border-purple-500 bg-muted/40"
-                        : "border-transparent hover:bg-muted/20",
+                        ? "border-l-purple-500 bg-muted/40"
+                        : "border-l-transparent hover:bg-muted/20",
                 )}
             >
                 <ProfileMonogram
