@@ -195,6 +195,24 @@ class Ramp(WireModel):
     owner: str | None = None
 
 
+class ProfileRampPreview(WireModel):
+    """Resolved ramp of a saved profile, for the profile shape preview.
+
+    Values mirror what the action executor would pass to the ramp manager:
+    ``step`` is normalized to percent of ``max``, ``start``/``max`` are
+    absolute field levels (MagicNumber ranges resolved to their midpoint).
+    """
+
+    unit: str
+    field: str
+    mode: RampMode = RampMode.RESET
+    timer: float = 1.0
+    step: float = 1.0
+    duration: float = -1
+    start: int = 0
+    max: int = 0
+
+
 class ProfileSummary(WireModel):
     """Catalog entry for a saved profile file (see services/profiles.py)."""
 
@@ -204,6 +222,8 @@ class ProfileSummary(WireModel):
     unit_count: int = 0
     ramp_count: int = 0
     modified_at: str | None = None
+    # Resolved per-ramp detail (ramps a profile apply would skip are omitted)
+    ramps: list[ProfileRampPreview] = []
 
 
 class ActiveProfile(WireModel):
@@ -364,6 +384,7 @@ __all__ = [
     "TriggeredEvent",
     "QueueStatus",
     "Ramp",
+    "ProfileRampPreview",
     "ProfileSummary",
     "ActiveProfile",
     "CommandResult",

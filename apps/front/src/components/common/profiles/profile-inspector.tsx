@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import {
     Copy,
     Download,
@@ -29,10 +29,9 @@ import { DuplicateProfileDialog } from "./duplicate-profile-dialog";
 import { EditProfileDialog } from "./edit-profile-dialog";
 import { ProfileMonogram, ProfileTypeBadge } from "./profile-badges";
 import {
+    buildProfilePreview,
     descriptionTags,
     formatClock,
-    profileDurationSeconds,
-    shapeBars,
 } from "./profile-shape";
 
 type ProfileInspectorProps = {
@@ -44,11 +43,11 @@ type ProfileInspectorProps = {
 };
 
 /** Lane A/B are purple, lane C slate — mirrors the design export. */
-const SHAPE_LANES = [
-    { label: "A", start: 17, end: 90, bar: "bg-purple-500" },
-    { label: "B", start: 13, end: 72, bar: "bg-purple-400" },
-    { label: "C", start: 10, end: 54, bar: "bg-slate-500" },
-] as const;
+const LANE_BAR_COLORS: Record<string, string> = {
+    A: "bg-purple-500",
+    B: "bg-purple-400",
+    C: "bg-slate-500",
+};
 
 const AXIS_TICKS = 5;
 
@@ -77,8 +76,9 @@ export function ProfileInspector({
     const [deleteOpen, setDeleteOpen] = useState(false);
     const [deleting, setDeleting] = useState(false);
 
+    const preview = useMemo(() => buildProfilePreview(profile), [profile]);
     const tags = descriptionTags(profile.description);
-    const durationSeconds = profileDurationSeconds(profile.ramp_count);
+    const durationSeconds = preview.durationSeconds;
 
     const handleDelete = async () => {
         setDeleting(true);
@@ -188,24 +188,20 @@ export function ProfileInspector({
                 </div>
 
                 <div className="flex flex-col gap-2 rounded-[10px] border border-border/60 bg-muted/20 p-4">
-                    {SHAPE_LANES.map((lane) => (
+                    {preview.lanes.map((lane) => (
                         <div key={lane.label} className="flex items-end gap-2">
                             <span className="w-2.5 pb-0.5 text-center font-mono text-[10px] text-muted-foreground">
                                 {lane.label}
                             </span>
                             <div className="flex h-[120px] flex-1 items-end gap-[3px] rounded-lg bg-muted/40 px-2">
-                                {shapeBars(
-                                    `${profile.name}#${lane.label}`,
-                                    profile.ramp_count,
-                                    lane.start,
-                                    lane.end,
-                                ).map((height, index) => (
+                                {lane.bars.map((height, index) => (
                                     <span
                                         key={index}
                                         style={{ height: `${height}%` }}
                                         className={cn(
                                             "min-w-0 flex-1 rounded-[3px]",
-                                            lane.bar,
+                                            LANE_BAR_COLORS[lane.label] ??
+                                                "bg-slate-500",
                                         )}
                                     />
                                 ))}

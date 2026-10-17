@@ -18,8 +18,9 @@ from datetime import UTC, datetime
 
 import structlog
 
-from hardware.ramp import ramp_manager
+from hardware.ramp import RAMP_FIELDS, ramp_manager
 from store import Store
+from typings import RampMode
 from utils import to_utc_iso
 
 logger = structlog.get_logger("pes")
@@ -85,10 +86,108 @@ def load_profile(name: str) -> dict:
     return document
 
 
+# MagicNumber-style range in a ramp config, resolved to its midpoint for previews
+_RAMP_RANGE_RE = re.compile(r"^\[(\d+)-(\d+)\]$")
+
+
+def _explicit_level(value: object) -> int | None:
+    """
+    Resolve an explicit ramp level: an int/float or a MagicNumber-style
+    "[low-high]" range (midpoint). Returns None for invalid values — the
+    executor skips the whole ramp in that case.
+    """
+    if isinstance(value, bool) or not isinstance(value, (int, float, str)):
+        return None
+    if isinstance(value, str):
+        match = _RAMP_RANGE_RE.match(value.strip())
+        if not match:
+            return None
+        low, high = sorted((int(match.group(1)), int(match.group(2))))
+        value = (low + high) // 2
+    return max(0, min(100, int(value)))
+
+
+def _preview_ramps(units: dict) -> list[dict]:
+    """
+    Resolved per-ramp preview of a profile's ``threads_settings``.
+
+    Mirrors the action executor (``_apply_profile`` → ``RampManager.start``):
+    invalid entries it would skip are omitted here too. ``step`` is normalized
+    to percent of the max value; ``start`` / ``max`` default to the level the
+    profile just applied to the field.
+    """
+    if not isinstance(units, dict):
+        return []
+
+    ramps: list[dict] = []
+    for unit_name in sorted(units):
+        unit_profile = units[unit_name]
+        if not isinstance(unit_profile, dict):
+            continue
+        unit_ramps = unit_profile.get("ramps") or {}
+        if not isinstance(unit_ramps, dict):
+            continue
+
+        for field in RAMP_FIELDS:
+            cfg = unit_ramps.get(field)
+            if not isinstance(cfg, dict):
+                continue
+
+            try:
+                timer = cfg["timer"]
+                step = float(cfg.get("step", 1))
+                duration = cfg.get("duration", -1)
+                mode = RampMode(cfg.get("mode", "reset"))
+            except (KeyError, TypeError, ValueError):
+                continue
+
+            step_unit = cfg.get("step_unit", "percent")
+            if (
+                not isinstance(timer, (int, float))
+                or isinstance(timer, bool)
+                or not isinstance(duration, (int, float))
+                or isinstance(duration, bool)
+                or step_unit not in ("percent", "absolute")
+                or timer <= 0
+                or step <= 0
+                or (step_unit == "percent" and step > 100)
+                or (duration != -1 and duration <= 0)
+            ):
+                continue
+
+            field_level = _explicit_level(unit_profile.get(field)) or 0
+            max_level = (
+                _explicit_level(cfg["max"]) if "max" in cfg else field_level
+            )
+            start_level = (
+                _explicit_level(cfg["start"]) if "start" in cfg else field_level
+            )
+            if max_level is None or start_level is None:
+                continue
+
+            if step_unit == "absolute" and max_level > 0:
+                step = step * 100 / max_level
+
+            ramps.append(
+                {
+                    "unit": unit_name,
+                    "field": field,
+                    "mode": mode.value,
+                    "timer": float(timer),
+                    "step": round(step, 2),
+                    "duration": float(duration),
+                    "start": start_level,
+                    "max": max_level,
+                }
+            )
+
+    return ramps
+
+
 def summarize(name: str, document: dict) -> dict:
     """Catalog entry for a profile document."""
     units = document.get("threads_settings") or {}
-    ramp_count = sum(len(unit.get("ramps") or {}) for unit in units.values())
+    ramps = _preview_ramps(units)
     path = PROFILE_DIR / f"{name}.json"
     try:
         modified = datetime.fromtimestamp(path.stat().st_mtime, tz=UTC)
@@ -100,8 +199,9 @@ def summarize(name: str, document: dict) -> dict:
         "description": document.get("comment") or None,
         "builtin": len(name) == 1 and name.isalpha(),
         "unit_count": len(units),
-        "ramp_count": ramp_count,
+        "ramp_count": len(ramps),
         "modified_at": to_utc_iso(modified) if modified else None,
+        "ramps": ramps,
     }
 
 

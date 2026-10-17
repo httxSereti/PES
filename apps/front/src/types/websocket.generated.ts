@@ -380,6 +380,18 @@ export interface ProfileSummary {
     unit_count: number;
     ramp_count: number;
     modified_at?: string | null;
+    ramps: ProfileRampPreview[];
+}
+
+export interface ProfileRampPreview {
+    unit: string;
+    field: string;
+    mode: RampMode;
+    timer: number;
+    step: number;
+    duration: number;
+    start: number;
+    max: number;
 }
 
 export interface ProfileSavedPayload {

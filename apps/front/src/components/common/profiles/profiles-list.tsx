@@ -10,7 +10,7 @@ import type { ProfileSummary } from "@/types";
 import { ApplyProfileDialog } from "./apply-profile-dialog";
 import { ProfileInspector } from "./profile-inspector";
 import { ProfileMonogram } from "./profile-badges";
-import { shapeBars } from "./profile-shape";
+import { sparklineBars } from "./profile-shape";
 
 type ProfilesListProps = {
     profiles: ProfileSummary[];
@@ -20,7 +20,7 @@ type ProfilesListProps = {
     onExport: (name: string) => void;
 };
 
-/** Deterministic sparkline mirroring lane A of the inspector chart. */
+/** Intensity envelope of the profile's real ramps, sampled over one program window. */
 function ShapeSparkline({
     profile,
     active,
@@ -28,7 +28,7 @@ function ShapeSparkline({
     profile: ProfileSummary;
     active: boolean;
 }) {
-    const bars = shapeBars(`${profile.name}#A`, profile.ramp_count, 17, 90, 8);
+    const bars = sparklineBars(profile);
     return (
         <div className="flex h-6 w-[88px] shrink-0 items-end gap-[2px]">
             {bars.map((height, index) => (
