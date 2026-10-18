@@ -1,10 +1,11 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
     ArrowUpDown,
     Bookmark,
     BookmarkPlus,
     LayoutGrid,
     List,
+    RefreshCw,
     Search,
 } from "lucide-react";
 import { toast } from "sonner";
@@ -27,21 +28,23 @@ import { useAppDispatch, useAppSelector } from "@/store/hooks";
 import {
     openProfileSave,
     profilesSelectors,
+    selectActiveProfile,
 } from "@/store/slices/profilesSlice";
 import type { ProfileSummary } from "@/types";
 import { Permission } from "@/types";
 
 import { ActiveProfileBanner } from "./active-profile-banner";
+import { PendingProfiles } from "./pending-profiles";
 import { ProfileCard } from "./profile-card";
 import { ProfilesList } from "./profiles-list";
 
-type ProfileTypeFilter = "all" | "builtin" | "custom";
+type ProfileTypeFilter = "all" | "legacy" | "custom";
 type ProfileSort = "newest" | "name" | "ramps";
 type ProfileView = "grid" | "list";
 
 const TYPE_FILTERS: Array<{ key: ProfileTypeFilter; label: string }> = [
     { key: "all", label: "All" },
-    { key: "builtin", label: "Built-in" },
+    { key: "legacy", label: "Legacy" },
     { key: "custom", label: "Custom" },
 ];
 
@@ -84,7 +87,7 @@ function sortProfiles(
 function noMatchMessage(query: string, type: ProfileTypeFilter): string {
     const q = query.trim();
     const typeLabel =
-        type === "builtin" ? "built-in" : type === "custom" ? "custom" : null;
+        type === "legacy" ? "legacy" : type === "custom" ? "custom" : null;
     if (q) {
         return typeLabel
             ? `No ${typeLabel} profile matches "${q}".`
@@ -95,21 +98,68 @@ function noMatchMessage(query: string, type: ProfileTypeFilter): string {
         : "No profile matches the current filters.";
 }
 
+/** ⌘K on macOS, Ctrl+K elsewhere — mirrors the keydown handler below. */
+function searchShortcut(): string {
+    const platform = typeof navigator === "undefined" ? "" : navigator.platform;
+    return /mac/i.test(platform) ? "⌘K" : "Ctrl+K";
+}
+
 export function Profiles() {
     const dispatch = useAppDispatch();
     const { sendCommand } = useWebSocket();
     const user = useAppSelector((state) => state.auth.user);
     const profiles = useAppSelector(profilesSelectors.selectAll);
     const initialized = useAppSelector((state) => state.profiles.initialized);
+    const activeProfile = useAppSelector(selectActiveProfile);
     const [query, setQuery] = useState("");
     const [type, setType] = useState<ProfileTypeFilter>("all");
     const [sort, setSort] = useState<ProfileSort>("name");
     const [view, setView] = useState<ProfileView>("grid");
+    const [refreshing, setRefreshing] = useState(false);
     const searchRef = useRef<HTMLInputElement>(null);
 
     const canApply = hasPermission(user, Permission.WRITE_UNITS);
     const canWrite = hasPermission(user, Permission.WRITE_PROFILES);
     const canDelete = hasPermission(user, Permission.MANAGE_PROFILES);
+
+    // The catalog is file-backed: re-fetch so profiles edited outside the
+    // app (hand edits, another instance) show up without a reconnect.
+    const handleRefresh = useCallback(async () => {
+        setRefreshing(true);
+        try {
+            void sendCommand("profiles:pending").catch(() => undefined);
+            const result = await sendCommand("profiles:list");
+            if (result.status !== "ok") {
+                toast.error("Failed to refresh profiles", {
+                    description: result.message ?? undefined,
+                    position: "bottom-right",
+                });
+            }
+        } catch (error) {
+            toast.error("Failed to refresh profiles", {
+                description: error instanceof Error ? error.message : undefined,
+                position: "bottom-right",
+            });
+        } finally {
+            setRefreshing(false);
+        }
+    }, [sendCommand]);
+
+    // Silent refetch when the window regains focus.
+    useEffect(() => {
+        const onFocus = () => {
+            sendCommand("profiles:list").catch(() => undefined);
+        };
+        window.addEventListener("focus", onFocus);
+        return () => window.removeEventListener("focus", onFocus);
+    }, [sendCommand]);
+
+    // Queued applies change when a profile starts or reverts: refetch on
+    // mount and whenever the active profile changes. Enqueue/cancel are
+    // pushed live via `profiles:pending` broadcasts.
+    useEffect(() => {
+        void sendCommand("profiles:pending").catch(() => undefined);
+    }, [sendCommand, activeProfile]);
 
     // ⌘K / Ctrl+K focuses the search input (no command palette).
     useEffect(() => {
@@ -127,21 +177,21 @@ export function Profiles() {
     }, []);
 
     const counts = useMemo(() => {
-        const builtin = profiles.reduce(
-            (total, profile) => total + (profile.builtin ? 1 : 0),
+        const legacy = profiles.reduce(
+            (total, profile) => total + (profile.legacy ? 1 : 0),
             0,
         );
         return {
             all: profiles.length,
-            builtin,
-            custom: profiles.length - builtin,
+            legacy,
+            custom: profiles.length - legacy,
         };
     }, [profiles]);
 
     const filtered = useMemo(() => {
         const q = query.trim().toLowerCase();
         const matching = profiles.filter((profile) => {
-            if (type !== "all" && profile.builtin !== (type === "builtin")) {
+            if (type !== "all" && profile.legacy !== (type === "legacy")) {
                 return false;
             }
             if (!q) return true;
@@ -191,7 +241,7 @@ export function Profiles() {
 
     return (
         <div className="space-y-4">
-            <div className="mb-8 flex flex-wrap items-start justify-between gap-4 px-5">
+            <div className="mb-6 flex flex-wrap items-start justify-between gap-4 px-4 md:mb-8 md:px-5">
                 <div className="flex-col">
                     <div className="flex items-center gap-2.5">
                         <h1 className="font-syne text-xl font-extrabold sm:text-2xl lg:text-[26px]">
@@ -206,10 +256,10 @@ export function Profiles() {
                     </div>
                 </div>
 
-                <div className="ml-auto flex flex-wrap items-center gap-2">
+                <div className="ml-auto flex w-full flex-wrap items-center gap-2 sm:w-auto">
                     {canWrite && (
                         <Button
-                            className="border border-purple-500/30 bg-purple-500/15 text-purple-700 hover:bg-purple-500/25 dark:text-purple-200"
+                            className="w-full border border-purple-500/30 bg-purple-500/15 text-purple-700 hover:bg-purple-500/25 sm:w-auto dark:text-purple-200"
                             onClick={() => dispatch(openProfileSave())}
                         >
                             <BookmarkPlus className="h-4 w-4" /> Save current
@@ -219,80 +269,102 @@ export function Profiles() {
                 </div>
             </div>
 
-            <div className="px-5">
+            <div className="space-y-2 px-4 md:px-5">
                 <ActiveProfileBanner />
+                <PendingProfiles canCancel={canApply} />
             </div>
 
-            <div className="flex flex-wrap items-center gap-2 px-5">
-                <div className="relative w-80 max-w-full">
+            <div className="flex flex-col gap-2 px-4 md:px-5 lg:flex-row lg:flex-wrap lg:items-center">
+                <div className="relative w-full lg:w-80">
                     <Search className="pointer-events-none absolute top-1/2 left-2.5 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
                     <Input
                         ref={searchRef}
                         value={query}
                         onChange={(event) => setQuery(event.target.value)}
                         placeholder="Search profiles..."
-                        className="h-9 pr-14 pl-8"
+                        className="h-9 pr-9 pl-8 sm:pr-14"
                     />
-                    <Kbd className="pointer-events-none absolute top-1/2 right-2.5 h-5 -translate-y-1/2 border border-border bg-transparent px-1.5 font-mono text-[10px] font-normal text-muted-foreground/70">
-                        ⌘K
+                    <Kbd className="pointer-events-none absolute top-1/2 right-2.5 hidden h-5 -translate-y-1/2 border border-border bg-transparent px-1.5 font-mono text-[10px] font-normal text-muted-foreground/70 sm:inline-flex">
+                        {searchShortcut()}
                     </Kbd>
                 </div>
 
-                {TYPE_FILTERS.map((filter) => {
-                    const active = type === filter.key;
-                    return (
-                        <button
-                            key={filter.key}
-                            type="button"
-                            aria-pressed={active}
-                            onClick={() => setType(filter.key)}
-                            className={cn(
-                                "inline-flex h-[30px] cursor-pointer items-center gap-1.5 rounded-lg border px-2.5 transition",
-                                active
-                                    ? "border-purple-500/30 bg-purple-500/15 text-purple-700 dark:text-purple-200"
-                                    : "border-border bg-muted/40 text-muted-foreground/70 hover:border-muted-foreground/30 hover:text-foreground",
-                            )}
-                        >
-                            <span className="text-xs font-medium">
-                                {filter.label}
-                            </span>
-                            <span
+                <div className="flex flex-wrap items-center gap-2 lg:contents">
+                    {TYPE_FILTERS.map((filter) => {
+                        const active = type === filter.key;
+                        return (
+                            <button
+                                key={filter.key}
+                                type="button"
+                                aria-pressed={active}
+                                onClick={() => setType(filter.key)}
                                 className={cn(
-                                    "font-mono text-[11px]",
+                                    "inline-flex h-[30px] cursor-pointer items-center gap-1.5 rounded-lg border px-2.5 transition",
                                     active
-                                        ? "text-purple-500/70 dark:text-purple-300/70"
-                                        : "text-muted-foreground/70",
+                                        ? "border-purple-500/30 bg-purple-500/15 text-purple-700 dark:text-purple-200"
+                                        : "border-border bg-muted/40 text-muted-foreground/70 hover:border-muted-foreground/30 hover:text-foreground",
                                 )}
                             >
-                                {counts[filter.key]}
-                            </span>
-                        </button>
-                    );
-                })}
+                                <span className="text-xs font-medium">
+                                    {filter.label}
+                                </span>
+                                <span
+                                    className={cn(
+                                        "font-mono text-[11px]",
+                                        active
+                                            ? "text-purple-500/70 dark:text-purple-300/70"
+                                            : "text-muted-foreground/70",
+                                    )}
+                                >
+                                    {counts[filter.key]}
+                                </span>
+                            </button>
+                        );
+                    })}
+                </div>
 
-                <div className="ml-auto flex items-center gap-2">
-                    <Select
-                        value={sort}
-                        onValueChange={(value) => setSort(value as ProfileSort)}
-                    >
-                        <SelectTrigger className="gap-2 px-3 text-xs [&_svg]:size-3.5">
-                            <ArrowUpDown className="size-3.5 text-muted-foreground" />
-                            <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent
-                            position="popper"
-                            align="end"
-                            sideOffset={4}
+                <div className="flex items-center justify-between gap-2 lg:ml-auto lg:justify-start">
+                    <div className="flex items-center gap-2">
+                        <Button
+                            variant="outline"
+                            size="icon"
+                            title="Refresh from disk"
+                            disabled={refreshing}
+                            onClick={() => void handleRefresh()}
                         >
-                            {(Object.keys(SORT_LABELS) as ProfileSort[]).map(
-                                (key) => (
+                            <RefreshCw
+                                className={cn(
+                                    "h-3.5 w-3.5",
+                                    refreshing && "animate-spin",
+                                )}
+                            />
+                        </Button>
+
+                        <Select
+                            value={sort}
+                            onValueChange={(value) =>
+                                setSort(value as ProfileSort)
+                            }
+                        >
+                            <SelectTrigger className="gap-2 px-3 text-xs [&_svg]:size-3.5">
+                                <ArrowUpDown className="size-3.5 text-muted-foreground" />
+                                <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent
+                                position="popper"
+                                align="end"
+                                sideOffset={4}
+                            >
+                                {(
+                                    Object.keys(SORT_LABELS) as ProfileSort[]
+                                ).map((key) => (
                                     <SelectItem key={key} value={key}>
                                         {SORT_LABELS[key]}
                                     </SelectItem>
-                                ),
-                            )}
-                        </SelectContent>
-                    </Select>
+                                ))}
+                            </SelectContent>
+                        </Select>
+                    </div>
 
                     <div className="flex h-9 items-center gap-0.5 rounded-lg border border-border bg-muted/40 p-0.5">
                         <button
@@ -328,11 +400,11 @@ export function Profiles() {
             </div>
 
             {!initialized ? (
-                <div className="px-5 text-sm text-muted-foreground">
+                <div className="px-4 text-sm text-muted-foreground md:px-5">
                     Loading...
                 </div>
             ) : filtered.length === 0 ? (
-                <div className="mx-5 flex flex-col items-center gap-3 rounded-lg border border-dashed border-border/60 py-16 text-center">
+                <div className="mx-4 flex flex-col items-center gap-3 rounded-lg border border-dashed border-border/60 py-16 text-center md:mx-5">
                     <Bookmark className="h-8 w-8 text-muted-foreground/50" />
                     <p className="text-sm text-muted-foreground">
                         {profiles.length === 0
@@ -369,7 +441,7 @@ export function Profiles() {
                     onExport={handleExport}
                 />
             ) : (
-                <div className="grid grid-cols-1 gap-3 px-5 pb-5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+                <div className="grid grid-cols-1 gap-3 px-4 pb-4 sm:grid-cols-2 md:px-5 md:pb-5 lg:grid-cols-3 xl:grid-cols-4">
                     {filtered.map((profile) => (
                         <ProfileCard
                             key={profile.name}

@@ -218,10 +218,19 @@ class ProfileSummary(WireModel):
 
     name: str
     description: str | None = None
-    builtin: bool = False
+    # Single-letter ids (Chaster WOF codes); legacy profiles live at the
+    # root of the profile directory, custom ones under `custom/`
+    legacy: bool = False
     unit_count: int = 0
+    # Valid UNIT names included in the profile (threads_settings keys)
+    units: list[str] = []
     ramp_count: int = 0
     modified_at: str | None = None
+    # Provenance recorded in the profile file
+    created_by: str | None = None
+    updated_by: str | None = None
+    created_at: str | None = None
+    updated_at: str | None = None
     # Resolved per-ramp detail (ramps a profile apply would skip are omitted)
     ramps: list[ProfileRampPreview] = []
 
@@ -236,6 +245,19 @@ class ActiveProfile(WireModel):
     ends_at: str | None = None
     # Units the profile targets (keys of its threads_settings block)
     units: list[str] | None = None
+
+
+class PendingProfile(WireModel):
+    """A waiting PROFILE item in the action queue (not started yet)."""
+
+    id: str
+    name: str
+    level_pct: int = 100
+    duration: int = -1
+    units: list[str] = []
+    origin: str = ""
+    display_name: str | None = None
+    created_at: str | None = None
 
 
 class CommandResult(WireModel):
@@ -387,6 +409,7 @@ __all__ = [
     "ProfileRampPreview",
     "ProfileSummary",
     "ActiveProfile",
+    "PendingProfile",
     "CommandResult",
     "StatusMessage",
     "EdgingGoal",

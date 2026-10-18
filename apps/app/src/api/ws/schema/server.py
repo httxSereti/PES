@@ -20,6 +20,7 @@ from .models import (
     EdgingEdge,
     EdgingSession,
     EdgingSessionStats,
+    PendingProfile,
     ProfileSummary,
     QueueStatus,
     Ramp,
@@ -264,6 +265,14 @@ class ProfilesActiveMessage(ServerMessage):
     payload: ActiveProfile | None
 
 
+@server_message(audience=Permission.READ_UNITS)
+class ProfilesPendingMessage(ServerMessage):
+    """Queued (waiting) profile applies — broadcast and personal reply."""
+
+    type: Literal["profiles:pending"] = "profiles:pending"
+    payload: list[PendingProfile]
+
+
 # ─────────────────────────────── Trigger rules ───────────────────────────────
 
 
@@ -478,6 +487,7 @@ __all__ = [
     "ProfileExportedPayload",
     "ProfilesExportedMessage",
     "ProfilesActiveMessage",
+    "ProfilesPendingMessage",
     "TriggerRulesLoadMessage",
     "TriggerRulesLoadLabelsMessage",
     "TriggerRuleBroadcastPayload",

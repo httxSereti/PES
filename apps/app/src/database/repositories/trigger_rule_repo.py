@@ -69,6 +69,27 @@ class TriggerRuleRepo:
             result = await session.execute(stmt)
             return result.scalar_one_or_none()
 
+    async def find_profile_references(
+        self, profile_name: str
+    ) -> List[TriggerRule]:
+        """
+        Rules holding a PROFILE action targeting `profile_name`.
+
+        Guards profile renames/deletes so trigger rules don't end up
+        pointing at a profile that no longer exists.
+        """
+        rules = await self.get_all_rules()
+        return [
+            rule
+            for rule in rules
+            if any(
+                action.action_type == ActionType.PROFILE
+                and isinstance(action.payload, dict)
+                and action.payload.get("profile") == profile_name
+                for action in rule.actions
+            )
+        ]
+
     async def create_rule(
         self,
         event_type: str,

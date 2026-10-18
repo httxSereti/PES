@@ -7,6 +7,7 @@ import {
 } from '@reduxjs/toolkit';
 import type {
     ActiveProfile,
+    PendingProfile,
     ProfileDeletedPayload,
     ProfileSavedPayload,
     ProfileSummary,
@@ -16,9 +17,9 @@ import type { RootState } from '@/store';
 const profilesAdapter = createEntityAdapter<ProfileSummary, string>({
     selectId: (profile) => profile.name,
     sortComparer: (a, b) =>
-        a.builtin === b.builtin
+        a.legacy === b.legacy
             ? a.name.localeCompare(b.name)
-            : a.builtin
+            : a.legacy
                 ? -1
                 : 1,
 });
@@ -30,6 +31,8 @@ export interface ProfilesState extends EntityState<ProfileSummary, string> {
     saveDialogOpen: boolean;
     /** The profile currently applied by the executor, null when idle. */
     activeProfile: ActiveProfile | null;
+    /** Waiting profile applies in the action queue (oldest first). */
+    pending: PendingProfile[];
 }
 
 const initialState: ProfilesState = {
@@ -37,6 +40,7 @@ const initialState: ProfilesState = {
     initialized: false,
     saveDialogOpen: false,
     activeProfile: null,
+    pending: [],
 };
 
 const profilesSlice = createSlice({
@@ -63,6 +67,13 @@ const profilesSlice = createSlice({
         ) => {
             state.activeProfile = action.payload;
         },
+        /** Queued applies changed (`profiles:pending`, oldest first). */
+        pendingProfilesLoaded: (
+            state,
+            action: PayloadAction<PendingProfile[]>
+        ) => {
+            state.pending = action.payload;
+        },
         /** Sidebar button / external trigger. */
         openProfileSave: (state) => {
             state.saveDialogOpen = true;
@@ -79,11 +90,15 @@ export const profilesSelectors: EntitySelectors<ProfileSummary, RootState, strin
 export const selectActiveProfile = (state: RootState) =>
     state.profiles.activeProfile;
 
+export const selectPendingProfiles = (state: RootState) =>
+    state.profiles.pending;
+
 export const {
     profilesLoaded,
     profileSaved,
     profileDeleted,
     activeProfileUpdated,
+    pendingProfilesLoaded,
     openProfileSave,
     closeProfileSave,
 } = profilesSlice.actions;

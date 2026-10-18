@@ -7,7 +7,6 @@ import {
     Play,
     Trash2,
 } from "lucide-react";
-import { toast } from "sonner";
 
 import { Button } from "@pes/ui/components/button";
 import {
@@ -20,7 +19,6 @@ import {
 import { cn } from "@pes/ui/lib/utils";
 
 import { ConfirmDeleteDialog } from "@/components/common/dialogs/confirm-delete-dialog";
-import { useWebSocket } from "@/hooks/useWebSocket";
 import { formatDateTime } from "@/lib/format-date";
 import type { ProfileSummary } from "@/types";
 
@@ -33,6 +31,7 @@ import {
     descriptionTags,
     formatClock,
 } from "./profile-shape";
+import { useProfileDelete } from "./use-profile-delete";
 
 type ProfileInspectorProps = {
     profile: ProfileSummary;
@@ -69,50 +68,25 @@ export function ProfileInspector({
     canDelete,
     onExport,
 }: ProfileInspectorProps) {
-    const { sendCommand } = useWebSocket();
     const [applyOpen, setApplyOpen] = useState(false);
     const [editOpen, setEditOpen] = useState(false);
     const [duplicateOpen, setDuplicateOpen] = useState(false);
     const [deleteOpen, setDeleteOpen] = useState(false);
-    const [deleting, setDeleting] = useState(false);
+    const { deleting, warning, requestDelete, reset } = useProfileDelete(
+        profile,
+        setDeleteOpen,
+    );
 
     const preview = useMemo(() => buildProfilePreview(profile), [profile]);
     const tags = descriptionTags(profile.description);
     const durationSeconds = preview.durationSeconds;
 
-    const handleDelete = async () => {
-        setDeleting(true);
-        try {
-            const result = await sendCommand("profiles:delete", {
-                name: profile.name,
-            });
-            if (result.status === "ok") {
-                toast.success(`Profile "${profile.name}" deleted`, {
-                    position: "bottom-right",
-                });
-                setDeleteOpen(false);
-                return;
-            }
-            toast.error("Failed to delete profile", {
-                description: result.message ?? undefined,
-                position: "bottom-right",
-            });
-        } catch (error) {
-            toast.error("Failed to delete profile", {
-                description: error instanceof Error ? error.message : undefined,
-                position: "bottom-right",
-            });
-        } finally {
-            setDeleting(false);
-        }
-    };
-
     return (
-        <div className="flex w-full flex-col gap-[18px] rounded-xl border bg-card p-5 2xl:w-[580px] 2xl:shrink-0">
+        <div className="flex w-full flex-col gap-4 rounded-xl border bg-card p-4 md:gap-[18px] md:p-5 2xl:w-[580px] 2xl:shrink-0">
             <div className="flex items-start gap-3">
                 <ProfileMonogram
                     name={profile.name}
-                    builtin={profile.builtin}
+                    legacy={profile.legacy}
                     className="h-11 w-11 rounded-[10px] text-base"
                 />
 
@@ -126,11 +100,29 @@ export function ProfileInspector({
                         </p>
                     )}
                     <div className="mt-1.5 flex flex-wrap items-center gap-2">
-                        <ProfileTypeBadge builtin={profile.builtin} />
+                        <ProfileTypeBadge legacy={profile.legacy} />
                         <span className="font-mono text-[10px] text-muted-foreground">
                             Updated {formatDateTime(profile.modified_at)}
                         </span>
                     </div>
+                    {(profile.created_by || profile.updated_by) && (
+                        <div className="mt-1 flex flex-wrap items-center gap-x-3 font-mono text-[10px] text-muted-foreground">
+                            {profile.created_by && (
+                                <span
+                                    title={`Created ${formatDateTime(profile.created_at)}`}
+                                >
+                                    created by {profile.created_by}
+                                </span>
+                            )}
+                            {profile.updated_by && (
+                                <span
+                                    title={`Last edit ${formatDateTime(profile.updated_at)}`}
+                                >
+                                    updated by {profile.updated_by}
+                                </span>
+                            )}
+                        </div>
+                    )}
                 </div>
 
                 <DropdownMenu>
@@ -187,13 +179,13 @@ export function ProfileInspector({
                     </span>
                 </div>
 
-                <div className="flex flex-col gap-2 rounded-[10px] border border-border/60 bg-muted/20 p-4">
+                <div className="flex flex-col gap-2 rounded-[10px] border border-border/60 bg-muted/20 p-3 md:p-4">
                     {preview.lanes.map((lane) => (
                         <div key={lane.label} className="flex items-end gap-2">
                             <span className="w-2.5 pb-0.5 text-center font-mono text-[10px] text-muted-foreground">
                                 {lane.label}
                             </span>
-                            <div className="flex h-[120px] flex-1 items-end gap-[3px] rounded-lg bg-muted/40 px-2">
+                            <div className="flex h-20 flex-1 items-end gap-[3px] rounded-lg bg-muted/40 px-2 md:h-[120px]">
                                 {lane.bars.map((height, index) => (
                                     <span
                                         key={index}
@@ -254,7 +246,7 @@ export function ProfileInspector({
                 <div className="flex gap-3">
                     <MetaCell
                         label="Type"
-                        value={profile.builtin ? "Built-in" : "Custom"}
+                        value={profile.legacy ? "Legacy" : "Custom"}
                     />
                     <MetaCell
                         label="Updated"
@@ -321,11 +313,16 @@ export function ProfileInspector({
             />
             <ConfirmDeleteDialog
                 open={deleteOpen}
-                onOpenChange={setDeleteOpen}
+                onOpenChange={(value) => {
+                    setDeleteOpen(value);
+                    if (!value) reset();
+                }}
                 title={`Delete profile "${profile.name}"?`}
                 description="The profile file is removed from the server. This cannot be undone."
+                warning={warning}
+                actionLabel={warning ? "Delete anyway" : undefined}
                 busy={deleting}
-                onConfirm={handleDelete}
+                onConfirm={() => requestDelete(warning != null)}
             />
         </div>
     );

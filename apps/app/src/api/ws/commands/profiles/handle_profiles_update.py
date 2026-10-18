@@ -3,10 +3,19 @@ import structlog
 from api.ws.context import CommandContext
 from api.ws.registry import command
 from api.ws.schema import CommandResult, ProfilesUpdateCommand
+from database.repositories.trigger_rule_repo import TriggerRuleRepo
 from services import profiles as profiles_service
 from typings import Permission
 
 logger = structlog.get_logger("pes")
+
+
+def _describe_rules(names: list[str], limit: int = 5) -> str:
+    """`RuleA, RuleB, +2 more` — keeps error messages short."""
+    shown = ", ".join(names[:limit])
+    if len(names) > limit:
+        shown += f", +{len(names) - limit} more"
+    return shown
 
 
 @command(ProfilesUpdateCommand, Permission.WRITE_PROFILES)
@@ -18,6 +27,24 @@ async def handle_profiles_update(
 
     if p.description is None and not p.from_current and not p.rename_to:
         return CommandResult(status="error", message="Nothing to update")
+
+    # Renaming would leave trigger-rule actions pointing at the old name,
+    # so it is blocked while any rule still references this profile.
+    if p.rename_to and p.rename_to != p.name:
+        references = await TriggerRuleRepo().find_profile_references(p.name)
+        if references:
+            logger.warning(
+                f"[WS|profiles:update] Blocked rename of '{p.name}': used by "
+                f"{len(references)} trigger rule(s)"
+            )
+            return CommandResult(
+                status="error",
+                message=(
+                    f"Profile '{p.name}' is used by {len(references)} trigger "
+                    f"rule(s): {_describe_rules([rule.name for rule in references])}. "
+                    "Update those rules before renaming."
+                ),
+            )
 
     try:
         summary = profiles_service.update_profile(

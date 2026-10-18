@@ -41,7 +41,7 @@ export function ActiveProfileBanner() {
     const stopProfile = async () => {
         setStopping(true);
         try {
-            const result = await sendCommand("profiles:stop");
+            const result = await sendCommand("profiles:stop", {});
             if (result.status === "ok") {
                 toast.success(`Profile "${active.name}" stopped`, {
                     description: "Previous settings restored.",

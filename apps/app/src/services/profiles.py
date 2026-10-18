@@ -1,10 +1,17 @@
 """
-Saved EStim profiles: JSON documents under ``DIR_PROFILE`` that the event
-executor can apply (``ActionType.PROFILE``) and users can create from the UI.
+Saved EStim profiles: JSON documents the event executor can apply
+(``ActionType.PROFILE``) and users can create from the UI.
 
 A profile maps each unit to its settings plus an optional per-field ``ramps``
-block; see ``apps/app/profile/MODELE.json`` for the reference format. Built-in
-profiles ship as single-letter files (A-J, Z), user profiles use any slug.
+block; see ``apps/app/profile/MODELE.json`` for the reference format.
+
+Two kinds of profiles share the catalog:
+
+- **legacy**: single-letter ids (A-K, Z) bound by the Chaster WOF codes
+  (``{p:JfA}``). They live at the root of ``DIR_PROFILE``.
+- **custom**: any other name, created from the UI. New ones are stored under
+  ``DIR_PROFILE/custom/``; custom files from the older flat layout are still
+  read and edited in place.
 """
 
 from __future__ import annotations
@@ -18,9 +25,11 @@ from datetime import UTC, datetime
 
 import structlog
 
+from events.enums import ActionType, QueueItemStatus
+from events.queue import ActionQueue
 from hardware.ramp import RAMP_FIELDS, ramp_manager
 from store import Store
-from typings import RampMode
+from typings import RampMode, UnitDict
 from utils import to_utc_iso
 
 logger = structlog.get_logger("pes")
@@ -28,9 +37,16 @@ logger = structlog.get_logger("pes")
 # Profile files live next to the app (CWD = apps/app); config.env overrides.
 PROFILE_DIR = pathlib.Path(os.getenv("DIR_PROFILE", "profile"))
 
+# Custom (user-created) profiles live in a subfolder of the profile directory.
+CUSTOM_DIR_NAME = "custom"
+CUSTOM_PROFILE_DIR = PROFILE_DIR / CUSTOM_DIR_NAME
+
 # Profile name == file stem. Slugs keep the trigger-rule text field readable
 # and prevent path traversal.
 PROFILE_NAME_RE = re.compile(r"^[A-Za-z0-9_-]{1,32}$")
+
+# Unit keys a profile may target (hand-edited files can contain anything)
+_VALID_UNIT_NAMES = frozenset(unit.value for unit in UnitDict)
 
 # Template/example files that are not applicable profiles
 _HIDDEN_STEMS = {"MODELE"}
@@ -58,12 +74,33 @@ class ProfileError(Exception):
     """Invalid profile operation (bad name, missing file, ...)."""
 
 
+def _is_legacy_name(name: str) -> bool:
+    """Legacy ids are single letters: the Chaster WOF codes bind that shape."""
+    return len(name) == 1 and name.isalpha()
+
+
 def profile_path(name: str) -> pathlib.Path:
+    """
+    File backing a profile.
+
+    Legacy ids always live at the root. Custom profiles are stored under
+    ``custom/``; pre-existing custom files from the flat layout are still
+    resolved (and edited) at the root so nothing moves on its own.
+    """
     if not PROFILE_NAME_RE.match(name):
         raise ProfileError(
             "Profile name must be 1-32 characters: letters, digits, '-' or '_'"
         )
-    return PROFILE_DIR / f"{name}.json"
+    if _is_legacy_name(name):
+        return PROFILE_DIR / f"{name}.json"
+
+    custom_path = CUSTOM_PROFILE_DIR / f"{name}.json"
+    if custom_path.is_file():
+        return custom_path
+    root_path = PROFILE_DIR / f"{name}.json"
+    if root_path.is_file():
+        return root_path
+    return custom_path
 
 
 def profile_exists(name: str) -> bool:
@@ -186,43 +223,101 @@ def _preview_ramps(units: dict) -> list[dict]:
 
 def summarize(name: str, document: dict) -> dict:
     """Catalog entry for a profile document."""
-    units = document.get("threads_settings") or {}
+    raw_units = document.get("threads_settings")
+    units = raw_units if isinstance(raw_units, dict) else {}
+    unit_names = sorted(unit for unit in units if unit in _VALID_UNIT_NAMES)
     ramps = _preview_ramps(units)
-    path = PROFILE_DIR / f"{name}.json"
     try:
-        modified = datetime.fromtimestamp(path.stat().st_mtime, tz=UTC)
+        modified = datetime.fromtimestamp(
+            profile_path(name).stat().st_mtime, tz=UTC
+        )
     except OSError:
         modified = None
 
     return {
         "name": name,
         "description": document.get("comment") or None,
-        "builtin": len(name) == 1 and name.isalpha(),
-        "unit_count": len(units),
+        "legacy": _is_legacy_name(name),
+        "unit_count": len(unit_names),
+        "units": unit_names,
         "ramp_count": len(ramps),
         "modified_at": to_utc_iso(modified) if modified else None,
+        "created_by": document.get("created_by") or None,
+        "updated_by": document.get("updated_by") or None,
+        "created_at": document.get("created_at") or None,
+        "updated_at": document.get("updated_at") or None,
         "ramps": ramps,
     }
 
 
 def list_profiles() -> list[dict]:
-    """Every readable profile, built-ins first then user profiles by name."""
-    profiles: list[dict] = []
-    if not PROFILE_DIR.is_dir():
-        return profiles
-
-    for path in sorted(PROFILE_DIR.glob("*.json")):
-        if path.stem in _HIDDEN_STEMS:
+    """Every readable profile, legacy ids first then by name."""
+    names: set[str] = set()
+    for directory in (PROFILE_DIR, CUSTOM_PROFILE_DIR):
+        if not directory.is_dir():
             continue
+        for path in directory.glob("*.json"):
+            if path.stem in _HIDDEN_STEMS:
+                continue
+            names.add(path.stem)
+
+    profiles: list[dict] = []
+    for name in names:
         try:
-            document = load_profile(path.stem)
+            document = load_profile(name)
         except ProfileError as err:
             logger.warning(f"[Profiles] {err}")
             continue
-        profiles.append(summarize(path.stem, document))
+        profiles.append(summarize(name, document))
 
-    profiles.sort(key=lambda p: (not p["builtin"], p["name"].lower()))
+    profiles.sort(key=lambda p: (not p["legacy"], p["name"].lower()))
     return profiles
+
+
+def list_pending_applies() -> list[dict]:
+    """
+    Waiting PROFILE items in the action queue, oldest first.
+
+    Feeds the `profiles:pending` broadcast / reply so the UI can show (and
+    cancel) applies queued behind a running action. An empty list is
+    returned before the queue is initialized.
+    """
+    try:
+        queue = ActionQueue.get_instance()
+    except RuntimeError:
+        return []
+
+    pending = [
+        item
+        for item in queue.get_items()
+        if item.action_type == ActionType.PROFILE
+        and item.status == QueueItemStatus.WAITING
+    ]
+    pending.sort(key=lambda item: item.created_at)
+
+    items: list[dict] = []
+    for item in pending:
+        payload = item.payload if isinstance(item.payload, dict) else {}
+        try:
+            level_pct = int(payload.get("level_pct", 100))
+        except (TypeError, ValueError):
+            level_pct = 100
+        units = payload.get("units")
+        items.append(
+            {
+                "id": item.id,
+                "name": str(payload.get("profile", "")),
+                "level_pct": level_pct,
+                "duration": item.duration,
+                "units": [str(unit) for unit in units]
+                if isinstance(units, list)
+                else [],
+                "origin": item.origin,
+                "display_name": item.display_name,
+                "created_at": to_utc_iso(item.created_at),
+            }
+        )
+    return items
 
 
 def capture_threads_settings(include_ramps: bool) -> dict:
@@ -322,6 +417,7 @@ def update_profile(
         document["threads_settings"] = threads_settings
 
     target_name = rename_to or name
+    old_path = profile_path(name)
     target_path = profile_path(target_name)
     if target_name != name and target_path.exists():
         raise ProfileError(f"Profile '{target_name}' already exists")
@@ -330,8 +426,8 @@ def update_profile(
     document["updated_at"] = to_utc_iso(datetime.now(UTC))
 
     _write_document(target_path, document)
-    if target_name != name:
-        profile_path(name).unlink(missing_ok=True)
+    if target_name != name and target_path != old_path:
+        old_path.unlink(missing_ok=True)
 
     logger.info(f"[Profiles] Updated profile '{name}'", updated_by=updated_by)
     return summarize(target_name, document)

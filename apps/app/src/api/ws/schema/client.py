@@ -255,7 +255,7 @@ class ProfileSavePayload(WireModel):
     name: str = Field(min_length=1, max_length=32, pattern=r"^[A-Za-z0-9_-]+$")
     description: str | None = Field(default=None, max_length=200)
     include_ramps: bool = True
-    # required to replace an existing profile (e.g. a built-in letter)
+    # required to replace an existing profile (e.g. a legacy letter)
     overwrite: bool = False
 
 
@@ -270,6 +270,11 @@ class ProfileApplyPayload(WireModel):
     name: str = Field(min_length=1, max_length=32)
     level_pct: int = Field(default=100, ge=0, le=150)
     duration: int = Field(default=-1, ge=-1)  # seconds, -1 = permanent
+    # Apply only these units (subset of the profile's threads_settings);
+    # None = every unit in the profile
+    units: list[str] | None = Field(default=None, min_length=1)
+    # Replace the profile currently running instead of waiting behind it
+    replace: bool = True
 
 
 class ProfilesApplyCommand(ClientMessage):
@@ -312,6 +317,8 @@ class ProfilesDuplicateCommand(ClientMessage):
 
 class ProfileDeletePayload(WireModel):
     name: str = Field(min_length=1, max_length=32)
+    # Delete even when trigger rules still reference the profile
+    force: bool = False
 
 
 class ProfilesDeleteCommand(ClientMessage):
@@ -332,10 +339,22 @@ class ProfilesExportCommand(ClientMessage):
     payload: ProfileExportPayload
 
 
+class ProfileStopPayload(WireModel):
+    # Cancel this waiting queue item instead of the running profile
+    queue_item_id: str | None = None
+
+
 class ProfilesStopCommand(ClientMessage):
-    """Stop the currently applied profile (reverses it)."""
+    """Stop the running profile, or cancel one queued apply by id."""
 
     type: Literal["profiles:stop"] = "profiles:stop"
+    payload: ProfileStopPayload
+
+
+class ProfilesPendingCommand(ClientMessage):
+    """Request the queued (waiting) profile applies (personal reply)."""
+
+    type: Literal["profiles:pending"] = "profiles:pending"
     payload: dict[str, Any] | None = None
 
 
@@ -526,7 +545,9 @@ __all__ = [
     "ProfilesDeleteCommand",
     "ProfileExportPayload",
     "ProfilesExportCommand",
+    "ProfileStopPayload",
     "ProfilesStopCommand",
+    "ProfilesPendingCommand",
     "TrainingIndexCommand",
     "TrainingSessionsCommand",
     "TrainingSessionDetailPayload",

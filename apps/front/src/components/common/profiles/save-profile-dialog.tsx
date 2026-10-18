@@ -192,7 +192,7 @@ export function SaveProfileDialog() {
                                 <FieldContent>
                                     <FieldLabel>Overwrite existing profile</FieldLabel>
                                     <FieldDescription className="text-amber-500">
-                                        {`"${existing.name}"${existing.builtin ? " (built-in)" : ""} already exists and will be replaced.`}
+                                        {`"${existing.name}"${existing.legacy ? " (legacy)" : ""} already exists and will be replaced.`}
                                     </FieldDescription>
                                 </FieldContent>
                             </Field>

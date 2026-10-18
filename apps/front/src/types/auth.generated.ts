@@ -58,6 +58,7 @@ export const SERVER_MESSAGE_AUDIENCE: Record<WebSocketServerMessage['type'], Per
     'profiles:deleted': Permission.READ_PROFILES,
     'profiles:exported': Permission.READ_PROFILES,
     'profiles:active': Permission.READ_UNITS,
+    'profiles:pending': Permission.READ_UNITS,
     'trigger_rules:load': Permission.ADMIN,
     'trigger_rules:load_labels': Permission.ADMIN,
     'trigger_rules:update': Permission.ADMIN,

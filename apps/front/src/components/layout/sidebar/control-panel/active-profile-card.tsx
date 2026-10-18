@@ -18,7 +18,7 @@ export function ActiveProfileCard() {
   const stopProfile = async () => {
     setStoppingProfile(true);
     try {
-      const data = await sendCommand("profiles:stop");
+      const data = await sendCommand("profiles:stop", {});
 
       if (data.status === "ok") {
         toast.success("Profile stopped", {

@@ -223,7 +223,55 @@ class ActionExecutor:
             "units": {},
         }
 
-        bck_settings = profile_data.get("threads_settings", {})
+        raw_settings = profile_data.get("threads_settings")
+
+        # Only apply the units the caller asked for (None = all of them), and
+        # drop invalid entries up front: a malformed unit block or unknown
+        # unit name must not abort the apply midway and leave earlier units
+        # changed without a snapshot to reverse them.
+        requested_units = payload.get("units")
+        allowed: set[str] | None = (
+            {str(unit) for unit in requested_units}
+            if isinstance(requested_units, list) and requested_units
+            else None
+        )
+
+        bck_settings: dict[str, dict] = {}
+        if isinstance(raw_settings, dict):
+            for unit_name, unit_profile in raw_settings.items():
+                if allowed is not None and unit_name not in allowed:
+                    continue
+                if not isinstance(unit_profile, dict):
+                    logger.warning(
+                        f"[Executor] Skipped invalid unit block '{unit_name}' "
+                        f"in profile '{profile_name}'"
+                    )
+                    continue
+                try:
+                    UnitDict(unit_name)
+                except ValueError:
+                    logger.warning(
+                        f"[Executor] Skipped unknown unit '{unit_name}' "
+                        f"in profile '{profile_name}'"
+                    )
+                    continue
+                bck_settings[unit_name] = unit_profile
+        else:
+            logger.warning(
+                f"[Executor] Profile '{profile_name}' has no valid "
+                "'threads_settings' block"
+            )
+
+        if not bck_settings:
+            logger.warning(
+                f"[Executor] Profile '{profile_name}' has no applicable units"
+            )
+            return {
+                "type": "profile",
+                "profile": profile_name,
+                "queue_item_id": item.id,
+                "units": {},
+            }
 
         for unit_name, unit_profile in bck_settings.items():
             unit = UnitDict(unit_name)
@@ -242,6 +290,12 @@ class ActionExecutor:
                 usage = unit_profile.get(use_field)
                 if usage is None or usage == current.get(use_field):
                     continue
+                if not isinstance(usage, str):
+                    logger.warning(
+                        f"[Executor] Skipped invalid usage "
+                        f"'{unit_name}.{use_field}={usage!r}'"
+                    )
+                    continue
                 unit_snapshot["usages"][ch] = {
                     "before_use": current.get(use_field),
                     "applied_use": usage,
@@ -259,7 +313,14 @@ class ActionExecutor:
                 if field not in _PROFILE_FIELDS:
                     continue
                 if field in ("ch_A", "ch_B"):
-                    new_val = round(int(value) * int(level_pct) / 100)
+                    try:
+                        new_val = round(int(value) * int(level_pct) / 100)
+                    except (TypeError, ValueError):
+                        logger.warning(
+                            f"[Executor] Skipped invalid profile value "
+                            f"'{unit_name}.{field}={value!r}'"
+                        )
+                        continue
                     new_val = min(100, max(0, new_val))
                 elif field in _INT_PROFILE_FIELDS:
                     try:
@@ -296,7 +357,14 @@ class ActionExecutor:
             # field's current value unless `start` is set. Invalid entries
             # are logged and skipped (profiles are hand-edited JSON).
             # Ramps are owned by this profile item (see stop_owned).
-            for field, ramp_cfg in unit_profile.get("ramps", {}).items():
+            unit_ramps = unit_profile.get("ramps") or {}
+            if not isinstance(unit_ramps, dict):
+                logger.warning(
+                    f"[Executor] Skipped invalid 'ramps' block for "
+                    f"'{unit_name}' in profile '{profile_name}'"
+                )
+                unit_ramps = {}
+            for field, ramp_cfg in unit_ramps.items():
                 try:
                     ramp_manager.start(
                         unit,

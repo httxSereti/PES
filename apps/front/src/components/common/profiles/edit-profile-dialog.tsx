@@ -102,7 +102,8 @@ export function EditProfileDialog({
                     <DialogTitle>{`Edit "${profile.name}"`}</DialogTitle>
                     <DialogDescription>
                         Rename it, change its description, or replace its content
-                        with the current unit settings.
+                        with the current unit settings. Renaming is blocked while
+                        trigger rules use the profile.
                     </DialogDescription>
                 </DialogHeader>
 

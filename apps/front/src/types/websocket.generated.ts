@@ -2,7 +2,7 @@
 // by apps/app/scripts/generate_ws_types.py — DO NOT EDIT.
 // Regenerate with: pnpm codegen:ws
 
-export const WS_SCHEMA_VERSION = 10;
+export const WS_SCHEMA_VERSION = 11;
 
 export enum ActionType {
     PROFILE = "PROFILE",
@@ -98,6 +98,8 @@ export interface ProfileApplyPayload {
     name: string;
     level_pct: number;
     duration: number;
+    units?: string[] | null;
+    replace: boolean;
 }
 
 export interface ProfileUpdatePayload {
@@ -115,10 +117,15 @@ export interface ProfileDuplicatePayload {
 
 export interface ProfileDeletePayload {
     name: string;
+    force: boolean;
 }
 
 export interface ProfileExportPayload {
     name: string;
+}
+
+export interface ProfileStopPayload {
+    queue_item_id?: string | null;
 }
 
 export interface TrainingSessionDetailPayload {
@@ -376,10 +383,15 @@ export interface QueueStatus {
 export interface ProfileSummary {
     name: string;
     description?: string | null;
-    builtin: boolean;
+    legacy: boolean;
     unit_count: number;
+    units: string[];
     ramp_count: number;
     modified_at?: string | null;
+    created_by?: string | null;
+    updated_by?: string | null;
+    created_at?: string | null;
+    updated_at?: string | null;
     ramps: ProfileRampPreview[];
 }
 
@@ -415,6 +427,17 @@ export interface ActiveProfile {
     started_at: string;
     ends_at?: string | null;
     units?: string[] | null;
+}
+
+export interface PendingProfile {
+    id: string;
+    name: string;
+    level_pct: number;
+    duration: number;
+    units: string[];
+    origin: string;
+    display_name?: string | null;
+    created_at?: string | null;
 }
 
 export interface TriggerRuleBroadcastPayload {
@@ -727,6 +750,12 @@ export interface ProfilesExportCommand {
 export interface ProfilesStopCommand {
     id?: string | null;
     type: 'profiles:stop';
+    payload: ProfileStopPayload;
+}
+
+export interface ProfilesPendingCommand {
+    id?: string | null;
+    type: 'profiles:pending';
     payload?: Record<string, unknown> | null;
 }
 
@@ -949,6 +978,12 @@ export interface ProfilesActiveMessage {
     payload: ActiveProfile | null;
 }
 
+export interface ProfilesPendingMessage {
+    id?: string | null;
+    type: 'profiles:pending';
+    payload: PendingProfile[];
+}
+
 export interface TriggerRulesLoadMessage {
     id?: string | null;
     type: 'trigger_rules:load';
@@ -1088,6 +1123,7 @@ export type WebSocketClientMessage =
     | ProfilesDeleteCommand
     | ProfilesExportCommand
     | ProfilesStopCommand
+    | ProfilesPendingCommand
     | TrainingIndexCommand
     | TrainingSessionsCommand
     | TrainingSessionDetailCommand
@@ -1127,6 +1163,7 @@ export type WebSocketServerMessage =
     | ProfilesDeletedMessage
     | ProfilesExportedMessage
     | ProfilesActiveMessage
+    | ProfilesPendingMessage
     | TriggerRulesLoadMessage
     | TriggerRulesLoadLabelsMessage
     | TriggerRulesUpdateMessage

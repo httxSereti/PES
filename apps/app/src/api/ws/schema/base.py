@@ -10,7 +10,7 @@ from pydantic import BaseModel, ConfigDict
 
 from typings import Permission
 
-WS_SCHEMA_VERSION = 10
+WS_SCHEMA_VERSION = 11
 
 
 class TsType(str):

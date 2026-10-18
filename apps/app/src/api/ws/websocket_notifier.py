@@ -20,13 +20,14 @@ class WebSocketNotifier:
         self._loop = loop
         self._queue = asyncio.Queue()
 
-    def notify(self, payload_type: str, payload: dict | None):
+    def notify(self, payload_type: str, payload: dict | list | None):
         """
         Queue a broadcast. The audience (required Permission, or None for
         public) is resolved from MESSAGE_AUDIENCE and applied by `consume`.
         `payload` may be None for messages that explicitly carry null (e.g.
-        `profiles:active` when no profile is running). Safe to call from any
-        thread.
+        `profiles:active` when no profile is running) or a list for
+        catalog-style messages (e.g. `profiles:pending`). Safe to call from
+        any thread.
         """
         if self._loop is None or self._queue is None:
             logger.warning("WSNotifier not ready, dropping event")
