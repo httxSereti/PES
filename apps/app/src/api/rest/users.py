@@ -20,6 +20,8 @@ def _serialize_user(user: User) -> dict:
         "is_active": user.is_active,
         # online == currently holding a live WebSocket connection
         "is_online": user.id in store.websocket.get_connected_clients(),
+        # Ephemeral guest identities aren't persisted and can't be managed
+        "is_ephemeral": user.is_ephemeral,
         "created_at": to_utc_iso(user.created_at),
         "last_login_at": to_utc_iso(user.last_login_at),
     }

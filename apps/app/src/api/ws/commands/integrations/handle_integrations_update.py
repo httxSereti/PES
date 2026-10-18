@@ -23,6 +23,8 @@ async def handle_integrations_update(
             payload.integration_id,
             enabled=payload.enabled,
             settings=payload.settings,
+            events=payload.events,
+            actions=payload.actions,
         )
     except ValueError as err:
         return CommandResult(status="error", message=str(err))
@@ -34,6 +36,8 @@ async def handle_integrations_update(
         "[WS|integrations:update] Integration updated",
         integration_id=payload.integration_id,
         enabled=payload.enabled,
+        events=payload.events,
+        actions=payload.actions,
     )
 
     return CommandResult(status="ok")

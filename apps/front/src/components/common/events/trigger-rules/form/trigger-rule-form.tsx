@@ -30,7 +30,7 @@ export default function TriggerRuleForm({ rule }: { rule?: TriggerRule }) {
     const dispatch = useAppDispatch();
     const navigate = useNavigate();
     const { sendCommand } = useWebSocket();
-    const { groups: eventGroups } = useEventCatalog();
+    const { groups: eventGroups, disabledTypes } = useEventCatalog();
     const [apiError, setApiError] = useState<string | null>(null);
 
     const isEdit = !!rule;
@@ -154,8 +154,21 @@ export default function TriggerRuleForm({ rule }: { rule?: TriggerRule }) {
                                                             {group.label}
                                                         </div>
                                                         {group.types.map((t) => (
-                                                            <SelectItem key={t} value={t}>
+                                                            <SelectItem
+                                                                key={t}
+                                                                value={t}
+                                                                className={
+                                                                    disabledTypes.has(t)
+                                                                        ? "text-muted-foreground/50"
+                                                                        : undefined
+                                                                }
+                                                            >
                                                                 {t}
+                                                                {disabledTypes.has(t) && (
+                                                                    <span className="ml-1.5 text-[10px] uppercase tracking-wide text-muted-foreground/50">
+                                                                        disabled
+                                                                    </span>
+                                                                )}
                                                             </SelectItem>
                                                         ))}
                                                     </div>

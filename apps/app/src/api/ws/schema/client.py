@@ -526,6 +526,9 @@ class IntegrationUpdatePayload(WireModel):
     enabled: bool | None = None
     # json-source settings only; env-source settings are read-only
     settings: dict[str, Any] | None = None
+    # per-event / per-action toggles: {item_id: enabled}
+    events: dict[str, bool] | None = None
+    actions: dict[str, bool] | None = None
 
 
 class IntegrationsUpdateCommand(ClientMessage):

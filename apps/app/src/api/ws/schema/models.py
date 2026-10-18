@@ -318,6 +318,8 @@ class IntegrationEvent(WireModel):
     description: str
     # Optional display subgroup (e.g. "Pillory", "Votes"); "" = ungrouped
     group: str = ""
+    # False = the event is ignored by the dispatcher (rule pipeline only)
+    enabled: bool = True
     data_schema: dict[str, str]
 
 
@@ -328,6 +330,8 @@ class IntegrationAction(WireModel):
     label: str
     description: str
     group: str = ""
+    # False = trigger rules may not run this action (manual paths unaffected)
+    enabled: bool = True
     payload_schema: dict[str, str]
     reversible: bool
 

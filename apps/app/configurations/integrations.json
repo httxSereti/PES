@@ -1,5 +1,8 @@
 {
   "chaster": {
-    "enabled": true
+    "enabled": true,
+    "events": {
+      "chaster_pillory_vote": true
+    }
   }
 }

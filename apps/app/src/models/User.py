@@ -18,6 +18,8 @@ class User:
     display_name: Optional[str]
     is_online: bool = False
     is_active: bool = True
+    # Ephemeral guest identities live only in the Store cache (never in DB)
+    is_ephemeral: bool = False
 
     created_at: datetime = field(default_factory=datetime.now)
     last_login_at: Optional[datetime] = None

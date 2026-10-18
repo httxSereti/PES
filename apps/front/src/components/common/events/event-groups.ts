@@ -45,6 +45,8 @@ export interface EventCatalog {
     grouped: Record<string, string[]>;
     /** Every known event type id. */
     knownTypes: Set<string>;
+    /** Event type ids currently disabled in their integration. */
+    disabledTypes: Set<string>;
     /** Event type id → short description. */
     descriptions: Record<string, string>;
     /** Event type id → human label. */
@@ -80,6 +82,7 @@ export function useEventCatalog(): EventCatalog {
             Object.entries(groups).map(([key, group]) => [key, group.types])
         );
         const knownTypes = new Set(Object.values(groups).flatMap(group => group.types));
+        const disabledTypes = new Set<string>();
 
         const descriptions: Record<string, string> = {};
         const labels: Record<string, string> = {};
@@ -87,10 +90,11 @@ export function useEventCatalog(): EventCatalog {
             for (const event of entry.events) {
                 descriptions[event.id] = event.description;
                 labels[event.id] = event.label;
+                if (event.enabled === false) disabledTypes.add(event.id);
             }
         }
 
-        return { groups, grouped, knownTypes, descriptions, labels };
+        return { groups, grouped, knownTypes, disabledTypes, descriptions, labels };
     }, [integrations]);
 }
 

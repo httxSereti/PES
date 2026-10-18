@@ -12,10 +12,12 @@ from events.enums import QueueItemStatus
 from events.models import QueueItem, TriggerRule
 from events.queue import ActionQueue
 from events.registry import EventRegistry
+from integrations import integration_registry
 from store import Store
 
 if TYPE_CHECKING:
     from api.ws.websocket_notifier import WebSocketNotifier
+    from integrations.registry import IntegrationRegistry
 
 logger = structlog.get_logger("pes")
 generate_id = cuid_wrapper()
@@ -37,12 +39,14 @@ class EventDispatcher:
         registry: EventRegistry,
         queue: ActionQueue,
         ws_notifier: WebSocketNotifier | None = None,
+        integrations: IntegrationRegistry | None = None,
     ):
         EventDispatcher._instance = self
         self._registry = registry
         self._queue = queue
         self._ws_notifier = ws_notifier
         self._event_repo = TriggeredEventRepo()
+        self._integrations = integrations or integration_registry
 
     async def dispatch(
         self,
@@ -68,6 +72,16 @@ class EventDispatcher:
             event_type=event_type,
             origin=origin,
         )
+
+        # Disabled at the integration level: drop the event entirely (no DB
+        # record, no queue items). Re-enabling brings the rules back.
+        if not self._integrations.is_event_enabled(event_type):
+            logger.info(
+                f"[Dispatcher] Event '{event_type}' disabled, ignored",
+                event_id=event_id,
+                origin=origin,
+            )
+            return
 
         # Resolve trigger rules from DB
         rules = await self._registry.get_rules_for_event(event_type)
@@ -130,6 +144,24 @@ class EventDispatcher:
         event_data = event_data or {}
         event_id = generate_id()
         triggered_at = datetime.now(UTC)
+
+        # Manual/dynamic items follow the same action toggles as rule items
+        # (option semantics: toggles only gate the automated pipeline).
+        enabled_items = [
+            item
+            for item in items
+            if self._integrations.is_action_enabled(item.action_type.value)
+        ]
+        skipped = len(items) - len(enabled_items)
+        if skipped:
+            logger.info(
+                f"[Dispatcher] Direct dispatch '{event_type}': {skipped} item(s) skipped (action disabled)",
+                event_id=event_id,
+                origin=origin,
+            )
+        items = enabled_items
+        if not items:
+            return
 
         logger.info(
             f"[Dispatcher] Direct dispatch '{event_type}' with {len(items)} item(s)",
@@ -232,11 +264,27 @@ class EventDispatcher:
             }
         ]
 
-    @staticmethod
-    def _rule_to_queue_items(rule: TriggerRule, origin: str) -> list[QueueItem]:
-        """Convert a TriggerRule's actions into QueueItems."""
+    def _rule_to_queue_items(self, rule: TriggerRule, origin: str) -> list[QueueItem]:
+        """
+        Convert a TriggerRule's actions into QueueItems.
+
+        Actions disabled at the integration level are skipped here, so the
+        rule keeps working as-is when the toggle is turned back on.
+        """
         items = []
         for action in rule.actions:
+            action_id = (
+                action.action_type.value
+                if hasattr(action.action_type, "value")
+                else str(action.action_type)
+            )
+            if not self._integrations.is_action_enabled(action_id):
+                logger.info(
+                    f"[Dispatcher] Action '{action_id}' disabled, skipped",
+                    rule=rule.name,
+                    origin=origin,
+                )
+                continue
             item = QueueItem(
                 id=generate_id(),
                 action_type=action.action_type,

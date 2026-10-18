@@ -77,7 +77,9 @@ store = Store()
 registry = EventRegistry(db)
 executor = ActionExecutor(store, ws_notifier=ws_notifier, registry=integration_registry)
 action_queue = ActionQueue(executor, ws_notifier=ws_notifier)
-dispatcher = EventDispatcher(registry, action_queue, ws_notifier=ws_notifier)
+dispatcher = EventDispatcher(
+    registry, action_queue, ws_notifier=ws_notifier, integrations=integration_registry
+)
 
 
 # REST API

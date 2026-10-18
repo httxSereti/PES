@@ -38,6 +38,24 @@ class WebSocketManager:
             self._connections.pop(client_id, None)
             self._permissions.pop(client_id, None)
 
+    async def close_connection(
+        self, client_id: str, code: int = 4001, reason: str = ""
+    ) -> None:
+        """
+        Drop and close a client's connection (used when a user is deleted or
+        deactivated). The 4001 close code tells the frontend to log out.
+        """
+        with self._lock:
+            websocket = self._connections.pop(client_id, None)
+            self._permissions.pop(client_id, None)
+
+        if websocket is None:
+            return
+        try:
+            await websocket.close(code=code, reason=reason)
+        except Exception:
+            pass
+
     def update_permissions(self, client_id: str, permissions: Set[Permission]):
         with self._lock:
             if client_id in self._connections:

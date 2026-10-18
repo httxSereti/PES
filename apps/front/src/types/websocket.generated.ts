@@ -2,7 +2,7 @@
 // by apps/app/scripts/generate_ws_types.py — DO NOT EDIT.
 // Regenerate with: pnpm codegen:ws
 
-export const WS_SCHEMA_VERSION = 13;
+export const WS_SCHEMA_VERSION = 14;
 
 export enum ActionType {
     PROFILE = "PROFILE",
@@ -206,6 +206,8 @@ export interface IntegrationUpdatePayload {
     integration_id: string;
     enabled?: boolean | null;
     settings?: Record<string, unknown> | null;
+    events?: Record<string, boolean> | null;
+    actions?: Record<string, boolean> | null;
 }
 
 export interface ConnectedPayload {
@@ -375,6 +377,7 @@ export interface IntegrationEvent {
     label: string;
     description: string;
     group: string;
+    enabled: boolean;
     data_schema: Record<string, string>;
 }
 
@@ -383,6 +386,7 @@ export interface IntegrationAction {
     label: string;
     description: string;
     group: string;
+    enabled: boolean;
     payload_schema: Record<string, string>;
     reversible: boolean;
 }

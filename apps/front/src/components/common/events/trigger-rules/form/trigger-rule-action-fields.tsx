@@ -37,10 +37,18 @@ export default function TriggerRuleActionFields({
     // static ActionType enum while the catalog has not arrived yet.
     const actionOptions = useMemo(() => {
         const fromCatalog = integrations.flatMap(integration =>
-            integration.actions.map(action => ({ id: action.id, label: action.label }))
+            integration.actions.map(action => ({
+                id: action.id,
+                label: action.label,
+                enabled: action.enabled,
+            }))
         );
         if (fromCatalog.length > 0) return fromCatalog;
-        return Object.values(ActionType).map(type => ({ id: type as string, label: type as string }));
+        return Object.values(ActionType).map(type => ({
+            id: type as string,
+            label: type as string,
+            enabled: true,
+        }));
     }, [integrations]);
 
     return (
@@ -71,11 +79,22 @@ export default function TriggerRuleActionFields({
                                     </SelectTrigger>
                                     <SelectContent position="item-aligned">
                                         {actionOptions.map((option) => (
-                                            <SelectItem key={option.id} value={option.id}>
+                                            <SelectItem
+                                                key={option.id}
+                                                value={option.id}
+                                                className={
+                                                    option.enabled ? undefined : "text-muted-foreground/50"
+                                                }
+                                            >
                                                 {option.label}
                                                 {option.label !== option.id && (
                                                     <span className="ml-1.5 font-mono text-[10px] text-muted-foreground/60">
                                                         {option.id}
+                                                    </span>
+                                                )}
+                                                {!option.enabled && (
+                                                    <span className="ml-1.5 text-[10px] uppercase tracking-wide text-muted-foreground/50">
+                                                        disabled
                                                     </span>
                                                 )}
                                             </SelectItem>

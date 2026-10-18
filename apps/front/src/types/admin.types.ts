@@ -12,6 +12,8 @@ export interface AdminUser {
     is_active: boolean;
     /** Currently holding a live WebSocket connection */
     is_online: boolean;
+    /** Ephemeral guest identity (cache-only; cannot be managed) */
+    is_ephemeral: boolean;
     created_at: string | null;
     last_login_at: string | null;
 }

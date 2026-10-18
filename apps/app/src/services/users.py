@@ -160,6 +160,7 @@ class UserService:
                 id=guest_id,
                 display_name=name,
                 role=Role.GUEST,
+                is_ephemeral=True,
             )
             self._store.add_user(user)
         else:
@@ -266,6 +267,69 @@ class UserService:
             revoked=sorted(p.value for p in (current - target)),
         )
         return True
+
+    async def set_user_display_name(self, user_id: str, display_name: str) -> bool:
+        """Write-through display-name change (DB + cache) and refresh the
+        user's live clients so their profile shows the new name."""
+        user = self._store.get_user(user_id)
+        if user is None:
+            return False
+
+        await self._users.update_display_name(user_id, display_name)
+        user.display_name = display_name
+
+        await self._store.websocket.send_personal_message(
+            {"type": "auth:refresh"}, user_id
+        )
+        logger.info("[Users] Display name updated", user_id=user_id)
+        return True
+
+    async def set_user_active(self, user_id: str, is_active: bool) -> bool:
+        """
+        Write-through active-state change (DB + cache). Deactivating a user
+        closes their live WebSocket (the endpoint can't be re-authenticated
+        while inactive).
+        """
+        user = self._store.get_user(user_id)
+        if user is None:
+            return False
+
+        await self._users.update_active(user_id, is_active)
+        user.is_active = is_active
+
+        if not is_active:
+            await self._store.websocket.close_connection(
+                user_id, code=4001, reason="User deactivated"
+            )
+        else:
+            await self._store.websocket.send_personal_message(
+                {"type": "auth:refresh"}, user_id
+            )
+        logger.info(
+            "[Users] Active state updated",
+            user_id=user_id,
+            is_active=is_active,
+        )
+        return True
+
+    async def delete_user(self, user_id: str) -> bool:
+        """
+        Permanently remove a user: magic tokens, DB row and Store cache entry.
+        Any live WebSocket is closed with 4001 so the client logs out.
+        """
+        user = self._store.get_user(user_id)
+        if user is None and await self._users.get_by_id(user_id) is None:
+            return False
+
+        await self._tokens.delete_for_user(user_id)
+        deleted = await self._users.delete(user_id)
+
+        self._store.remove_user(user_id)
+        await self._store.websocket.close_connection(
+            user_id, code=4001, reason="Account deleted"
+        )
+        logger.info("[Users] Deleted user", user_id=user_id)
+        return deleted
 
 
 user_service = UserService()

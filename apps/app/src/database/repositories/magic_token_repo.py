@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Optional
 
-from sqlalchemy import select
+from sqlalchemy import delete, select
 
 from database.connection import Database
 from database.models.magic_token import MagicTokenModel
@@ -51,4 +51,12 @@ class MagicTokenRepo:
             )
             for token in result.scalars().all():
                 token.revoked = True
+            await session.commit()
+
+    async def delete_for_user(self, user_id: str) -> None:
+        """Remove every magic token tied to a user (used on account deletion)."""
+        async with self._db.session_maker() as session:
+            await session.execute(
+                delete(MagicTokenModel).where(MagicTokenModel.user_id == user_id)
+            )
             await session.commit()

@@ -114,13 +114,49 @@ function groupBySubgroup<T extends { group?: string }>(items: T[]): GroupedItems
     return [...groups.filter(group => group.key), ...groups.filter(group => !group.key)];
 }
 
-function CatalogList<T extends { id: string; label: string; description: string; group?: string }>({
+function CatalogList<
+    T extends {
+        id: string;
+        label: string;
+        description: string;
+        group?: string;
+        enabled: boolean;
+    },
+>({
     items,
     emptyText,
+    integrationId,
+    section,
+    onSaved,
 }: {
     items: T[];
     emptyText: string;
+    integrationId: string;
+    section: "events" | "actions";
+    onSaved: () => void;
 }) {
+    const { sendCommand } = useWebSocket();
+    const [saving, setSaving] = useState<string | null>(null);
+
+    const toggle = async (item: T, enabled: boolean) => {
+        setSaving(item.id);
+        try {
+            const result = await sendCommand(
+                "integrations:update",
+                section === "events"
+                    ? { integration_id: integrationId, events: { [item.id]: enabled } }
+                    : { integration_id: integrationId, actions: { [item.id]: enabled } }
+            );
+            if (result.status !== "ok") {
+                toast.error(result.message ?? "Failed to update");
+                return;
+            }
+            onSaved();
+        } finally {
+            setSaving(null);
+        }
+    };
+
     if (items.length === 0) {
         return <p className="text-xs italic text-muted-foreground/50">{emptyText}</p>;
     }
@@ -140,13 +176,25 @@ function CatalogList<T extends { id: string; label: string; description: string;
                         </div>
                     )}
                     {group.items.map(item => (
-                        <div key={item.id} className="flex flex-col gap-0.5">
-                            <code className="font-mono text-[11px] text-violet-600 dark:text-violet-300">
-                                {item.id}
-                            </code>
-                            <span className="text-[11px] text-muted-foreground/70">
-                                {item.description || item.label}
-                            </span>
+                        <div key={item.id} className="flex items-center gap-3">
+                            <div
+                                className={`flex min-w-0 flex-1 flex-col gap-0.5 ${
+                                    item.enabled ? "" : "opacity-50"
+                                }`}
+                            >
+                                <code className="font-mono text-[11px] text-violet-600 dark:text-violet-300">
+                                    {item.id}
+                                </code>
+                                <span className="text-[11px] text-muted-foreground/70">
+                                    {item.description || item.label}
+                                </span>
+                            </div>
+                            <Switch
+                                className="shrink-0"
+                                checked={item.enabled}
+                                disabled={saving === item.id}
+                                onCheckedChange={enabled => void toggle(item, enabled)}
+                            />
                         </div>
                     ))}
                 </div>
@@ -453,6 +501,9 @@ function IntegrationPanel({
                             <CatalogList
                                 items={entry.events}
                                 emptyText="This integration provides no events."
+                                integrationId={entry.id}
+                                section="events"
+                                onSaved={onSaved}
                             />
                         </TabsContent>
 
@@ -460,6 +511,9 @@ function IntegrationPanel({
                             <CatalogList
                                 items={entry.actions}
                                 emptyText="This integration provides no actions."
+                                integrationId={entry.id}
+                                section="actions"
+                                onSaved={onSaved}
                             />
                         </TabsContent>
                     </div>

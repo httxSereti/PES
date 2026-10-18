@@ -46,6 +46,9 @@ class IntegrationRegistry:
         self._integrations: dict[str, Integration] = {}
         self._settings = settings_store or IntegrationSettingsStore()
         self._ctx: IntegrationContext | None = None
+        # item id -> owning integration id (filled at registration)
+        self._event_owner: dict[str, str] = {}
+        self._action_owner: dict[str, str] = {}
 
     # ───────── Registration / lookup ─────────
 
@@ -55,6 +58,10 @@ class IntegrationRegistry:
         if integration.id in self._integrations:
             raise ValueError(f"Duplicate integration id: {integration.id}")
         self._integrations[integration.id] = integration
+        for event in integration.events():
+            self._event_owner[event.id] = integration.id
+        for action in integration.actions():
+            self._action_owner[action.id] = integration.id
         logger.info(
             f"[Integrations] Registered '{integration.id}'",
             kind=integration.kind.value,
@@ -122,6 +129,51 @@ class IntegrationRegistry:
             raise ValueError(f"'{integration_id}' is a core integration and cannot be disabled")
         self._settings.set_enabled(integration_id, enabled)
 
+    def _is_item_toggled(self, integration_id: str, section: str, item_id: str) -> bool:
+        values = self._settings.get(integration_id).get(section)
+        if not isinstance(values, dict):
+            return True
+        return bool(values.get(item_id, True))
+
+    def is_event_enabled(self, event_id: str) -> bool:
+        """
+        True when the event may trigger rules.
+
+        Unknown ids (`custom:*` pseudo events) keep firing: they cannot be
+        toggled and never have a rule of their own.
+        """
+        owner_id = self._event_owner.get(event_id)
+        if owner_id is None:
+            return True
+        return self._is_item_toggled(owner_id, "events", event_id)
+
+    def is_action_enabled(self, action_id: str) -> bool:
+        """True when trigger rules may run this action type."""
+        owner_id = self._action_owner.get(action_id)
+        if owner_id is None:
+            return True
+        return self._is_item_toggled(owner_id, "actions", action_id)
+
+    def set_event_enabled(self, integration_id: str, event_id: str, enabled: bool) -> None:
+        integration = self._require(integration_id)
+        if not any(event.id == event_id for event in integration.events()):
+            raise ValueError(f"Unknown event '{event_id}' for '{integration_id}'")
+        self._set_item_toggled(integration_id, "events", event_id, enabled)
+
+    def set_action_enabled(self, integration_id: str, action_id: str, enabled: bool) -> None:
+        integration = self._require(integration_id)
+        if not any(action.id == action_id for action in integration.actions()):
+            raise ValueError(f"Unknown action '{action_id}' for '{integration_id}'")
+        self._set_item_toggled(integration_id, "actions", action_id, enabled)
+
+    def _set_item_toggled(
+        self, integration_id: str, section: str, item_id: str, enabled: bool
+    ) -> None:
+        values = self._settings.get(integration_id).get(section)
+        if not isinstance(values, dict):
+            values = {}
+        self._settings.update(integration_id, {section: {**values, item_id: bool(enabled)}})
+
     def settings_values(self, integration_id: str) -> dict[str, Any]:
         """Current value of every declared setting (secrets masked)."""
         integration = self._require(integration_id)
@@ -164,6 +216,8 @@ class IntegrationRegistry:
         *,
         enabled: bool | None = None,
         settings: dict[str, Any] | None = None,
+        events: dict[str, bool] | None = None,
+        actions: dict[str, bool] | None = None,
     ) -> dict[str, Any]:
         """Apply an update coming from the UI and return the fresh entry."""
         integration = self._require(integration_id)
@@ -172,6 +226,10 @@ class IntegrationRegistry:
             self.set_enabled(integration_id, enabled)
         if settings:
             self.set_settings(integration_id, settings)
+        for event_id, value in (events or {}).items():
+            self.set_event_enabled(integration_id, event_id, bool(value))
+        for action_id, value in (actions or {}).items():
+            self.set_action_enabled(integration_id, action_id, bool(value))
 
         return self.catalog_entry(integration)
 
@@ -216,6 +274,7 @@ class IntegrationRegistry:
                     "label": event.label,
                     "description": event.description,
                     "group": event.group,
+                    "enabled": self.is_event_enabled(event.id),
                     "data_schema": event.data_schema,
                 }
                 for event in integration.events()
@@ -226,6 +285,7 @@ class IntegrationRegistry:
                     "label": action.label,
                     "description": action.description,
                     "group": action.group,
+                    "enabled": self.is_action_enabled(action.id),
                     "payload_schema": action.payload_schema,
                     "reversible": action.reversible,
                 }
