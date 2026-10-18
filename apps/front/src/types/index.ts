@@ -36,6 +36,15 @@ export type {
 } from './events.types'
 
 export type {
+    IntegrationCatalogEntry,
+    IntegrationEvent,
+    IntegrationAction,
+    IntegrationSetting,
+    IntegrationDetail,
+    IntegrationValues,
+} from './integrations.types'
+
+export type {
     TrainingIndexResponse,
     TrainingSessionDetail,
     TrainingLiveSnapshot,

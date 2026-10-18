@@ -14,7 +14,7 @@ import { Switch } from "@pes/ui/components/switch";
 import { Separator } from "@pes/ui/components/separator";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@pes/ui/components/select";
 
-import { EVENT_GROUPS } from "@/components/common/events/event-groups";
+import { useEventCatalog } from "@/components/common/events/event-groups";
 import { useWebSocket } from "@/hooks/useWebSocket";
 import { useAppDispatch } from "@/store/hooks";
 import { triggerRuleAdded, triggerRuleUpdated } from "@/store/slices/triggerRulesSlice";
@@ -30,6 +30,7 @@ export default function TriggerRuleForm({ rule }: { rule?: TriggerRule }) {
     const dispatch = useAppDispatch();
     const navigate = useNavigate();
     const { sendCommand } = useWebSocket();
+    const { groups: eventGroups } = useEventCatalog();
     const [apiError, setApiError] = useState<string | null>(null);
 
     const isEdit = !!rule;
@@ -147,7 +148,7 @@ export default function TriggerRuleForm({ rule }: { rule?: TriggerRule }) {
                                                 <SelectValue placeholder="Select" />
                                             </SelectTrigger>
                                             <SelectContent position="item-aligned">
-                                                {Object.values(EVENT_GROUPS).map((group) => (
+                                                {Object.values(eventGroups).map((group) => (
                                                     <div key={group.label}>
                                                         <div className="px-2 py-1 font-mono text-[10px] uppercase tracking-widest text-muted-foreground/40">
                                                             {group.label}

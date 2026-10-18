@@ -1,21 +1,18 @@
 from __future__ import annotations
 
-import random
-import re
-import structlog
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
+import structlog
 from cuid2 import cuid_wrapper
 
-from events.enums import ActionType, QueueItemStatus
-from events.models import QueueItem, TriggerRule
-from events.registry import EventRegistry
-from events.queue import ActionQueue
 from database.models.triggered_event import TriggeredEvent
 from database.repositories.triggered_event_repo import TriggeredEventRepo
+from events.enums import QueueItemStatus
+from events.models import QueueItem, TriggerRule
+from events.queue import ActionQueue
+from events.registry import EventRegistry
 from store import Store
-
 
 if TYPE_CHECKING:
     from api.ws.websocket_notifier import WebSocketNotifier
@@ -63,7 +60,7 @@ class EventDispatcher:
         """
         event_data = event_data or {}
         event_id = generate_id()
-        triggered_at = datetime.now(timezone.utc)
+        triggered_at = datetime.now(UTC)
 
         logger.info(
             "[Dispatcher] Event received",
@@ -71,45 +68,6 @@ class EventDispatcher:
             event_type=event_type,
             origin=origin,
         )
-
-        """
-        Check for custom WOF action 
-            - Predefined Profile: {p:[profileChar][levelPercentage][duration]}
-            - [WIP] Custom Profile {p!:[profileId][levelPercentage][duration]}
-            - [WIP] Unit
-            - [WIP] Sensor
-        """
-
-        if "wofCustomType" in event_data:
-            if event_data["wofCustomType"] == "profile":
-                wof_items = self._parse_wof_dynamic_profile(
-                    event_action_text=event_data["wofText"], origin=origin
-                )
-
-                if wof_items:
-                    triggered_rules_summary = self._build_wof_summary(
-                        f"Execute profile ({event_data['wofAction']})", wof_items
-                    )
-                    await self._save_and_notify(
-                        event_id,
-                        event_type,
-                        origin,
-                        event_data,
-                        triggered_at,
-                        triggered_rules_summary,
-                    )
-                    self._queue.enqueue(wof_items)
-                    return
-            elif event_data["wofCustomType"] == "unit":
-                # TODO: implement unit update logic
-                pass
-            else:
-                logger.warning(
-                    f"[Dispatcher] Unknown WOF custom type: {event_data['wofCustomType']}",
-                    origin=origin,
-                    event_id=event_id,
-                )
-                return
 
         # Resolve trigger rules from DB
         rules = await self._registry.get_rules_for_event(event_type)
@@ -153,6 +111,43 @@ class EventDispatcher:
         # ── Step 3: Enqueue ──
         if queue_items:
             self._queue.enqueue(queue_items)
+
+    async def dispatch_direct(
+        self,
+        event_type: str,
+        items: list[QueueItem],
+        event_data: dict | None = None,
+        origin: str = "unknown",
+        summary_name: str | None = None,
+    ) -> None:
+        """
+        Dispatch pre-built queue items without resolving trigger rules.
+
+        Used by integrations whose dynamic actions (e.g. Chaster WOF codes)
+        bypass the rule engine. The event is still logged and broadcast with
+        the item summary so it shows up in the event history.
+        """
+        event_data = event_data or {}
+        event_id = generate_id()
+        triggered_at = datetime.now(UTC)
+
+        logger.info(
+            f"[Dispatcher] Direct dispatch '{event_type}' with {len(items)} item(s)",
+            event_id=event_id,
+            origin=origin,
+        )
+
+        await self._save_and_notify(
+            event_id,
+            event_type,
+            origin,
+            event_data,
+            triggered_at,
+            self._build_direct_summary(summary_name or event_type, items),
+        )
+
+        if items:
+            self._queue.enqueue(items)
 
     async def _save_and_notify(
         self,
@@ -215,12 +210,12 @@ class EventDispatcher:
         }
 
     @staticmethod
-    def _build_wof_summary(rule_name: str, queue_items: list[QueueItem]) -> list[dict]:
-        """Build a summary for WOF dynamic events (no DB rule involved)."""
+    def _build_direct_summary(summary_name: str, queue_items: list[QueueItem]) -> list[dict]:
+        """Build a summary for direct dispatches (no DB rule involved)."""
         return [
             {
                 "rule_id": None,
-                "rule_name": rule_name or "Custom WOF",
+                "rule_name": summary_name or "Direct action",
                 "priority": 0,
                 "actions": [
                     {
@@ -235,58 +230,6 @@ class EventDispatcher:
                     for item in queue_items
                 ],
             }
-        ]
-
-    @staticmethod
-    def _parse_wof_dynamic_profile(
-        event_action_text: str, origin: str
-    ) -> list[QueueItem]:
-        """
-        Parse dynamic WOF action codes (e.g. {p:Jfa}).
-        Format: {p:[Profile][Level][Duration]}
-          - Profile: uppercase letter A-J (or X for random)
-          - Level: uppercase = +5% per step from A, lowercase = -2% per step from a
-          - Duration: uppercase = 10s per step from A, lowercase = random up to 10s per step from a
-        """
-        m = re.match(r"^\{p:([A-Z])([A-Za-z])([A-Za-z])\}", event_action_text)
-        if not m:
-            return []
-
-        profile = m.group(1)
-
-        # Level coefficient
-        level_char = m.group(2)
-        if level_char.isupper():
-            level_pct = 100 + (ord(level_char) - 65) * 5
-        else:
-            level_pct = 100 - (ord(level_char) - 97) * 2
-
-        # Duration
-        dur_char = m.group(3)
-        if dur_char.isupper():
-            duration = (ord(dur_char) - 64) * 10
-        else:
-            duration = random.randint(10, (ord(dur_char) - 96) * 10)
-
-        logger.info(
-            f"[Dispatcher] Parsed WOF dynamic profile profile={profile}, level={level_pct}%, duration={duration}s",
-            profile=profile,
-            origin=origin,
-        )
-
-        return [
-            QueueItem(
-                id=generate_id(),
-                action_type=ActionType.PROFILE,
-                payload={"profile": profile, "level_pct": level_pct},
-                duration=duration,
-                cumulative=False,
-                priority=0,
-                status=QueueItemStatus.WAITING,
-                origin=origin,
-                display_name=f"WOF | Profile: {profile} at {level_pct} for {duration}s",
-                created_at=datetime.now(),
-            )
         ]
 
     @staticmethod

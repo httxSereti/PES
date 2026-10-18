@@ -19,7 +19,7 @@ import {
     type TriggeredFilterMode,
     type TimeWindowKey,
 } from "./events-filters";
-import { ALL_KNOWN_TYPES, EVENT_GROUPS, STATIC_GROUPED } from "./event-groups";
+import { useEventCatalog } from "./event-groups";
 
 interface EventsToolbarProps {
     events: TriggeredEvent[];
@@ -94,6 +94,7 @@ export function EventsToolbar({
     onSortToggle,
 }: EventsToolbarProps) {
     const activeCount = countActiveFilters(filter);
+    const { grouped, groups: groupDefs, knownTypes } = useEventCatalog();
 
     // Facets derived from the events currently in memory
     const facets = useMemo(() => {
@@ -109,7 +110,7 @@ export function EventsToolbar({
                 providers.add(o.provider);
                 modules.add(o.module);
             }
-            if (!ALL_KNOWN_TYPES.has(e.event_type)) unknown.add(e.event_type);
+            if (!knownTypes.has(e.event_type)) unknown.add(e.event_type);
             for (const r of e.triggered_rules ?? []) {
                 rules.add(r.rule_name);
                 for (const a of r.actions) actionTypes.add(a.action_type);
@@ -123,9 +124,9 @@ export function EventsToolbar({
             actionTypes: Array.from(actionTypes).sort(),
             unknown: Array.from(unknown).sort(),
         };
-    }, [events]);
+    }, [events, knownTypes]);
 
-    const groups: Array<[string, string[]]> = Object.entries(STATIC_GROUPED);
+    const groups: Array<[string, string[]]> = Object.entries(grouped);
     if (facets.unknown.length > 0) groups.push(["other", facets.unknown]);
 
     return (
@@ -219,7 +220,7 @@ export function EventsToolbar({
                                         <div key={groupKey} className="space-y-1.5">
                                             <div className="flex items-center justify-between gap-2">
                                                 <span className="text-[11px] font-medium text-muted-foreground/80">
-                                                    {isUnknownGroup ? "Other / unknown" : EVENT_GROUPS[groupKey]?.label ?? groupKey}
+                                                    {isUnknownGroup ? "Other / unknown" : groupDefs[groupKey]?.label ?? groupKey}
                                                 </span>
                                                 <button
                                                     type="button"

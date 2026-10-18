@@ -307,6 +307,56 @@ class StatusMessage(WireModel):
     message: str
 
 
+# ─────────────────────────────── Integrations ───────────────────────────────
+
+
+class IntegrationEvent(WireModel):
+    """One triggerable event contributed by an integration."""
+
+    id: str
+    label: str
+    description: str
+    # Optional display subgroup (e.g. "Pillory", "Votes"); "" = ungrouped
+    group: str = ""
+    data_schema: dict[str, str]
+
+
+class IntegrationAction(WireModel):
+    """One action type contributed by an integration."""
+
+    id: str
+    label: str
+    description: str
+    group: str = ""
+    payload_schema: dict[str, str]
+    reversible: bool
+
+
+class IntegrationSetting(WireModel):
+    """Declaration of one integration setting (source env = read-only)."""
+
+    key: str
+    label: str
+    description: str
+    type: str
+    source: str
+    secret: bool
+    options: list[str]
+
+
+class IntegrationCatalogEntry(WireModel):
+    """One integration with everything it contributes + its enabled state."""
+
+    id: str
+    name: str
+    description: str
+    kind: str
+    enabled: bool
+    events: list[IntegrationEvent]
+    actions: list[IntegrationAction]
+    settings: list[IntegrationSetting]
+
+
 # ─────────────────────────────── Training ───────────────────────────────
 
 
@@ -446,6 +496,10 @@ __all__ = [
     "PendingProfile",
     "CommandResult",
     "StatusMessage",
+    "IntegrationEvent",
+    "IntegrationAction",
+    "IntegrationSetting",
+    "IntegrationCatalogEntry",
     "EdgingGoal",
     "EdgingEdge",
     "EdgingSession",

@@ -22,6 +22,7 @@ from events.registry import EventRegistry
 from hardware.ramp import thread_ramp
 from hardware.sensors import thread_sensors_bt
 from hardware.units import mk2b_init, thread_bt_unit
+from integrations import integration_registry
 from store import Store
 from utils import initialize_logger
 
@@ -74,7 +75,7 @@ with open("configurations/bt_sensors.json") as json_file:
 db = Database()
 store = Store()
 registry = EventRegistry(db)
-executor = ActionExecutor(store, ws_notifier=ws_notifier)
+executor = ActionExecutor(store, ws_notifier=ws_notifier, registry=integration_registry)
 action_queue = ActionQueue(executor, ws_notifier=ws_notifier)
 dispatcher = EventDispatcher(registry, action_queue, ws_notifier=ws_notifier)
 

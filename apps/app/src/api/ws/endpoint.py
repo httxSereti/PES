@@ -117,6 +117,12 @@ async def _send_init_sequence(websocket: WebSocket, user) -> None:
 
         await profiles_loader(user.id, store.websocket)
 
+    # Integrations catalog (event readers)
+    if allowed("integrations:load"):
+        from api.ws.loaders import integrations_loader
+
+        await integrations_loader(user.id, store.websocket)
+
     # Load trigger rules + labels (admins only)
     if allowed("trigger_rules:load"):
         await ws_notifier.load_datas(user.id, store.websocket)

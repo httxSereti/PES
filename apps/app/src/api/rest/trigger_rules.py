@@ -3,8 +3,8 @@ from pydantic import BaseModel
 
 from api.helpers import get_current_user, require_permission, to_utc_iso
 from database.repositories.trigger_rule_repo import TriggerRuleRepo
-from events.enums import ActionType, TriggerableEvent
 from events.queue import ActionQueue
+from integrations import integration_registry
 from typings import Permission
 
 router = APIRouter(prefix="/api", tags=["trigger-rules"])
@@ -140,36 +140,25 @@ async def resume_queue(
 
 @router.get("/events/types")
 async def list_event_types(current_user: dict = Depends(get_current_user)):
-    """List all available triggerable event types."""
-    return [{"value": e.value, "name": e.name} for e in TriggerableEvent]
+    """List all available triggerable event types (integrations catalog)."""
+    return [
+        {
+            "value": event.id,
+            "name": event.label,
+            "description": event.description,
+        }
+        for event in integration_registry.events()
+    ]
 
 
 @router.get("/events/action-types")
 async def list_action_types(current_user: dict = Depends(get_current_user)):
     """List all action types with their expected payload schemas."""
-    schemas = {
-        ActionType.PROFILE: {
-            "profile": "string (A-J or X for random)",
-            "level_pct": "integer (percentage 0-150, default 100)",
-        },
-        ActionType.LEVEL: {
-            "units": "string (e.g. '123', '12RM', '23RO')",
-            "channels": "string (e.g. 'AB', 'ABRM')",
-            "operation": "string (prefix: '', '+', '-', '%+', '%-')",
-            "value": "string (level value, e.g. '30', '+10')",
-        },
-        ActionType.MULT: {
-            "target": "string (usage name or 'all')",
-            "pct": "integer (percentage to add/subtract)",
-            "random": "boolean (randomize between 0 and pct)",
-        },
-        ActionType.CHASTER_TIME_UPDATE: {
-            "duration_minutes": "integer (positive to add, negative to remove)",
-            "only_max": "boolean (only update max, not current time)",
-        },
-    }
-
     return [
-        {"value": t.value, "name": t.name, "payload_schema": schemas.get(t, {})}
-        for t in ActionType
+        {
+            "value": action.id,
+            "name": action.label,
+            "payload_schema": action.payload_schema,
+        }
+        for action in integration_registry.actions()
     ]

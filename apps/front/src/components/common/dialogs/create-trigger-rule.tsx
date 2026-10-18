@@ -12,7 +12,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Separator } from "@pes/ui/components/separator";
 import { useAppSelector } from "@/store/hooks";
 import { Role } from "@/types";
-import { ALL_KNOWN_TYPES } from "@/components/common/events/event-groups";
+import { useEventCatalog } from "@/components/common/events/event-groups";
 
 const API_URL = import.meta.env.VITE_API_URL;
 
@@ -70,6 +70,7 @@ async function addUser(
 
 export const CreateTriggerRule: FC = () => {
     const token = useAppSelector((state) => state.auth.token);
+    const { knownTypes } = useEventCatalog();
 
     const [open, setOpen] = useState(false);
     const [apiError, setApiError] = useState<string | null>(null);
@@ -209,7 +210,7 @@ export const CreateTriggerRule: FC = () => {
                                             <SelectValue placeholder="Select" />
                                         </SelectTrigger>
                                         <SelectContent position="item-aligned">
-                                            {Array.from(ALL_KNOWN_TYPES).map((eventType) => (
+                                            {Array.from(knownTypes).map((eventType) => (
                                                 <SelectItem key={eventType} value={eventType}>
                                                     {eventType}
                                                 </SelectItem>

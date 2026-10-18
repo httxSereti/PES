@@ -1,12 +1,10 @@
 from __future__ import annotations
 
-import os
 import random
 import re
 from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING
 
-import aiohttp
 import structlog
 
 from constants import BT_UNITS
@@ -21,15 +19,7 @@ from .models import QueueItem
 
 if TYPE_CHECKING:
     from api.ws.websocket_notifier import WebSocketNotifier
-
-# Chaster API
-_CHASTER_URL = os.getenv("CHASTER_URL", "")
-_CHASTER_TOKEN = os.getenv("CHASTER_TOKEN", "")
-_CHASTER_HEADERS = {
-    "accept": "application/json",
-    "Authorization": f"Bearer {_CHASTER_TOKEN}",
-    "Content-Type": "application/json",
-}
+    from integrations.registry import IntegrationRegistry
 
 # Upper bound for the profile level multiplier. Enforced here (not just in
 # the WS contract) so every path is capped: trigger rules, manual applies
@@ -68,12 +58,28 @@ logger = structlog.get_logger("pes")
 class ActionExecutor:
     """
     Executes and reverses actions on hardware units and external APIs.
-    Extracted from main.py apply_action() and reverse_action().
+
+    Integration actions are delegated to the handler registered in the
+    IntegrationRegistry (e.g. Chaster time updates); core hardware actions
+    (LEVEL, PROFILE, MULT) keep their implementation here.
     """
 
-    def __init__(self, store: Store, ws_notifier: WebSocketNotifier | None = None):
+    def __init__(
+        self,
+        store: Store,
+        ws_notifier: WebSocketNotifier | None = None,
+        registry: IntegrationRegistry | None = None,
+    ):
         self._store = store
         self._ws_notifier = ws_notifier
+        self._registry = registry
+
+    def _handler_for(self, item: QueueItem):
+        """Return the integration action handler for this item, if any."""
+        if self._registry is None:
+            return None
+        definition = self._registry.get_action(item.action_type.value)
+        return definition.handler if definition else None
 
     async def apply(self, item: QueueItem) -> dict | None:
         """
@@ -85,6 +91,10 @@ class ActionExecutor:
             origin=item.origin,
         )
 
+        handler = self._handler_for(item)
+        if handler is not None:
+            return await handler.apply(item)
+
         action_type = item.action_type
         payload = item.payload
 
@@ -94,9 +104,6 @@ class ActionExecutor:
             return await self._apply_profile(item)
         elif action_type == ActionType.MULT:
             self._apply_mult(payload)
-            return None
-        elif action_type == ActionType.CHASTER_TIME_UPDATE:
-            await self._apply_chaster_time(payload)
             return None
         else:
             logger.info(
@@ -108,6 +115,11 @@ class ActionExecutor:
         """
         Reverse a previously applied action using its snapshot data.
         """
+        handler = self._handler_for(item)
+        if handler is not None:
+            await handler.reverse(item)
+            return
+
         if item.snapshot_data is None:
             return
 
@@ -516,64 +528,6 @@ class ActionExecutor:
                 self._store.update_unit_dict(unit, changes)
 
         logger.info(f"[Executor] Multiplier applied: target={target}, pct={pct}")
-
-    # ───────── CHASTER_TIME_ADD ─────────
-
-    async def _apply_chaster_time(self, payload: dict) -> None:
-        """Add time to Chaster lock."""
-        duration_minutes = payload.get("duration_minutes", 0)
-        only_max = payload.get("only_max", False)
-        duration_secs = duration_minutes * 60
-
-        if not _CHASTER_URL or not _CHASTER_TOKEN:
-            logger.info("[Executor] Chaster not configured, skipping time add")
-            return
-
-        # Need lock ID — fetch from API
-        async with aiohttp.ClientSession() as session:
-            async with session.get(
-                f"{_CHASTER_URL}/locks?status=active", headers=_CHASTER_HEADERS
-            ) as resp:
-                locks = await resp.json()
-                if not locks:
-                    logger.info("[Executor] No active Chaster lock found")
-                    return
-                lock_id = locks[0]["_id"]
-
-            # Update max limit date
-            async with session.get(
-                f"{_CHASTER_URL}/locks/{lock_id}", headers=_CHASTER_HEADERS
-            ) as resp:
-                lock_data = await resp.json()
-
-            from datetime import datetime, timedelta
-
-            max_date_str = lock_data.get("maxLimitDate") or lock_data.get("maxDate", "")
-            if max_date_str:
-                max_date = datetime.strptime(max_date_str, "%Y-%m-%dT%H:%M:%S.%fZ")
-                new_max = max_date + timedelta(seconds=duration_secs)
-                async with session.post(
-                    f"{_CHASTER_URL}/locks/{lock_id}/max-limit-date",
-                    json={
-                        "maxLimitDate": new_max.strftime("%Y-%m-%dT%H:%M:%S.%fZ"),
-                        "disableMaxLimitDate": False,
-                    },
-                    headers=_CHASTER_HEADERS,
-                ) as resp:
-                    logger.debug(f"[Executor] Max limit date updated: {resp.status}")
-
-            # Also add to current time if not only_max
-            if not only_max:
-                async with session.post(
-                    f"{_CHASTER_URL}/locks/{lock_id}/update-time",
-                    json={"duration": duration_secs},
-                    headers=_CHASTER_HEADERS,
-                ) as resp:
-                    logger.debug(f"[Executor] Current time updated: {resp.status}")
-
-        logger.info(
-            f"[Executor] Chaster time added: {duration_minutes}min (only_max={only_max})"
-        )
 
     # ───────── Helpers ─────────
 

@@ -40,6 +40,7 @@ export default [
         route("admin", "components/layout/admin-layout.tsx", [
             index("pages/app/admin/dashboard.tsx"),
             route("users", "pages/app/admin/users.tsx"),
+            route("integrations", "pages/app/admin/integrations.tsx"),
         ]),
     ]),
 

@@ -10,6 +10,7 @@ import unitsHistorySlice from '@/store/slices/unitsHistorySlice';
 import eventsReducer from '@/store/slices/eventsSlice';
 import triggerRulesReducer from '@/store/slices/triggerRulesSlice';
 import triggerRuleLabelsReducer from '@/store/slices/triggerRuleLabelsSlice';
+import integrationsReducer from '@/store/slices/integrationsSlice';
 import trainingReducer from '@/store/slices/trainingSlice';
 import sessionReducer from '@/store/slices/sessionSlice';
 import sessionHistoryReducer from '@/store/slices/sessionHistorySlice';
@@ -46,6 +47,7 @@ export const store = configureStore({
         events: eventsReducer,
         triggerRules: triggerRulesReducer,
         triggerRuleLabels: triggerRuleLabelsReducer,
+        integrations: integrationsReducer,
         training: trainingReducer,
         session: sessionReducer,
         sessionHistory: sessionHistoryReducer,

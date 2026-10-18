@@ -1,5 +1,5 @@
 import { BookOpen, ChevronDown, Crosshair, Percent } from "lucide-react";
-import { EVENT_GROUPS } from "@/components/common/events/event-groups";
+import { useEventCatalog } from "@/components/common/events/event-groups";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@pes/ui/components/card";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@pes/ui/components/collapsible";
 
@@ -84,6 +84,8 @@ function DefinitionList({ entries }: { entries: Array<[string, string]> }) {
 }
 
 export default function EventsWiki() {
+    const { groups, descriptions } = useEventCatalog();
+
     return (
         <Collapsible defaultOpen className="group/wiki-card">
             <Card>
@@ -108,7 +110,7 @@ export default function EventsWiki() {
                         They are grouped by provider/service.
                     </p>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        {Object.entries(EVENT_GROUPS).map(([groupKey, group]) => (
+                        {Object.entries(groups).map(([groupKey, group]) => (
                             <div key={groupKey} className="rounded-lg border border-border/60 p-3 space-y-2">
                                 <div className="text-xs font-semibold text-foreground">{group.label}</div>
                                 <div className="space-y-1">
@@ -118,7 +120,7 @@ export default function EventsWiki() {
                                                 {type}
                                             </code>
                                             <span className="text-[11px] text-muted-foreground/60">
-                                                {EVENT_DESCRIPTIONS[type] ?? ""}
+                                                {descriptions[type] ?? EVENT_DESCRIPTIONS[type] ?? ""}
                                             </span>
                                         </div>
                                     ))}

@@ -12,6 +12,7 @@ import type { WebSocketConfig, WebSocketIncomingMessage, WebSocketMessage } from
 import type { Middleware } from '@reduxjs/toolkit';
 import { triggerRulesInitialized, triggerRuleUpdated, triggerRuleAdded, triggerRuleRemoved } from '@/store/slices/triggerRulesSlice';
 import { triggerRuleLabelsInitialized, triggerRuleLabelAdded } from '@/store/slices/triggerRuleLabelsSlice';
+import { integrationsInitialized, integrationUpdated } from '@/store/slices/integrationsSlice';
 import { trainingInit, trainingSessionUpdated, trainingEdgeAdded, trainingSessionDeleted, trainingOverviewLoaded, trainingSessionsLoaded, trainingSessionDetailLoaded } from '@/store/slices/trainingSlice';
 import { sessionInit, sessionUpdated } from '@/store/slices/sessionSlice';
 import { sessionHistoryLoaded, sessionHistoryDetailLoaded, sessionHistoryDeleted } from '@/store/slices/sessionHistorySlice';
@@ -210,6 +211,17 @@ export function createWebSocketMiddleware(config: WebSocketConfig): Middleware {
                         break;
                     case 'hardware:update':
                         dispatch(hardwareUpdated(message.payload))
+                        break;
+
+                    /**
+                     * @Integrations (events/actions/settings catalog)
+                     */
+                    case 'integrations:load':
+                        dispatch(integrationsInitialized(message.payload));
+                        break;
+
+                    case 'integrations:update':
+                        dispatch(integrationUpdated(message.payload));
                         break;
 
                     /**

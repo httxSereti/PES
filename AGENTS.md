@@ -22,7 +22,7 @@ Hybrid monorepo: **pnpm workspaces + Turbo** (JS/TS) and **uv workspace** (Pytho
 - `packages/ui` — `@pes/ui`, shared component library (Radix UI / shadcn-style, Tailwind). Exported via subpath exports (`./components/*`, `./hooks/*`, `./lib/*`, `./globals.css`).
 - `packages/eslint-config` — `@pes/eslint-config`, shared ESLint flat configs (`base.js`, `vite.js`, `react-internal.js`, `next.js`).
 - `packages/typescript-config` — `@pes/typescript-config`, shared `tsconfig` presets.
-- `resources/docs` — domain documentation (events flow, app flow, Chaster integration, realtime architecture).
+- `resources/docs` — domain documentation (events flow, app flow, integrations, realtime architecture).
 
 ## Common Commands
 
@@ -51,7 +51,8 @@ There is currently **no test suite** — do not invent test commands; verify cha
 ### Backend (`apps/app/src`)
 
 - `main.py` is the **composition root**: instantiates singletons in order — `Database` → `Store` → `EventRegistry` → `ActionExecutor` → `ActionQueue` → `EventDispatcher` — then starts daemon hardware threads (one per BT unit/sensor) and runs uvicorn on the main thread.
-- `api/rest/` — FastAPI REST routers (`auth`, `users`, `admin`, `trigger_rules`, `webhooks/`).
+- `integrations/` — everything that provides **events, actions or settings**: one `IntegrationRegistry` (built in `integrations/__init__.py`) registering `core` hardware facades (`units`, `sensors`) and `external` services (`chaster`). External integrations are enable/disable (`configurations/integrations.json`), own their REST routes, delegate queued actions to registered handlers (`integrations/chaster/actions.py`), and expose a catalog consumed by `/api/events/types`, `/api/events/action-types`, `GET /integrations` and WS `integrations:load|update`. See `resources/docs/integrations.md`.
+- `api/rest/` — FastAPI REST routers (`auth`, `users`, `admin`, `trigger_rules`, `integrations`; integration-owned routers are mounted from the registry).
 - `api/ws/` — WebSocket layer: `schema/` (pydantic message contracts, **source of truth**), `commands/`, `loaders/`, `registry.py`, `websocket_manager.py`.
 - `events/` — the event pipeline: `dispatcher.py`, `registry.py`, `queue.py`, `executor.py`, `models.py`, `enums.py`.
 - `hardware/` — `units.py` (2B board BT comms), `sensors.py`, `ramp.py`. Hardware threads always run and idle when their device is disabled in the Store; devices are toggled at runtime via WS `hardware:*` commands (persisted in `configurations/hardware.json`).

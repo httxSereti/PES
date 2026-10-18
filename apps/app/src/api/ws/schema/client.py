@@ -518,6 +518,23 @@ class HardwareRescanBtSensorsCommand(ClientMessage):
     payload: HardwareSensorRescanPayload
 
 
+# ─────────────────────────────── Integrations ───────────────────────────────
+
+
+class IntegrationUpdatePayload(WireModel):
+    integration_id: str
+    enabled: bool | None = None
+    # json-source settings only; env-source settings are read-only
+    settings: dict[str, Any] | None = None
+
+
+class IntegrationsUpdateCommand(ClientMessage):
+    """Enable/disable an integration and/or update its settings."""
+
+    type: Literal["integrations:update"] = "integrations:update"
+    payload: IntegrationUpdatePayload
+
+
 __all__ = [
     "PingCommand",
     "CoreStopCommand",
@@ -597,4 +614,6 @@ __all__ = [
     "HardwareUpdateBtSensorsCommand",
     "HardwareSensorRescanPayload",
     "HardwareRescanBtSensorsCommand",
+    "IntegrationUpdatePayload",
+    "IntegrationsUpdateCommand",
 ]

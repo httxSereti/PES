@@ -20,6 +20,7 @@ from .models import (
     EdgingEdge,
     EdgingSession,
     EdgingSessionStats,
+    IntegrationCatalogEntry,
     PendingProfile,
     ProfileDetail,
     ProfileSummary,
@@ -174,6 +175,25 @@ class HardwareInitMessage(ServerMessage):
 class HardwareUpdateMessage(ServerMessage):
     type: Literal["hardware:update"] = "hardware:update"
     payload: dict[str, bool]
+
+
+# ─────────────────────────────── Integrations ───────────────────────────────
+
+
+@server_message(audience=Permission.READ_EVENTS)
+class IntegrationsLoadMessage(ServerMessage):
+    """Catalog of every integration (events, actions, settings, enabled)."""
+
+    type: Literal["integrations:load"] = "integrations:load"
+    payload: list[IntegrationCatalogEntry]
+
+
+@server_message(audience=Permission.ADMIN)
+class IntegrationsUpdateMessage(ServerMessage):
+    """One integration changed (enable/disable, settings)."""
+
+    type: Literal["integrations:update"] = "integrations:update"
+    payload: IntegrationCatalogEntry
 
 
 # ─────────────────────────────── Core (cont.) ───────────────────────────────
@@ -484,6 +504,8 @@ __all__ = [
     "RampsRemoveMessage",
     "HardwareInitMessage",
     "HardwareUpdateMessage",
+    "IntegrationsLoadMessage",
+    "IntegrationsUpdateMessage",
     "CoreStopMessage",
     "EventsHistoryMessage",
     "EventsTriggeredMessage",

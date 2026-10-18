@@ -6,6 +6,7 @@ from api.ws.registry import command
 from api.ws.schema import CommandResult, TriggerRulesEditCommand
 from database.repositories.trigger_rule_repo import TriggerRuleRepo
 from events.enums import ActionType
+from integrations import integration_registry
 from typings import Permission
 
 logger = structlog.get_logger("pes")
@@ -32,6 +33,11 @@ async def handle_trigger_rule_edit(
         return CommandResult(status="error", message="Missing rule_id")
     if not name or not event_type:
         return CommandResult(status="error", message="Missing name or event_type")
+
+    if not integration_registry.is_known_event(event_type):
+        return CommandResult(
+            status="error", message=f"Unknown event_type: {event_type}"
+        )
 
     # Validate action types up front so we don't half-rewrite the rule
     for action in actions:

@@ -2,7 +2,7 @@
 // by apps/app/scripts/generate_ws_types.py — DO NOT EDIT.
 // Regenerate with: pnpm codegen:ws
 
-export const WS_SCHEMA_VERSION = 11;
+export const WS_SCHEMA_VERSION = 13;
 
 export enum ActionType {
     PROFILE = "PROFILE",
@@ -202,6 +202,12 @@ export interface HardwareSensorRescanPayload {
     id: 'sound' | 'motion1' | 'motion2';
 }
 
+export interface IntegrationUpdatePayload {
+    integration_id: string;
+    enabled?: boolean | null;
+    settings?: Record<string, unknown> | null;
+}
+
 export interface ConnectedPayload {
     message: string;
     userId: string;
@@ -351,6 +357,44 @@ export interface Ramp {
 export interface RampRemovePayload {
     unit: string;
     field: string;
+}
+
+export interface IntegrationCatalogEntry {
+    id: string;
+    name: string;
+    description: string;
+    kind: string;
+    enabled: boolean;
+    events: IntegrationEvent[];
+    actions: IntegrationAction[];
+    settings: IntegrationSetting[];
+}
+
+export interface IntegrationEvent {
+    id: string;
+    label: string;
+    description: string;
+    group: string;
+    data_schema: Record<string, string>;
+}
+
+export interface IntegrationAction {
+    id: string;
+    label: string;
+    description: string;
+    group: string;
+    payload_schema: Record<string, string>;
+    reversible: boolean;
+}
+
+export interface IntegrationSetting {
+    key: string;
+    label: string;
+    description: string;
+    type: string;
+    source: string;
+    secret: boolean;
+    options: string[];
 }
 
 export interface StatusMessage {
@@ -873,6 +917,12 @@ export interface HardwareRescanBtSensorsCommand {
     payload: HardwareSensorRescanPayload;
 }
 
+export interface IntegrationsUpdateCommand {
+    id?: string | null;
+    type: 'integrations:update';
+    payload: IntegrationUpdatePayload;
+}
+
 export interface ConnectedMessage {
     id?: string | null;
     type: 'connected';
@@ -958,6 +1008,18 @@ export interface HardwareUpdateMessage {
     id?: string | null;
     type: 'hardware:update';
     payload: Record<string, boolean>;
+}
+
+export interface IntegrationsLoadMessage {
+    id?: string | null;
+    type: 'integrations:load';
+    payload: IntegrationCatalogEntry[];
+}
+
+export interface IntegrationsUpdateMessage {
+    id?: string | null;
+    type: 'integrations:update';
+    payload: IntegrationCatalogEntry;
 }
 
 export interface CoreStopMessage {
@@ -1179,7 +1241,8 @@ export type WebSocketClientMessage =
     | HardwareUpdateMk2btCommand
     | HardwareRescanMk2btCommand
     | HardwareUpdateBtSensorsCommand
-    | HardwareRescanBtSensorsCommand;
+    | HardwareRescanBtSensorsCommand
+    | IntegrationsUpdateCommand;
 
 export type WebSocketServerMessage =
     | ConnectedMessage
@@ -1197,6 +1260,8 @@ export type WebSocketServerMessage =
     | RampsRemoveMessage
     | HardwareInitMessage
     | HardwareUpdateMessage
+    | IntegrationsLoadMessage
+    | IntegrationsUpdateMessage
     | CoreStopMessage
     | EventsHistoryMessage
     | EventsTriggeredMessage

@@ -1,32 +1,50 @@
-import os
-import re
-import secrets
-import structlog
+"""
+Chaster webhook endpoint (REST).
 
-from fastapi import APIRouter, HTTPException, status, Depends, Request
+Owned by the Chaster integration: the router is mounted through
+`Integration.router()` and its runtime context is injected through
+`setup()` at app startup.
+"""
+
+from __future__ import annotations
+
+import os
+import secrets
+
+import structlog
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from fastapi.security import HTTPBasic, HTTPBasicCredentials
 
-from events.dispatcher import EventDispatcher
 from events.enums import TriggerableEvent
+from integrations.base import IntegrationContext
+
+from . import wof
 
 router = APIRouter(prefix="/webhooks", tags=["webhooks"])
 security = HTTPBasic()
 logger = structlog.get_logger("pes")
 
-# Dispatcher — set during app startup
-_dispatcher: EventDispatcher | None = None
+CHASTER_INTEGRATION_ID = "chaster"
+
+# Runtime context — set during app startup
+_ctx: IntegrationContext | None = None
 
 
-def setup(dispatcher: EventDispatcher) -> None:
-    """Called during app startup to inject the event dispatcher."""
-    global _dispatcher
-    _dispatcher = dispatcher
+def setup(ctx: IntegrationContext) -> None:
+    """Called by the integration at app startup."""
+    global _ctx
+    _ctx = ctx
 
 
-def _get_dispatcher() -> EventDispatcher:
-    if _dispatcher is None:
-        raise RuntimeError("Webhook router not initialized")
-    return _dispatcher
+def teardown() -> None:
+    global _ctx
+    _ctx = None
+
+
+def _get_ctx() -> IntegrationContext:
+    if _ctx is None:
+        raise RuntimeError("Chaster webhook router not initialized")
+    return _ctx
 
 
 def verify_credentials(credentials: HTTPBasicCredentials = Depends(security)):
@@ -59,8 +77,14 @@ async def read_chaster_webhook(
     Handle Chaster webhook events.
     Parses action_log.created events and dispatches them to the event system.
     """
+    ctx = _get_ctx()
+    if not ctx.registry.is_enabled(CHASTER_INTEGRATION_ID):
+        logger.info("[Webhook] Chaster integration disabled, event ignored")
+        return {"status": "ignored"}
+
+    dispatcher = ctx.dispatcher
+
     data = await request.json()
-    dispatcher = _get_dispatcher()
 
     event: str = data.get("event", "")
     webhook_id: str = data.get("requestId", "")
@@ -93,7 +117,7 @@ async def read_chaster_webhook(
                     and followed by 3-letter abbreviations (profile id, profile level, duration).
                     like "{p:JfA}", "{p:AdB}", or "{p:XcC}".
                 """
-                match_profile = re.match(r"^\{p:([A-Z][A-Za-z][A-Za-z])\}", text)
+                match_profile = wof.match_profile(text)
 
                 """
                     # TODO: custom wof update for units
@@ -103,7 +127,7 @@ async def read_chaster_webhook(
                     and followed by 3-letter abbreviations (profile id, profile level, duration).
                     like "{u:[unit]@[channel]@[operator]}"; "{u:12RO@ABRM@[5-25]}", or "{u:1@A@%+5}".
                 """
-                match_unit_update = re.match(r"^\{u:([A-Z]@[A-Za-z]@[A-Za-z])\}", text)
+                match_unit_update = wof.match_unit(text)
 
                 # handle logic for profile action
                 if match_profile:
@@ -111,17 +135,28 @@ async def read_chaster_webhook(
                     logger.info(
                         f"[Webhook] Custom WOF profile action: {match_profile.group(1)}"
                     )
-                    await dispatcher.dispatch(
-                        event_type=wof_code,
-                        event_data={
-                            "author": role,
-                            "wofText": text,
-                            "wofCustomType": "profile",
-                            "wofAction": match_profile.group(1),
-                            "triggeredAt": created_at,
-                        },
-                        origin=origin,
-                    )
+                    event_data = {
+                        "author": role,
+                        "wofText": text,
+                        "wofCustomType": "profile",
+                        "wofAction": match_profile.group(1),
+                        "triggeredAt": created_at,
+                    }
+                    # Dynamic profile codes bypass trigger rules: parse and
+                    # enqueue directly (the event is still logged).
+                    items = wof.build_profile_items(text, origin)
+                    if items:
+                        await dispatcher.dispatch_direct(
+                            event_type=wof_code,
+                            items=items,
+                            event_data=event_data,
+                            origin=origin,
+                            summary_name=f"Execute profile ({match_profile.group(1)})",
+                        )
+                    else:
+                        await dispatcher.dispatch(
+                            event_type=wof_code, event_data=event_data, origin=origin
+                        )
                 elif match_unit_update:
                     wof_code = f"custom:wof_unit_{match_unit_update.group(1)}"
                     logger.info(

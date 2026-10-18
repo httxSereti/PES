@@ -10,8 +10,8 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from api.rest import admin, auth, users
+from api.rest import integrations as integrations_router
 from api.rest import trigger_rules as trigger_rules_router
-from api.rest.webhooks import chaster as chaster_webhooks
 from api.ws.endpoint import router as ws_router
 from api.ws.websocket_notifier import ws_notifier
 from database.connection import Database
@@ -19,6 +19,7 @@ from database.seed import seed_from_json
 from events.dispatcher import EventDispatcher
 from events.queue import ActionQueue
 from hardware.sensors import sensor_alarm_check
+from integrations import IntegrationContext, integration_registry
 from services.profiles import list_profiles
 from services.users import user_service
 from store import Store
@@ -92,8 +93,15 @@ async def lifespan(app: FastAPI):
     await user_service.load_from_db()
     await user_service.ensure_host_bootstrap()
 
-    # Inject into routers
-    chaster_webhooks.setup(EventDispatcher.get_instance())
+    # Inject the runtime context into every integration (webhooks, clients)
+    await integration_registry.start(
+        IntegrationContext(
+            store=store,
+            dispatcher=EventDispatcher.get_instance(),
+            registry=integration_registry,
+            notifier=ws_notifier,
+        )
+    )
 
     # Notify Discord that the app started successfully
     await send_discord_startup_message(profile_count=len(list_profiles()))
@@ -103,6 +111,7 @@ async def lifespan(app: FastAPI):
     # shutdown
     queue_task.cancel()
     alarm_task.cancel()
+    await integration_registry.stop()
     await db.close()
 
 
@@ -111,7 +120,9 @@ app = FastAPI(lifespan=lifespan)
 app.include_router(users.router)
 app.include_router(auth.router)
 app.include_router(admin.router)
-app.include_router(chaster_webhooks.router)
+app.include_router(integrations_router.router)
+for integration_router in integration_registry.routers():
+    app.include_router(integration_router)
 app.include_router(trigger_rules_router.router)
 app.include_router(ws_router)
 

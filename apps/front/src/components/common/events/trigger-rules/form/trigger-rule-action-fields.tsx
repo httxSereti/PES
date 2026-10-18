@@ -1,5 +1,6 @@
 import type { Control } from "react-hook-form";
 import { Controller } from "react-hook-form";
+import { useMemo } from "react";
 import { Trash2 } from "lucide-react";
 
 import { Button } from "@pes/ui/components/button";
@@ -12,6 +13,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 
 import { useAppSelector } from "@/store/hooks";
 import { profilesSelectors } from "@/store/slices/profilesSlice";
+import { integrationsSelectors } from "@/store/slices/integrationsSlice";
 import { ActionType } from "@/types/events.types";
 import { type FormValues } from "./schema";
 
@@ -29,6 +31,17 @@ export default function TriggerRuleActionFields({
     onRemove: () => void;
 }) {
     const profiles = useAppSelector(profilesSelectors.selectAll);
+    const integrations = useAppSelector(integrationsSelectors.selectAll);
+
+    // Action options come from the integrations catalog; fall back to the
+    // static ActionType enum while the catalog has not arrived yet.
+    const actionOptions = useMemo(() => {
+        const fromCatalog = integrations.flatMap(integration =>
+            integration.actions.map(action => ({ id: action.id, label: action.label }))
+        );
+        if (fromCatalog.length > 0) return fromCatalog;
+        return Object.values(ActionType).map(type => ({ id: type as string, label: type as string }));
+    }, [integrations]);
 
     return (
         <Card className="bg-muted/20">
@@ -57,9 +70,14 @@ export default function TriggerRuleActionFields({
                                         <SelectValue placeholder="Select" />
                                     </SelectTrigger>
                                     <SelectContent position="item-aligned">
-                                        {Object.values(ActionType).map((t) => (
-                                            <SelectItem key={t} value={t}>
-                                                {t}
+                                        {actionOptions.map((option) => (
+                                            <SelectItem key={option.id} value={option.id}>
+                                                {option.label}
+                                                {option.label !== option.id && (
+                                                    <span className="ml-1.5 font-mono text-[10px] text-muted-foreground/60">
+                                                        {option.id}
+                                                    </span>
+                                                )}
                                             </SelectItem>
                                         ))}
                                     </SelectContent>

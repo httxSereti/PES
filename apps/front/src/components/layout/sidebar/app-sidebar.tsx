@@ -110,6 +110,10 @@ const data = {
           title: "Users",
           url: "/app/admin/users",
         },
+        {
+          title: "Integrations",
+          url: "/app/admin/integrations",
+        },
       ],
     },
   ],
