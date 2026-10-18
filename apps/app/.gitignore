@@ -5,6 +5,7 @@ firmware-tools/
 **.pyc
 resources/sounds/*.wav
 userdata/*
+profile/custom/
 backup/
 tmp/
 plunes.db*
