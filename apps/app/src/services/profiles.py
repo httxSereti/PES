@@ -22,6 +22,7 @@ import pathlib
 import re
 import tempfile
 from datetime import UTC, datetime
+from functools import lru_cache
 
 import structlog
 
@@ -36,6 +37,9 @@ logger = structlog.get_logger("pes")
 
 # Profile files live next to the app (CWD = apps/app); config.env overrides.
 PROFILE_DIR = pathlib.Path(os.getenv("DIR_PROFILE", "profile"))
+
+# Shared hardware configuration files (same source as hardware/units.py)
+CONFIG_DIR = pathlib.Path("configurations")
 
 # Custom (user-created) profiles live in a subfolder of the profile directory.
 CUSTOM_DIR_NAME = "custom"
@@ -221,19 +225,288 @@ def _preview_ramps(units: dict) -> list[dict]:
     return ramps
 
 
+# ─────────────────────── Editing (validation / defaults) ────────────────────
+#
+# The UI editor sends a full `threads_settings` replacement; everything is
+# validated here against the same constraints the action executor enforces,
+# so a saved profile never contains values an apply would silently skip.
+
+# Known unit-block fields and their accepted integer ranges (2B firmware)
+_UNIT_INT_RANGES: dict[str, tuple[int, int]] = {
+    "ch_A": (0, 100),
+    "ch_B": (0, 100),
+    "adj_1": (0, 100),
+    "adj_2": (0, 100),
+    "adj_3": (0, 3),  # ramp speed R0-R3 (x1..x4)
+    "adj_4": (0, 5),  # warp factor W0-W5 (x1..x32)
+    "power_bias": (0, 3),  # Q0-Q3 (A, B, avg, max)
+    "level_map": (0, 2),  # O0-O2 (map A/B/C)
+    "mode": (0, 16),  # MODE_2B index
+}
+
+_UNIT_BOOL_FIELDS = ("ch_link", "level_d", "level_h")
+_UNIT_USAGE_FIELDS = ("ch_A_use", "ch_B_use")
+
+
+@lru_cache(maxsize=4)
+def _read_config(filename: str) -> dict:
+    """Read a `configurations/*.json` file (empty dict when unavailable)."""
+    try:
+        with open(CONFIG_DIR / filename, encoding="utf-8") as handle:
+            data = json.load(handle)
+    except (OSError, json.JSONDecodeError) as err:
+        logger.warning(f"[Profiles] Can't read configuration '{filename}': {err}")
+        return {}
+    return data if isinstance(data, dict) else {}
+
+
+def _usage_limits() -> dict[str, dict]:
+    """Usage levels limits ({start, warn, max} per usage name)."""
+    return _read_config("usage_limit.json")
+
+
+def _unit_defaults() -> dict[str, dict]:
+    """
+    Fallback unit block for units absent from a profile, built from the same
+    initial settings the hardware threads use (``init_settings.json`` +
+    ``default_usage.json``).
+    """
+    init_settings = _read_config("init_settings.json")
+    default_usage = _read_config("default_usage.json")
+
+    blocks: dict[str, dict] = {}
+    for unit_name in sorted(_VALID_UNIT_NAMES):
+        init = init_settings.get(unit_name)
+        init = init if isinstance(init, dict) else {}
+        usage = default_usage.get(unit_name)
+        usage = usage if isinstance(usage, dict) else {}
+        blocks[unit_name] = {
+            "ch_A": 0,
+            "ch_B": 0,
+            "ch_A_use": str(usage.get("A", "default")),
+            "ch_B_use": str(usage.get("B", "default")),
+            "adj_1": _coerce_int(init.get("adj_1", 50)) or 0,
+            "adj_2": _coerce_int(init.get("adj_2", 50)) or 0,
+            "adj_3": 0,
+            "adj_4": 0,
+            "ch_link": False,
+            "level_d": False,
+            "level_h": bool(init.get("level_h", False)),
+            "level_map": 0,
+            "power_bias": 0,
+            "mode": _coerce_int(init.get("mode", 0)) or 0,
+        }
+    return blocks
+
+
+def _coerce_int(value: object) -> int | None:
+    """Rounded int for JSON numbers; None for anything else (bool excluded)."""
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        return None
+    return round(value)
+
+
+def _validate_level_value(value: object, path: str) -> int | str:
+    """A 0-100 level, or a MagicNumber-style range like `[25-35]`."""
+    if isinstance(value, str):
+        match = _RAMP_RANGE_RE.match(value.strip())
+        if not match:
+            raise ProfileError(
+                f"{path} must be a number 0-100 or a range like [25-35]"
+            )
+        low, high = int(match.group(1)), int(match.group(2))
+        if not (0 <= low <= 100 and 0 <= high <= 100):
+            raise ProfileError(f"{path} range must stay between 0 and 100")
+        return f"[{low}-{high}]"
+
+    number = _coerce_int(value)
+    if number is None or not 0 <= number <= 100:
+        raise ProfileError(f"{path} must be a number 0-100 or a range like [25-35]")
+    return number
+
+
+def _validate_ramps(unit_name: str, ramps: dict) -> dict:
+    """Validated per-field ramp block (mirrors hardware/ramp.py semantics)."""
+    cleaned: dict[str, dict] = {}
+    for field, cfg in ramps.items():
+        path = f"{unit_name}.ramps.{field}"
+        if field not in RAMP_FIELDS:
+            raise ProfileError(
+                f"{path} is not rampable (use ch_A, ch_B, adj_1 or adj_2)"
+            )
+        if not isinstance(cfg, dict):
+            raise ProfileError(f"{path} must be a JSON object")
+        config = dict(cfg)
+
+        timer = cfg.get("timer")
+        if (
+            isinstance(timer, bool)
+            or not isinstance(timer, (int, float))
+            or timer <= 0
+        ):
+            raise ProfileError(f"{path}.timer must be greater than 0")
+        config["timer"] = float(timer)
+
+        step_unit = cfg.get("step_unit", "percent")
+        if step_unit not in ("percent", "absolute"):
+            raise ProfileError(f"{path}.step_unit must be 'percent' or 'absolute'")
+        config["step_unit"] = step_unit
+
+        step = cfg.get("step", 1)
+        if isinstance(step, bool) or not isinstance(step, (int, float)) or step <= 0:
+            raise ProfileError(f"{path}.step must be greater than 0")
+        if step_unit == "percent" and step > 100:
+            raise ProfileError(f"{path}.step cannot exceed 100% of the max")
+        config["step"] = float(step)
+
+        try:
+            mode = RampMode(cfg.get("mode", "reset"))
+        except ValueError:
+            raise ProfileError(f"{path}.mode must be reset, wave or ascend")
+        config["mode"] = mode.value
+
+        duration = cfg.get("duration", -1)
+        if (
+            isinstance(duration, bool)
+            or not isinstance(duration, (int, float))
+            or (duration != -1 and duration <= 0)
+        ):
+            raise ProfileError(f"{path}.duration must be -1 or greater than 0")
+        config["duration"] = float(duration)
+
+        # Optional: omitted = live field value at apply time
+        for key in ("start", "max"):
+            if key not in cfg or cfg[key] is None:
+                config.pop(key, None)
+            else:
+                config[key] = _validate_level_value(cfg[key], f"{path}.{key}")
+
+        cleaned[field] = config
+    return cleaned
+
+
+def _validate_unit_block(unit_name: str, block: dict) -> dict:
+    """Validated copy of one unit block (unknown keys are preserved)."""
+    cleaned = dict(block)
+
+    for field, (low, high) in _UNIT_INT_RANGES.items():
+        if field not in block:
+            continue
+        value = _coerce_int(block[field])
+        if value is None or not low <= value <= high:
+            raise ProfileError(
+                f"{unit_name}.{field} must be an integer between {low} and {high}"
+            )
+        cleaned[field] = value
+
+    for field in _UNIT_BOOL_FIELDS:
+        if field in block and not isinstance(block[field], bool):
+            raise ProfileError(f"{unit_name}.{field} must be true or false")
+
+    for field in _UNIT_USAGE_FIELDS:
+        if field not in block:
+            continue
+        usage = block[field]
+        if not isinstance(usage, str) or not usage.strip():
+            raise ProfileError(f"{unit_name}.{field} must be a usage name")
+        cleaned[field] = usage.strip()
+
+    if "ramps" in block:
+        ramps = block["ramps"]
+        if not isinstance(ramps, dict):
+            raise ProfileError(f"{unit_name}.ramps must be a JSON object")
+        validated = _validate_ramps(unit_name, ramps)
+        if validated:
+            cleaned["ramps"] = validated
+        else:
+            cleaned.pop("ramps", None)
+
+    return cleaned
+
+
+def validate_threads_settings(settings: object) -> dict[str, dict]:
+    """
+    Validate a full `threads_settings` replacement.
+
+    Raises `ProfileError` on the first invalid value; returns the normalized
+    mapping (unknown keys preserved, ramp defaults filled where applicable).
+    """
+    if not isinstance(settings, dict) or not settings:
+        raise ProfileError("A profile must target at least one unit")
+
+    cleaned: dict[str, dict] = {}
+    for unit_name, block in settings.items():
+        if unit_name not in _VALID_UNIT_NAMES:
+            raise ProfileError(f"Unknown unit '{unit_name}'")
+        if not isinstance(block, dict):
+            raise ProfileError(f"'{unit_name}' must be a JSON object")
+        cleaned[unit_name] = _validate_unit_block(unit_name, block)
+    return cleaned
+
+
+def _validate_defaults(defaults: object, unit_names: set[str]) -> dict:
+    """Validate the optional `defaults` block written by the editor."""
+    if not isinstance(defaults, dict):
+        raise ProfileError("defaults must be a JSON object")
+
+    level = _coerce_int(defaults.get("level_pct", 100))
+    if level is None or not 0 <= level <= 150:
+        raise ProfileError("defaults.level_pct must be between 0 and 150")
+
+    duration = _coerce_int(defaults.get("duration", -1))
+    if duration is None or (duration != -1 and duration <= 0):
+        raise ProfileError("defaults.duration must be -1 or greater than 0")
+
+    raw_units = defaults.get("units", [])
+    if not isinstance(raw_units, list):
+        raise ProfileError("defaults.units must be a list of unit names")
+    units = list(dict.fromkeys(str(unit) for unit in raw_units))
+    unknown = [unit for unit in units if unit not in unit_names]
+    if unknown:
+        raise ProfileError(
+            f"defaults.units contains units not in the profile: {', '.join(unknown)}"
+        )
+
+    return {"level_pct": level, "duration": duration, "units": units}
+
+
+def _read_defaults(document: dict) -> dict | None:
+    """Lenient read of a profile's `defaults` block (None when absent/invalid)."""
+    raw = document.get("defaults")
+    if not isinstance(raw, dict):
+        return None
+
+    level = _coerce_int(raw.get("level_pct", 100))
+    duration = _coerce_int(raw.get("duration", -1))
+    raw_units = raw.get("units")
+    units = (
+        [unit for unit in raw_units if isinstance(unit, str)]
+        if isinstance(raw_units, list)
+        else []
+    )
+    return {
+        "level_pct": min(150, max(0, level)) if level is not None else 100,
+        "duration": duration
+        if duration is not None and (duration == -1 or duration > 0)
+        else -1,
+        "units": units,
+    }
+
+
+def _modified_at(name: str) -> str | None:
+    try:
+        modified = datetime.fromtimestamp(profile_path(name).stat().st_mtime, tz=UTC)
+    except OSError:
+        return None
+    return to_utc_iso(modified)
+
+
 def summarize(name: str, document: dict) -> dict:
     """Catalog entry for a profile document."""
     raw_units = document.get("threads_settings")
     units = raw_units if isinstance(raw_units, dict) else {}
     unit_names = sorted(unit for unit in units if unit in _VALID_UNIT_NAMES)
     ramps = _preview_ramps(units)
-    try:
-        modified = datetime.fromtimestamp(
-            profile_path(name).stat().st_mtime, tz=UTC
-        )
-    except OSError:
-        modified = None
-
     return {
         "name": name,
         "description": document.get("comment") or None,
@@ -241,12 +514,13 @@ def summarize(name: str, document: dict) -> dict:
         "unit_count": len(unit_names),
         "units": unit_names,
         "ramp_count": len(ramps),
-        "modified_at": to_utc_iso(modified) if modified else None,
+        "modified_at": _modified_at(name),
         "created_by": document.get("created_by") or None,
         "updated_by": document.get("updated_by") or None,
         "created_at": document.get("created_at") or None,
         "updated_at": document.get("updated_at") or None,
         "ramps": ramps,
+        "defaults": _read_defaults(document),
     }
 
 
@@ -272,6 +546,43 @@ def list_profiles() -> list[dict]:
 
     profiles.sort(key=lambda p: (not p["legacy"], p["name"].lower()))
     return profiles
+
+
+def get_profile_detail(name: str) -> dict:
+    """
+    Editable content of one profile, for the UI editor.
+
+    Returns the raw unit blocks (unknown keys preserved) plus the usage
+    vocabulary / limits and the fallback defaults used when adding a unit
+    that is not in the profile yet.
+    """
+    document = load_profile(name)
+
+    settings: dict[str, dict] = {}
+    raw_settings = document.get("threads_settings")
+    if isinstance(raw_settings, dict):
+        settings = {
+            unit: block
+            for unit, block in raw_settings.items()
+            if isinstance(block, dict)
+        }
+
+    limits = _usage_limits()
+    return {
+        "name": name,
+        "description": document.get("comment") or None,
+        "legacy": _is_legacy_name(name),
+        "threads_settings": settings,
+        "defaults": _read_defaults(document),
+        "usage_limits": limits,
+        "usage_names": sorted(usage for usage in limits if usage != "default"),
+        "unit_defaults": _unit_defaults(),
+        "modified_at": _modified_at(name),
+        "created_by": document.get("created_by") or None,
+        "updated_by": document.get("updated_by") or None,
+        "created_at": document.get("created_at") or None,
+        "updated_at": document.get("updated_at") or None,
+    }
 
 
 def list_pending_applies() -> list[dict]:
@@ -342,6 +653,7 @@ def capture_threads_settings(include_ramps: bool) -> dict:
                 ramp["field"]: {
                     "timer": ramp["timer"],
                     "step": ramp["step"],
+                    "step_unit": ramp.get("step_unit", "percent"),
                     "mode": ramp["mode"],
                     "duration": ramp["duration"],
                     "max": ramp["max_value"],
@@ -398,10 +710,18 @@ def update_profile(
     rename_to: str | None = None,
     from_current: bool = False,
     include_ramps: bool = True,
+    threads_settings: dict | None = None,
+    defaults: dict | None = None,
+    replace_defaults: bool = False,
     updated_by: str,
 ) -> dict:
     """
-    Update a profile in place: description, content snapshot and/or name.
+    Update a profile in place: description, content, defaults and/or name.
+
+    `threads_settings` (validated) replaces the stored unit blocks when not
+    None; `from_current` snapshots the live state first, so explicit settings
+    win over the snapshot. `defaults` is only written when
+    `replace_defaults` is true (None then clears the block).
 
     Returns the updated profile's catalog summary.
     """
@@ -411,10 +731,21 @@ def update_profile(
         document["comment"] = description
 
     if from_current:
-        threads_settings = capture_threads_settings(include_ramps)
-        if not threads_settings:
+        captured = capture_threads_settings(include_ramps)
+        if not captured:
             raise ProfileError("No unit settings to save yet")
-        document["threads_settings"] = threads_settings
+        document["threads_settings"] = captured
+
+    if threads_settings is not None:
+        document["threads_settings"] = validate_threads_settings(threads_settings)
+
+    if replace_defaults:
+        if defaults is None:
+            document.pop("defaults", None)
+        else:
+            stored = document.get("threads_settings")
+            unit_names = set(stored) if isinstance(stored, dict) else set()
+            document["defaults"] = _validate_defaults(defaults, unit_names)
 
     target_name = rename_to or name
     old_path = profile_path(name)

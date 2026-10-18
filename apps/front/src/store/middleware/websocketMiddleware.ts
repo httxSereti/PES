@@ -15,7 +15,7 @@ import { triggerRuleLabelsInitialized, triggerRuleLabelAdded } from '@/store/sli
 import { trainingInit, trainingSessionUpdated, trainingEdgeAdded, trainingSessionDeleted, trainingOverviewLoaded, trainingSessionsLoaded, trainingSessionDetailLoaded } from '@/store/slices/trainingSlice';
 import { sessionInit, sessionUpdated } from '@/store/slices/sessionSlice';
 import { sessionHistoryLoaded, sessionHistoryDetailLoaded, sessionHistoryDeleted } from '@/store/slices/sessionHistorySlice';
-import { profilesLoaded, profileSaved, profileDeleted, activeProfileUpdated, pendingProfilesLoaded } from '@/store/slices/profilesSlice';
+import { profilesLoaded, profileSaved, profileDeleted, profileDetailLoaded, activeProfileUpdated, pendingProfilesLoaded } from '@/store/slices/profilesSlice';
 import { queueUpdated } from '@/store/slices/queueSlice';
 
 export function createWebSocketMiddleware(config: WebSocketConfig): Middleware {
@@ -315,6 +315,10 @@ export function createWebSocketMiddleware(config: WebSocketConfig): Middleware {
 
                     case 'profiles:deleted':
                         dispatch(profileDeleted(message.payload));
+                        break;
+
+                    case 'profiles:detail':
+                        dispatch(profileDetailLoaded(message.payload));
                         break;
 
                     case 'profiles:active':

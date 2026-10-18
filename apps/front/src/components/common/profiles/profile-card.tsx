@@ -22,11 +22,12 @@ import {
 
 import { ConfirmDeleteDialog } from "@/components/common/dialogs/confirm-delete-dialog";
 import { formatDateTime } from "@/lib/format-date";
+import { useAppDispatch } from "@/store/hooks";
+import { openProfileEdit } from "@/store/slices/profilesSlice";
 import type { ProfileSummary } from "@/types";
 
 import { ApplyProfileDialog } from "./apply-profile-dialog";
 import { DuplicateProfileDialog } from "./duplicate-profile-dialog";
-import { EditProfileDialog } from "./edit-profile-dialog";
 import { ProfileMonogram, ProfileTypeBadge } from "./profile-badges";
 import { useProfileDelete } from "./use-profile-delete";
 
@@ -45,8 +46,8 @@ export function ProfileCard({
     canDelete,
     onExport,
 }: ProfileCardProps) {
+    const dispatch = useAppDispatch();
     const [applyOpen, setApplyOpen] = useState(false);
-    const [editOpen, setEditOpen] = useState(false);
     const [duplicateOpen, setDuplicateOpen] = useState(false);
     const [deleteOpen, setDeleteOpen] = useState(false);
     const { deleting, warning, requestDelete, reset } = useProfileDelete(
@@ -81,7 +82,11 @@ export function ProfileCard({
                     </DropdownMenuTrigger>
                     <DropdownMenuContent align="end">
                         {canWrite && (
-                            <DropdownMenuItem onClick={() => setEditOpen(true)}>
+                            <DropdownMenuItem
+                                onClick={() =>
+                                    dispatch(openProfileEdit(profile.name))
+                                }
+                            >
                                 <Pencil /> Edit
                             </DropdownMenuItem>
                         )}
@@ -152,11 +157,6 @@ export function ProfileCard({
                 profile={profile}
                 open={applyOpen}
                 onOpenChange={setApplyOpen}
-            />
-            <EditProfileDialog
-                profile={profile}
-                open={editOpen}
-                onOpenChange={setEditOpen}
             />
             <DuplicateProfileDialog
                 profile={profile}

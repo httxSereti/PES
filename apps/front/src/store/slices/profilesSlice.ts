@@ -9,6 +9,7 @@ import type {
     ActiveProfile,
     PendingProfile,
     ProfileDeletedPayload,
+    ProfileDetail,
     ProfileSavedPayload,
     ProfileSummary,
 } from '@/types';
@@ -33,6 +34,10 @@ export interface ProfilesState extends EntityState<ProfileSummary, string> {
     activeProfile: ActiveProfile | null;
     /** Waiting profile applies in the action queue (oldest first). */
     pending: PendingProfile[];
+    /** Profile name currently open in the studio editor (null = closed). */
+    editorName: string | null;
+    /** Replies to `profiles:detail`, keyed by profile name. */
+    details: Record<string, ProfileDetail>;
 }
 
 const initialState: ProfilesState = {
@@ -41,6 +46,8 @@ const initialState: ProfilesState = {
     saveDialogOpen: false,
     activeProfile: null,
     pending: [],
+    editorName: null,
+    details: {},
 };
 
 const profilesSlice = createSlice({
@@ -59,6 +66,10 @@ const profilesSlice = createSlice({
         /** A profile was deleted or renamed away (broadcast). */
         profileDeleted: (state, action: PayloadAction<ProfileDeletedPayload>) => {
             profilesAdapter.removeOne(state, action.payload.name);
+            delete state.details[action.payload.name];
+            if (state.editorName === action.payload.name) {
+                state.editorName = null;
+            }
         },
         /** The executor started/stopped a profile (`profiles:active`). */
         activeProfileUpdated: (
@@ -81,6 +92,17 @@ const profilesSlice = createSlice({
         closeProfileSave: (state) => {
             state.saveDialogOpen = false;
         },
+        /** Open the studio editor on one profile (card, list, inspector). */
+        openProfileEdit: (state, action: PayloadAction<string>) => {
+            state.editorName = action.payload;
+        },
+        closeProfileEdit: (state) => {
+            state.editorName = null;
+        },
+        /** Reply to `profiles:detail` (editor content). */
+        profileDetailLoaded: (state, action: PayloadAction<ProfileDetail>) => {
+            state.details[action.payload.name] = action.payload;
+        },
     },
 });
 
@@ -93,6 +115,14 @@ export const selectActiveProfile = (state: RootState) =>
 export const selectPendingProfiles = (state: RootState) =>
     state.profiles.pending;
 
+/** Name of the profile open in the studio editor, or null. */
+export const selectEditingProfileName = (state: RootState) =>
+    state.profiles.editorName;
+
+/** Cached `profiles:detail` reply for one profile (undefined until loaded). */
+export const selectProfileDetail = (state: RootState, name: string) =>
+    state.profiles.details[name];
+
 export const {
     profilesLoaded,
     profileSaved,
@@ -101,5 +131,8 @@ export const {
     pendingProfilesLoaded,
     openProfileSave,
     closeProfileSave,
+    openProfileEdit,
+    closeProfileEdit,
+    profileDetailLoaded,
 } = profilesSlice.actions;
 export default profilesSlice.reducer;

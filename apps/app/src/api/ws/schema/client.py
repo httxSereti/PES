@@ -16,7 +16,12 @@ from events.enums import ActionType
 from typings import RampMode
 
 from .base import ClientMessage, WireModel
-from .models import SensorPatch, SessionSensorId, SessionUnitId
+from .models import (
+    ProfileDefaults,
+    SensorPatch,
+    SessionSensorId,
+    SessionUnitId,
+)
 
 # ─────────────────────────────── Core ───────────────────────────────
 
@@ -284,6 +289,17 @@ class ProfilesApplyCommand(ClientMessage):
     payload: ProfileApplyPayload
 
 
+class ProfileDetailPayload(WireModel):
+    name: str = Field(min_length=1, max_length=32)
+
+
+class ProfilesDetailCommand(ClientMessage):
+    """Load a profile's editable content (personal reply `profiles:detail`)."""
+
+    type: Literal["profiles:detail"] = "profiles:detail"
+    payload: ProfileDetailPayload
+
+
 class ProfileUpdatePayload(WireModel):
     name: str = Field(min_length=1, max_length=32)
     # None = keep the current description; "" clears it
@@ -294,10 +310,16 @@ class ProfileUpdatePayload(WireModel):
     # replace the stored unit settings with the current live state
     from_current: bool = False
     include_ramps: bool = True
+    # Full replacement of `threads_settings` (validated server-side);
+    # None = keep the stored blocks
+    threads_settings: dict[str, dict[str, Any]] | None = None
+    # Written only when replace_defaults is true; None clears the block
+    defaults: ProfileDefaults | None = None
+    replace_defaults: bool = False
 
 
 class ProfilesUpdateCommand(ClientMessage):
-    """Edit a profile: description, content snapshot and/or name."""
+    """Edit a profile: description, content, defaults and/or name."""
 
     type: Literal["profiles:update"] = "profiles:update"
     payload: ProfileUpdatePayload
@@ -537,6 +559,8 @@ __all__ = [
     "ProfilesSaveCommand",
     "ProfileApplyPayload",
     "ProfilesApplyCommand",
+    "ProfileDetailPayload",
+    "ProfilesDetailCommand",
     "ProfileUpdatePayload",
     "ProfilesUpdateCommand",
     "ProfileDuplicatePayload",

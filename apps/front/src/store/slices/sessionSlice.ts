@@ -1,7 +1,7 @@
 import type { Session, SessionInitPayload } from '@/types';
 import { createSlice, type PayloadAction } from '@reduxjs/toolkit';
 
-interface SessionState {
+export interface SessionState {
     /** The active application session, null when none. */
     activeSession: Session | null;
     /** True once the connect snapshot (`session:init`) has arrived. */

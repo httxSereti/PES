@@ -22,10 +22,16 @@ def _describe_rules(names: list[str], limit: int = 5) -> str:
 async def handle_profiles_update(
     msg: ProfilesUpdateCommand, ctx: CommandContext
 ) -> CommandResult:
-    """Edit a profile: description, snapshot and/or name."""
+    """Edit a profile: description, content, defaults and/or name."""
     p = msg.payload
 
-    if p.description is None and not p.from_current and not p.rename_to:
+    if (
+        p.description is None
+        and not p.from_current
+        and not p.rename_to
+        and p.threads_settings is None
+        and not p.replace_defaults
+    ):
         return CommandResult(status="error", message="Nothing to update")
 
     # Renaming would leave trigger-rule actions pointing at the old name,
@@ -53,6 +59,11 @@ async def handle_profiles_update(
             rename_to=p.rename_to,
             from_current=p.from_current,
             include_ramps=p.include_ramps,
+            threads_settings=p.threads_settings,
+            defaults=(
+                p.defaults.model_dump() if p.defaults is not None else None
+            ),
+            replace_defaults=p.replace_defaults,
             updated_by=ctx.user.display_name or ctx.user.id,
         )
     except profiles_service.ProfileError as err:

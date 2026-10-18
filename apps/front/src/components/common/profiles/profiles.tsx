@@ -34,6 +34,7 @@ import type { ProfileSummary } from "@/types";
 import { Permission } from "@/types";
 
 import { ActiveProfileBanner } from "./active-profile-banner";
+import { ProfileEditorDialog } from "./editor/profile-editor-dialog";
 import { PendingProfiles } from "./pending-profiles";
 import { ProfileCard } from "./profile-card";
 import { ProfilesList } from "./profiles-list";
@@ -454,6 +455,8 @@ export function Profiles() {
                     ))}
                 </div>
             )}
+
+            <ProfileEditorDialog />
         </div>
     );
 }

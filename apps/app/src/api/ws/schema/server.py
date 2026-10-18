@@ -21,6 +21,7 @@ from .models import (
     EdgingSession,
     EdgingSessionStats,
     PendingProfile,
+    ProfileDetail,
     ProfileSummary,
     QueueStatus,
     Ramp,
@@ -257,6 +258,14 @@ class ProfilesExportedMessage(ServerMessage):
     payload: ProfileExportedPayload
 
 
+@server_message(audience=Permission.READ_PROFILES)
+class ProfilesDetailMessage(ServerMessage):
+    """Personal reply to `profiles:detail`: editable profile content."""
+
+    type: Literal["profiles:detail"] = "profiles:detail"
+    payload: ProfileDetail
+
+
 @server_message(audience=Permission.READ_UNITS)
 class ProfilesActiveMessage(ServerMessage):
     """The profile currently applied, or null when none is running."""
@@ -486,6 +495,7 @@ __all__ = [
     "ProfilesDeletedMessage",
     "ProfileExportedPayload",
     "ProfilesExportedMessage",
+    "ProfilesDetailMessage",
     "ProfilesActiveMessage",
     "ProfilesPendingMessage",
     "TriggerRulesLoadMessage",

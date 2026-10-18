@@ -213,6 +213,15 @@ class ProfileRampPreview(WireModel):
     max: int = 0
 
 
+class ProfileDefaults(WireModel):
+    """Optional per-profile apply defaults, used to prefill the apply dialog."""
+
+    # Same shape as the apply payload: 0-150%, -1 = until stopped, empty = all
+    level_pct: int = 100
+    duration: int = -1
+    units: list[str] = []
+
+
 class ProfileSummary(WireModel):
     """Catalog entry for a saved profile file (see services/profiles.py)."""
 
@@ -233,6 +242,29 @@ class ProfileSummary(WireModel):
     updated_at: str | None = None
     # Resolved per-ramp detail (ramps a profile apply would skip are omitted)
     ramps: list[ProfileRampPreview] = []
+    # Optional apply defaults stored in the profile (`defaults` block)
+    defaults: ProfileDefaults | None = None
+
+
+class ProfileDetail(WireModel):
+    """Reply to `profiles:detail`: the editable content of one profile."""
+
+    name: str
+    description: str | None = None
+    legacy: bool = False
+    # Raw per-unit blocks (UNIT1..3), exactly as stored — unknown keys kept
+    threads_settings: dict[str, dict[str, Any]] = {}
+    defaults: ProfileDefaults | None = None
+    # Usage vocabulary and level limits (configurations/usage_limit.json)
+    usage_limits: dict[str, UsageLimit] = {}
+    usage_names: list[str] = []
+    # Fallback unit blocks for units absent from the profile (init config)
+    unit_defaults: dict[str, dict[str, Any]] = {}
+    modified_at: str | None = None
+    created_by: str | None = None
+    updated_by: str | None = None
+    created_at: str | None = None
+    updated_at: str | None = None
 
 
 class ActiveProfile(WireModel):
@@ -407,7 +439,9 @@ __all__ = [
     "QueueStatus",
     "Ramp",
     "ProfileRampPreview",
+    "ProfileDefaults",
     "ProfileSummary",
+    "ProfileDetail",
     "ActiveProfile",
     "PendingProfile",
     "CommandResult",

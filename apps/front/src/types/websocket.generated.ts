@@ -102,12 +102,25 @@ export interface ProfileApplyPayload {
     replace: boolean;
 }
 
+export interface ProfileDetailPayload {
+    name: string;
+}
+
 export interface ProfileUpdatePayload {
     name: string;
     description?: string | null;
     rename_to?: string | null;
     from_current: boolean;
     include_ramps: boolean;
+    threads_settings?: Record<string, Record<string, unknown>> | null;
+    defaults?: ProfileDefaults | null;
+    replace_defaults: boolean;
+}
+
+export interface ProfileDefaults {
+    level_pct: number;
+    duration: number;
+    units: string[];
 }
 
 export interface ProfileDuplicatePayload {
@@ -393,6 +406,7 @@ export interface ProfileSummary {
     created_at?: string | null;
     updated_at?: string | null;
     ramps: ProfileRampPreview[];
+    defaults?: ProfileDefaults | null;
 }
 
 export interface ProfileRampPreview {
@@ -418,6 +432,22 @@ export interface ProfileDeletedPayload {
 export interface ProfileExportedPayload {
     name: string;
     document: Record<string, unknown>;
+}
+
+export interface ProfileDetail {
+    name: string;
+    description?: string | null;
+    legacy: boolean;
+    threads_settings: Record<string, Record<string, unknown>>;
+    defaults?: ProfileDefaults | null;
+    usage_limits: Record<string, UsageLimit>;
+    usage_names: string[];
+    unit_defaults: Record<string, Record<string, unknown>>;
+    modified_at?: string | null;
+    created_by?: string | null;
+    updated_by?: string | null;
+    created_at?: string | null;
+    updated_at?: string | null;
 }
 
 export interface ActiveProfile {
@@ -723,6 +753,12 @@ export interface ProfilesApplyCommand {
     payload: ProfileApplyPayload;
 }
 
+export interface ProfilesDetailCommand {
+    id?: string | null;
+    type: 'profiles:detail';
+    payload: ProfileDetailPayload;
+}
+
 export interface ProfilesUpdateCommand {
     id?: string | null;
     type: 'profiles:update';
@@ -972,6 +1008,12 @@ export interface ProfilesExportedMessage {
     payload: ProfileExportedPayload;
 }
 
+export interface ProfilesDetailMessage {
+    id?: string | null;
+    type: 'profiles:detail';
+    payload: ProfileDetail;
+}
+
 export interface ProfilesActiveMessage {
     id?: string | null;
     type: 'profiles:active';
@@ -1118,6 +1160,7 @@ export type WebSocketClientMessage =
     | ProfilesListCommand
     | ProfilesSaveCommand
     | ProfilesApplyCommand
+    | ProfilesDetailCommand
     | ProfilesUpdateCommand
     | ProfilesDuplicateCommand
     | ProfilesDeleteCommand
@@ -1162,6 +1205,7 @@ export type WebSocketServerMessage =
     | ProfilesSavedMessage
     | ProfilesDeletedMessage
     | ProfilesExportedMessage
+    | ProfilesDetailMessage
     | ProfilesActiveMessage
     | ProfilesPendingMessage
     | TriggerRulesLoadMessage

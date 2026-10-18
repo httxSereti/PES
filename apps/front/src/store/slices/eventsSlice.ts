@@ -5,7 +5,7 @@ import { createSlice, type PayloadAction } from '@reduxjs/toolkit';
 // existing importers.
 export type { TriggeredAction, TriggeredRule, TriggeredEvent } from '@/types';
 
-interface EventsState {
+export interface EventsState {
     events: TriggeredEvent[];
     triggerRules: TriggerRule[];
     /** Max events kept in memory */

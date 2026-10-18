@@ -7,7 +7,7 @@ import type {
 } from '@/types';
 import { createSlice, type PayloadAction } from '@reduxjs/toolkit';
 
-interface TrainingState {
+export interface TrainingState {
     /** The session currently running (status === 'running'), null otherwise. */
     liveSession: EdgingSession | null;
     /** Edges of the live session, appended as `training:edge` arrives. */

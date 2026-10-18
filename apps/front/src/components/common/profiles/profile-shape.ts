@@ -43,6 +43,21 @@ type RampCurve = {
     levelAt: (seconds: number) => number;
 };
 
+/** Resolved ramp used to draw a curve (editor + saved-profile previews). */
+export type RampCurveInput = {
+    mode: RampMode;
+    /** Seconds between two steps. */
+    timer: number;
+    /** Increment per step (percent of max by default). */
+    step: number;
+    /** "percent" (default) or "absolute" field levels per step. */
+    stepUnit?: string;
+    /** Absolute field level (0-100) treated as 100% — the ramp target. */
+    max: number;
+    /** Absolute field level (0-100) the cycle rests at — the ramp start. */
+    start: number;
+};
+
 function clampLevel(value: number): number {
     return Math.min(100, Math.max(0, Math.round(value)));
 }
@@ -56,15 +71,23 @@ function positiveModulo(value: number, modulus: number): number {
  * Cycle of one ramp: climb from `start` to 100% of `max`, then loop by mode —
  * WAVE goes back down, RESET dwells one step at the top, ASCEND holds there.
  */
-function buildCurve(ramp: ProfileRampPreview): RampCurve {
-    const maxLevel = clampLevel(ramp.max);
-    const startLevel = clampLevel(ramp.start);
+export function buildRampCurve(input: RampCurveInput): RampCurve {
+    const maxLevel = clampLevel(input.max);
+    const startLevel = clampLevel(input.start);
     const startPct = maxLevel > 0 ? (startLevel * 100) / maxLevel : 0;
-    const timer = ramp.timer > 0 ? ramp.timer : 1;
+    const timer = input.timer > 0 ? input.timer : 1;
+
+    // `step` is a share of the max: absolute steps are converted like the
+    // backend does (`step * 100 / max`), mirroring `_preview_ramps`.
+    const step = input.step > 0 ? input.step : 0;
+    const stepPct =
+        input.stepUnit === "absolute" && maxLevel > 0
+            ? (step * 100) / maxLevel
+            : step;
 
     const climbPct = Math.max(0, 100 - startPct);
     const climbSeconds =
-        ramp.step > 0 && climbPct > 0 ? (climbPct / ramp.step) * timer : 0;
+        stepPct > 0 && climbPct > 0 ? (climbPct / stepPct) * timer : 0;
 
     if (climbSeconds <= 0) {
         // Already at (or above) the max — a static level, nothing to shape.
@@ -74,7 +97,7 @@ function buildCurve(ramp: ProfileRampPreview): RampCurve {
     const level = (progressPct: number) =>
         clampLevel((maxLevel * progressPct) / 100);
 
-    if (ramp.mode === RampMode.WAVE) {
+    if (input.mode === RampMode.WAVE) {
         const periodSeconds = climbSeconds * 2;
         return {
             periodSeconds,
@@ -90,7 +113,7 @@ function buildCurve(ramp: ProfileRampPreview): RampCurve {
         };
     }
 
-    if (ramp.mode === RampMode.ASCEND) {
+    if (input.mode === RampMode.ASCEND) {
         return {
             periodSeconds: climbSeconds,
             levelAt: (seconds) =>
@@ -111,6 +134,18 @@ function buildCurve(ramp: ProfileRampPreview): RampCurve {
                 : maxLevel;
         },
     };
+}
+
+/** Curve of a resolved profile ramp (`ProfileRampPreview.step` is percent). */
+function buildCurve(ramp: ProfileRampPreview): RampCurve {
+    return buildRampCurve({
+        mode: ramp.mode,
+        timer: ramp.timer,
+        step: ramp.step,
+        stepUnit: "percent",
+        max: ramp.max,
+        start: ramp.start,
+    });
 }
 
 /**

@@ -1,7 +1,7 @@
 import type { SessionHistoryDetail, SessionHistoryItem } from "@/types";
 import { createSlice, type PayloadAction } from "@reduxjs/toolkit";
 
-interface SessionHistoryState {
+export interface SessionHistoryState {
   /** Full history list (null until the first `sessions:history` reply). */
   list: SessionHistoryItem[] | null;
   /** History detail per session id, keyed by `sessions:history_detail` replies. */

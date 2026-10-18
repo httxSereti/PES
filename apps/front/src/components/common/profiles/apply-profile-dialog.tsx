@@ -102,14 +102,19 @@ function useApplyProfileForm(
     const [replace, setReplace] = useState(true);
     const [submitting, setSubmitting] = useState(false);
 
-    // Fresh defaults every time the dialog opens.
+    // Fresh defaults every time the dialog opens; stored profile defaults
+    // (see the studio "Apply" tab) prefill level, duration and units.
+    const storedDefaults = profile.defaults ?? null;
     useEffect(() => {
         if (!open) return;
-        setLevelPct(100);
-        setDurationText("-1");
-        setSelectedUnits(profile.units);
+        setLevelPct(storedDefaults?.level_pct ?? 100);
+        setDurationText(String(storedDefaults?.duration ?? -1));
+        const preferredUnits = storedDefaults?.units?.length
+            ? profile.units.filter((unit) => storedDefaults.units.includes(unit))
+            : profile.units;
+        setSelectedUnits(preferredUnits.length > 0 ? preferredUnits : profile.units);
         setReplace(true);
-    }, [open, profile.units]);
+    }, [open, profile.units, storedDefaults]);
 
     const showUnitPicker = profile.units.length > 1;
 
@@ -394,7 +399,9 @@ export function ApplyProfileDialog({
     const meta = [
         `${profile.unit_count} unit${profile.unit_count === 1 ? "" : "s"}`,
         `${profile.ramp_count} ramp${profile.ramp_count === 1 ? "" : "s"}`,
-        "previous state is restored when it ends",
+        profile.defaults
+            ? "prefilled from this profile's defaults"
+            : "previous state is restored when it ends",
     ].join(" · ");
 
     if (isDesktop) {
