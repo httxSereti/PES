@@ -142,7 +142,9 @@ class TriggerRuleUpdatePayload(WireModel):
     rule_id: str
     name: str | None = None
     description: str | None = None
+    # Legacy single event; `event_types` supersedes it when both are sent
     event_type: str | None = None
+    event_types: list[str] | None = None
     enabled: bool | None = None
     priority: int | None = None
 
@@ -162,7 +164,9 @@ class TriggerActionDraft(WireModel):
 
 class TriggerRuleDraft(WireModel):
     name: str
-    event_type: str
+    event_types: list[str] = []
+    # Legacy single event accepted from older clients
+    event_type: str | None = None
     description: str | None = None
     enabled: bool = True
     priority: int = 0

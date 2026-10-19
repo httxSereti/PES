@@ -64,7 +64,7 @@ export const actionSchema = z.discriminatedUnion("action_type", [
 export const formSchema = z.object({
     name: z.string().min(3, "Name must be at least 3 characters.").max(64, "Name must be at most 64 characters."),
     description: z.string().max(256, "Description must be at most 256 characters.").optional(),
-    event_type: z.string().min(1, "Please select an event."),
+    event_types: z.array(z.string().min(1)).min(1, "Select at least one event."),
     priority: z.coerce.number().int().min(0).max(100),
     enabled: z.boolean(),
     labels: z.array(z.string().min(1)),
@@ -158,7 +158,12 @@ export function ruleToFormValues(rule: TriggerRule): FormValues {
     return {
         name: rule.name,
         description: rule.description ?? "",
-        event_type: rule.event_type,
+        event_types:
+            rule.event_types?.length > 0
+                ? rule.event_types
+                : rule.event_type
+                  ? [rule.event_type]
+                  : [],
         priority: rule.priority,
         enabled: rule.enabled,
         labels: rule.labels.map((l) => l.name),

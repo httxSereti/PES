@@ -1,10 +1,14 @@
 import structlog
-from store import Store
+from sqlalchemy.orm import selectinload
+
 from api.ws.context import CommandContext
 from api.ws.registry import command
 from api.ws.schema import CommandResult, TriggerRulesUpdateCommand
 from database.connection import Database
-from database.models import TriggerRule
+from database.models import TriggerRule, TriggerRuleEvent
+from database.repositories.trigger_rule_repo import unique_event_types
+from integrations import integration_registry
+from store import Store
 from typings import Permission
 
 
@@ -24,19 +28,43 @@ async def handle_trigger_rule_update(
     # raw payload dict the old handler received
     sent_fields = msg.payload.model_dump(exclude_none=True)
 
-    try:
-        if not rule_id:
-            return CommandResult(status="error", message="Missing rule id")
+    if not rule_id:
+        return CommandResult(status="error", message="Missing rule id")
 
+    raw_event_types = msg.payload.event_types
+    if raw_event_types is None and msg.payload.event_type is not None:
+        raw_event_types = [msg.payload.event_type]
+    event_types = (
+        unique_event_types(raw_event_types) if raw_event_types is not None else None
+    )
+    if event_types is not None:
+        if not event_types:
+            return CommandResult(
+                status="error", message="A rule needs at least one event"
+            )
+        unknown = [
+            event_type
+            for event_type in event_types
+            if not integration_registry.is_known_event(event_type)
+        ]
+        if unknown:
+            return CommandResult(
+                status="error", message=f"Unknown event_types: {unknown}"
+            )
+
+    try:
         async with Database.get_instance().session_maker() as session:
-            rule = await session.get(TriggerRule, rule_id)
+            rule = await session.get(
+                TriggerRule,
+                rule_id,
+                options=[selectinload(TriggerRule.event_links)],
+            )
 
             if not rule:
                 return CommandResult(status="error", message="Missing rule")
 
             name = msg.payload.name
             description = msg.payload.description
-            event_type = msg.payload.event_type
             enabled = msg.payload.enabled
             priority = msg.payload.priority
 
@@ -48,11 +76,20 @@ async def handle_trigger_rule_update(
                 rule.enabled = enabled
             if priority is not None:
                 rule.priority = priority
-            if event_type is not None:
-                rule.event_type = event_type
+            if event_types is not None:
+                rule.event_type = event_types[0]
+                rule.event_links = [
+                    TriggerRuleEvent(event_type=event_type, sort_order=index)
+                    for index, event_type in enumerate(event_types)
+                ]
 
             await session.commit()
             await session.refresh(rule)
+
+        changes = {k: v for k, v in sent_fields.items() if k != "rule_id"}
+        if event_types is not None:
+            changes["event_type"] = event_types[0]
+            changes["event_types"] = event_types
 
         ctx.notifier.notify(
             "trigger_rules:update",
@@ -60,7 +97,7 @@ async def handle_trigger_rule_update(
                 "status": "ok",
                 "id": rule_id,
                 "partial": True,
-                "changes": {k: v for k, v in sent_fields.items() if k != "rule_id"},
+                "changes": changes,
             },
         )
 

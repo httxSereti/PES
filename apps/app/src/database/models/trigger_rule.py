@@ -8,6 +8,7 @@ from database.base import Base
 
 if TYPE_CHECKING:
     from .trigger_action import TriggerAction
+    from .trigger_rule_event import TriggerRuleEvent
     from .trigger_rule_label import TriggerRuleLabel
 
 
@@ -15,6 +16,8 @@ class TriggerRule(Base):
     __tablename__ = "trigger_rules"
 
     id: Mapped[str] = mapped_column(String, primary_key=True)
+    # Legacy single-event field: first selected event. Multi-event rules live
+    # in `event_links`; rows without links fall back to this column.
     event_type: Mapped[str] = mapped_column(String, index=True)
     name: Mapped[str] = mapped_column(String)
     description: Mapped[Optional[str]] = mapped_column(String, nullable=True)
@@ -37,5 +40,13 @@ class TriggerRule(Base):
         "TriggerRuleLabel",
         secondary="trigger_rule_label_map",
         back_populates="rules",
+        lazy="selectin",
+    )
+
+    event_links: Mapped[List[TriggerRuleEvent]] = relationship(
+        "TriggerRuleEvent",
+        back_populates="rule",
+        cascade="all, delete-orphan",
+        order_by="TriggerRuleEvent.sort_order",
         lazy="selectin",
     )

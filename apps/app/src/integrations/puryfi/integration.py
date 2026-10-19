@@ -40,49 +40,84 @@ from .protocol import DESIRED_INTENTS, PuryFiClient, PuryFiConnection, PuryFiErr
 logger = structlog.get_logger("pes")
 
 _EVENTS = [
-    # Detection
+    # Detection — aggregate categories
     EventDef(
         id="puryfi_genitals_detected",
         label="Genitals detected",
-        description="Genitals detected in a scanned image",
-        group="Detection",
+        description=(
+            "Includes FemaleGenitals, FemaleGenitalsCovered, MaleGenitals and "
+            "MaleGenitalsCovered."
+        ),
+        group="Aggregated",
+        image_url=f"/puryfi/buttons/{labels.CATEGORY_ICONS['genitals']}",
     ),
     EventDef(
         id="puryfi_breasts_detected",
         label="Breasts detected",
-        description="Breasts detected in a scanned image",
-        group="Detection",
+        description=(
+            "Includes FemaleBreast, FemaleBreastCovered, MaleBreast and "
+            "MaleBreastCovered."
+        ),
+        group="Aggregated",
+        image_url=f"/puryfi/buttons/{labels.CATEGORY_ICONS['breasts']}",
     ),
     EventDef(
         id="puryfi_buttocks_detected",
         label="Buttocks detected",
-        description="Buttocks detected in a scanned image",
-        group="Detection",
+        description="Includes Buttocks and ButtocksCovered.",
+        group="Aggregated",
+        image_url=f"/puryfi/buttons/{labels.CATEGORY_ICONS['buttocks']}",
     ),
     EventDef(
         id="puryfi_anus_detected",
         label="Anus detected",
-        description="Anus detected in a scanned image",
-        group="Detection",
+        description="Includes Anus and AnusCovered.",
+        group="Aggregated",
+        image_url=f"/puryfi/buttons/{labels.CATEGORY_ICONS['anus']}",
     ),
     EventDef(
         id="puryfi_nipples_detected",
         label="Nipples detected",
-        description="Nipples detected in a scanned image",
-        group="Detection",
+        description="Includes Nipple and NippleCovered.",
+        group="Aggregated",
+        image_url=f"/puryfi/buttons/{labels.CATEGORY_ICONS['nipples']}",
     ),
     EventDef(
         id="puryfi_body_detected",
         label="Body detected",
-        description="Body parts (tummy, armpit, foot, hand, silhouette) detected",
-        group="Detection",
+        description=(
+            "Includes Tummy, TummyCovered, Foot, FootCovered, Armpit, "
+            "ArmpitCovered, Hand, HandCovered and Silhouette."
+        ),
+        group="Aggregated",
+        image_url=f"/puryfi/buttons/{labels.CATEGORY_ICONS['body']}",
     ),
     EventDef(
         id="puryfi_face_detected",
         label="Face detected",
-        description="Faces, eyes or mouths detected in a scanned image",
-        group="Detection",
+        description="Includes FaceFemale, FaceMale, Eye and Mouth.",
+        group="Aggregated",
+        image_url=f"/puryfi/buttons/{labels.CATEGORY_ICONS['face']}",
     ),
+    # Detection — the 27 individual PuryFi labels
+    *[
+        EventDef(
+            id=labels.LABEL_EVENT_IDS[label_id],
+            label=labels.display_label(label_id),
+            description=(
+                f"{labels.display_label(label_id)} detected in a scanned image"
+            ),
+            group="All",
+            image_url=f"/puryfi/buttons/{labels.LABEL_ICONS[label_id]}",
+            data_schema={
+                "objects": "Detected objects for this label",
+                "count": "Number of objects found",
+                "label": "PuryFi label name",
+                "label_id": "PuryFi label id (0-26)",
+            },
+        )
+        for label_id in sorted(labels.PURYFI_LABELS)
+    ],
     # Lock
     EventDef(
         id="puryfi_lock_set",
@@ -412,6 +447,7 @@ class PuryFiIntegration(Integration):
         now = time.monotonic()
 
         hits: dict[str, list[dict]] = {}
+        label_hits: dict[int, list[dict]] = {}
         for obj in objects:
             if not isinstance(obj, dict):
                 continue
@@ -430,14 +466,14 @@ class PuryFiIntegration(Integration):
             if score < min_score:
                 continue
 
-            hits.setdefault(category_key, []).append(
-                {
-                    "label": labels.label_name(label_id),
-                    "label_id": label_id,
-                    "score": round(score, 3),
-                    "rect": obj.get("rect"),
-                }
-            )
+            found_object = {
+                "label": labels.label_name(label_id),
+                "label_id": label_id,
+                "score": round(score, 3),
+                "rect": obj.get("rect"),
+            }
+            hits.setdefault(category_key, []).append(found_object)
+            label_hits.setdefault(label_id, []).append(found_object)
 
         for category_key, found in hits.items():
             if len(found) < min_objects:
@@ -449,6 +485,28 @@ class PuryFiIntegration(Integration):
                 labels.CATEGORIES[category_key]["event"],
                 {"objects": found, "count": len(found)},
                 f"puryfi:scan:{category_key}",
+            )
+
+        # Individual label events are intentionally not subject to
+        # `min_objects`: one detected label is enough to name it. They keep
+        # their own cooldown so a scan can still fire several labels at once.
+        for label_id, found in label_hits.items():
+            cooldown_key = f"label:{label_id}"
+            if (
+                cooldown
+                and now - self._last_detection.get(cooldown_key, 0.0) < cooldown
+            ):
+                continue
+            self._last_detection[cooldown_key] = now
+            await self._dispatch(
+                labels.LABEL_EVENT_IDS[label_id],
+                {
+                    "objects": found,
+                    "count": len(found),
+                    "label": labels.label_name(label_id),
+                    "label_id": label_id,
+                },
+                f"puryfi:scan:label:{label_id}",
             )
 
     async def _setup_subscriptions(

@@ -1,4 +1,5 @@
 import TriggerRulesActions from "@/components/common/events/trigger-rules/actions/trigger-rules-actions";
+import { EventTypeBadge } from "@/components/common/events/event-badges";
 import { formatDateTime } from "@/lib/format-date";
 import { useWebSocket } from "@/hooks/useWebSocket";
 import { useAppDispatch } from "@/store/hooks";
@@ -26,6 +27,11 @@ export function TriggerRuleLabelBadge({ name }: { name: string }) {
     );
 }
 
+
+function eventTypesOf(triggerRule: TriggerRule): string[] {
+    if (triggerRule.event_types?.length) return triggerRule.event_types;
+    return triggerRule.event_type ? [triggerRule.event_type] : [];
+}
 
 export default function TriggerRulesCard({ triggerRule }: { triggerRule: TriggerRule }) {
     const dispatch = useAppDispatch()
@@ -182,9 +188,9 @@ export default function TriggerRulesCard({ triggerRule }: { triggerRule: Trigger
 
                             <>
                                 <Activity size={12} className="text-muted-foreground/70 shrink-0" />
-                                <span className={`inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-medium border font-mono bg-violet-500/15 text-violet-700 border-violet-500/30 dark:text-violet-300`}>
-                                    {triggerRule.event_type}
-                                </span>
+                                {eventTypesOf(triggerRule).map((eventType) => (
+                                    <EventTypeBadge key={eventType} type={eventType} />
+                                ))}
                             </>
 
                             {triggerRule.labels.length > 0 ? (

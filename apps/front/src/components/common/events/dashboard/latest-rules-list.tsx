@@ -8,6 +8,12 @@ import { formatDateTime } from "@/lib/format-date";
 import { Card, CardContent, CardHeader, CardTitle } from "@pes/ui/components/card";
 
 function LatestRuleRow({ rule }: { rule: TriggerRule }) {
+    const eventTypes = rule.event_types?.length
+        ? rule.event_types
+        : rule.event_type
+          ? [rule.event_type]
+          : [];
+
     return (
         <Link
             to={`/app/events/trigger-rules/${rule.id}/edit`}
@@ -18,7 +24,12 @@ function LatestRuleRow({ rule }: { rule: TriggerRule }) {
                 className={`shrink-0 ${rule.enabled ? "text-emerald-600 dark:text-emerald-400" : "text-muted-foreground/30"}`}
             />
             <span className="font-mono text-xs text-foreground truncate">{rule.name}</span>
-            <EventTypeBadge type={rule.event_type} />
+            {eventTypes[0] && <EventTypeBadge type={eventTypes[0]} />}
+            {eventTypes.length > 1 && (
+                <span className="shrink-0 font-mono text-[9px] text-muted-foreground/50">
+                    +{eventTypes.length - 1}
+                </span>
+            )}
             <span className="ml-auto text-[10px] text-muted-foreground/50 font-mono whitespace-nowrap tabular-nums hidden sm:inline">
                 {formatDateTime(rule.created_at)}
             </span>

@@ -1,5 +1,5 @@
 import type { Control } from "react-hook-form";
-import { Controller } from "react-hook-form";
+import { Controller, useWatch } from "react-hook-form";
 import { useMemo } from "react";
 import { Trash2 } from "lucide-react";
 
@@ -32,6 +32,7 @@ export default function TriggerRuleActionFields({
 }) {
     const profiles = useAppSelector(profilesSelectors.selectAll);
     const integrations = useAppSelector(integrationsSelectors.selectAll);
+    const watchedOperation = useWatch({ control, name: `actions.${index}.operation` });
 
     // Action options come from the integrations catalog; fall back to the
     // static ActionType enum while the catalog has not arrived yet.
@@ -272,6 +273,157 @@ export default function TriggerRuleActionFields({
                     )}
 
                     <Separator />
+
+                    {actionType === ActionType.PURYFI_SET_ENABLED && (
+                        <Controller
+                            name={`actions.${index}.enabled`}
+                            control={control}
+                            render={({ field }) => (
+                                <Field orientation="horizontal">
+                                    <Switch checked={field.value} onCheckedChange={field.onChange} />
+                                    <FieldContent>
+                                        <FieldLabel>Enable PuryFi</FieldLabel>
+                                        <FieldDescription>On enables the blocker, off disables it</FieldDescription>
+                                    </FieldContent>
+                                </Field>
+                            )}
+                        />
+                    )}
+
+                    {actionType === ActionType.PURYFI_SET_LOCK && (
+                        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                            <Controller
+                                name={`actions.${index}.timer_minutes`}
+                                control={control}
+                                render={({ field, fieldState }) => (
+                                    <Field data-invalid={fieldState.invalid}>
+                                        <FieldLabel>Timer (minutes)</FieldLabel>
+                                        <FieldDescription>0 sets no timer</FieldDescription>
+                                        <Input {...field} type="number" min={0} aria-invalid={fieldState.invalid} placeholder="30" />
+                                        {fieldState.invalid && <FieldError errors={[fieldState.error]} />}
+                                    </Field>
+                                )}
+                            />
+                            <Controller
+                                name={`actions.${index}.password`}
+                                control={control}
+                                render={({ field, fieldState }) => (
+                                    <Field data-invalid={fieldState.invalid}>
+                                        <FieldLabel>Password</FieldLabel>
+                                        <FieldDescription>Leave empty to clear an existing password</FieldDescription>
+                                        <Input {...field} type="password" aria-invalid={fieldState.invalid} placeholder="optional" autoComplete="off" />
+                                        {fieldState.invalid && <FieldError errors={[fieldState.error]} />}
+                                    </Field>
+                                )}
+                            />
+                        </div>
+                    )}
+
+                    {actionType === ActionType.PURYFI_SET_LOCK_TIMER && (
+                        <Controller
+                            name={`actions.${index}.value`}
+                            control={control}
+                            render={({ field, fieldState }) => (
+                                <Field data-invalid={fieldState.invalid}>
+                                    <FieldLabel>Time</FieldLabel>
+                                    <FieldDescription>
+                                        Relative to the current timer: 30, +10, -5, [5-25], +[5-25]
+                                    </FieldDescription>
+                                    <Input {...field} aria-invalid={fieldState.invalid} placeholder="+10" autoComplete="off" />
+                                    {fieldState.invalid && <FieldError errors={[fieldState.error]} />}
+                                </Field>
+                            )}
+                        />
+                    )}
+
+                    {(actionType === ActionType.PURYFI_ENTER_LOCK_PASSWORD ||
+                        actionType === ActionType.PURYFI_EMERGENCY_UNLOCK) && (
+                        <p className="text-[11px] text-muted-foreground/60">
+                            Uses the{" "}
+                            {actionType === ActionType.PURYFI_ENTER_LOCK_PASSWORD
+                                ? "lock password"
+                                : "emergency server token"}{" "}
+                            configured in the PuryFi integration settings.
+                        </p>
+                    )}
+
+                    {actionType === ActionType.PURYFI_UPDATE_WBLIST && (
+                        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                            <Controller
+                                name={`actions.${index}.operation`}
+                                control={control}
+                                render={({ field }) => (
+                                    <Field>
+                                        <FieldLabel>Operation</FieldLabel>
+                                        <Select value={field.value} onValueChange={field.onChange}>
+                                            <SelectTrigger>
+                                                <SelectValue />
+                                            </SelectTrigger>
+                                            <SelectContent position="item-aligned">
+                                                <SelectItem value="add">Add entry</SelectItem>
+                                                <SelectItem value="remove">Remove entry</SelectItem>
+                                                <SelectItem value="set_mode">Switch mode</SelectItem>
+                                            </SelectContent>
+                                        </Select>
+                                    </Field>
+                                )}
+                            />
+                            <Controller
+                                name={`actions.${index}.list`}
+                                control={control}
+                                render={({ field }) => (
+                                    <Field>
+                                        <FieldLabel>
+                                            {watchedOperation === "set_mode" ? "Mode" : "List"}
+                                        </FieldLabel>
+                                        <Select value={field.value} onValueChange={field.onChange}>
+                                            <SelectTrigger>
+                                                <SelectValue />
+                                            </SelectTrigger>
+                                            <SelectContent position="item-aligned">
+                                                <SelectItem value="blacklist">Blacklist</SelectItem>
+                                                <SelectItem value="whitelist">Whitelist</SelectItem>
+                                            </SelectContent>
+                                        </Select>
+                                    </Field>
+                                )}
+                            />
+                            {watchedOperation !== "set_mode" && (
+                                <>
+                                    <Controller
+                                        name={`actions.${index}.entry_mode`}
+                                        control={control}
+                                        render={({ field }) => (
+                                            <Field>
+                                                <FieldLabel>Match</FieldLabel>
+                                                <Select value={field.value} onValueChange={field.onChange}>
+                                                    <SelectTrigger>
+                                                        <SelectValue />
+                                                    </SelectTrigger>
+                                                    <SelectContent position="item-aligned">
+                                                        <SelectItem value="text">Text</SelectItem>
+                                                        <SelectItem value="regex">Regex</SelectItem>
+                                                    </SelectContent>
+                                                </Select>
+                                            </Field>
+                                        )}
+                                    />
+                                    <Controller
+                                        name={`actions.${index}.value`}
+                                        control={control}
+                                        render={({ field, fieldState }) => (
+                                            <Field data-invalid={fieldState.invalid}>
+                                                <FieldLabel>Value</FieldLabel>
+                                                <FieldDescription>URL, domain or pattern</FieldDescription>
+                                                <Input {...field} aria-invalid={fieldState.invalid} placeholder="example.com" autoComplete="off" />
+                                                {fieldState.invalid && <FieldError errors={[fieldState.error]} />}
+                                            </Field>
+                                        )}
+                                    />
+                                </>
+                            )}
+                        </div>
+                    )}
 
                     {/* ── Common scheduling ── */}
                     <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">

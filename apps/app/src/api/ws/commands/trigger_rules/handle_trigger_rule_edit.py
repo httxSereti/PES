@@ -4,7 +4,7 @@ from api.ws.context import CommandContext
 from api.ws.loaders.trigger_rules_loader import _serialize_rule
 from api.ws.registry import command
 from api.ws.schema import CommandResult, TriggerRulesEditCommand
-from database.repositories.trigger_rule_repo import TriggerRuleRepo
+from database.repositories.trigger_rule_repo import TriggerRuleRepo, unique_event_types
 from events.enums import ActionType
 from integrations import integration_registry
 from typings import Permission
@@ -25,18 +25,26 @@ async def handle_trigger_rule_edit(
     """
     rule_id = msg.payload.rule_id
     name = msg.payload.name
-    event_type = msg.payload.event_type
+    event_types = unique_event_types(
+        msg.payload.event_types
+        or ([msg.payload.event_type] if msg.payload.event_type else [])
+    )
     actions = msg.payload.actions
     labels = msg.payload.labels
 
     if not rule_id:
         return CommandResult(status="error", message="Missing rule_id")
-    if not name or not event_type:
-        return CommandResult(status="error", message="Missing name or event_type")
+    if not name or not event_types:
+        return CommandResult(status="error", message="Missing name or event_types")
 
-    if not integration_registry.is_known_event(event_type):
+    unknown = [
+        event_type
+        for event_type in event_types
+        if not integration_registry.is_known_event(event_type)
+    ]
+    if unknown:
         return CommandResult(
-            status="error", message=f"Unknown event_type: {event_type}"
+            status="error", message=f"Unknown event_types: {unknown}"
         )
 
     # Validate action types up front so we don't half-rewrite the rule
@@ -54,7 +62,7 @@ async def handle_trigger_rule_edit(
 
         rule = await repo.update_rule(
             rule_id=rule_id,
-            event_type=event_type,
+            event_types=event_types,
             name=name,
             description=msg.payload.description,
             enabled=msg.payload.enabled,

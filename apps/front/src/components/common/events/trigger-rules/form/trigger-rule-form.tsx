@@ -12,9 +12,7 @@ import { Input } from "@pes/ui/components/input";
 import { Textarea } from "@pes/ui/components/textarea";
 import { Switch } from "@pes/ui/components/switch";
 import { Separator } from "@pes/ui/components/separator";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@pes/ui/components/select";
 
-import { useEventCatalog } from "@/components/common/events/event-groups";
 import { useWebSocket } from "@/hooks/useWebSocket";
 import { useAppDispatch } from "@/store/hooks";
 import { triggerRuleAdded, triggerRuleUpdated } from "@/store/slices/triggerRulesSlice";
@@ -22,6 +20,7 @@ import { ActionType, type TriggerRule } from "@/types/events.types";
 
 import TriggerRuleActionFields from "./trigger-rule-action-fields";
 import TriggerRuleLabelSelect from "./trigger-rule-label-select";
+import { EventSelection } from "./event-explorer";
 import { defaultAction, formSchema, ruleToFormValues, toActionBody, type FormValues } from "./schema";
 
 const BACK_PATH = "/app/events/trigger-rules";
@@ -30,7 +29,6 @@ export default function TriggerRuleForm({ rule }: { rule?: TriggerRule }) {
     const dispatch = useAppDispatch();
     const navigate = useNavigate();
     const { sendCommand } = useWebSocket();
-    const { groups: eventGroups, disabledTypes } = useEventCatalog();
     const [apiError, setApiError] = useState<string | null>(null);
 
     const isEdit = !!rule;
@@ -44,7 +42,7 @@ export default function TriggerRuleForm({ rule }: { rule?: TriggerRule }) {
             : {
                 name: "",
                 description: "",
-                event_type: "",
+                event_types: [],
                 priority: 0,
                 enabled: true,
                 labels: [],
@@ -61,7 +59,7 @@ export default function TriggerRuleForm({ rule }: { rule?: TriggerRule }) {
         setApiError(null);
         try {
             const body = {
-                event_type: values.event_type,
+                event_types: values.event_types,
                 name: values.name,
                 description: values.description || null,
                 enabled: values.enabled,
@@ -87,7 +85,7 @@ export default function TriggerRuleForm({ rule }: { rule?: TriggerRule }) {
             }
 
             toast.success(`Trigger rule '${values.name}' ${isEdit ? "updated" : "created"}`, {
-                description: `${values.actions.length} action${values.actions.length > 1 ? "s" : ""} on ${values.event_type}`,
+                description: `${values.actions.length} action${values.actions.length > 1 ? "s" : ""} on ${values.event_types.length} event${values.event_types.length > 1 ? "s" : ""}`,
                 position: "bottom-right",
             });
 
@@ -134,47 +132,16 @@ export default function TriggerRuleForm({ rule }: { rule?: TriggerRule }) {
                                 )}
                             />
                             <Controller
-                                name="event_type"
+                                name="event_types"
                                 control={form.control}
                                 render={({ field, fieldState }) => (
-                                    <Field orientation="responsive" data-invalid={fieldState.invalid}>
-                                        <FieldContent>
-                                            <FieldLabel>Event</FieldLabel>
-                                            <FieldDescription>Which event should trigger this rule</FieldDescription>
-                                            {fieldState.invalid && <FieldError errors={[fieldState.error]} />}
-                                        </FieldContent>
-                                        <Select name={field.name} value={field.value} onValueChange={field.onChange}>
-                                            <SelectTrigger aria-invalid={fieldState.invalid} className="min-w-[200px]">
-                                                <SelectValue placeholder="Select" />
-                                            </SelectTrigger>
-                                            <SelectContent position="item-aligned">
-                                                {Object.values(eventGroups).map((group) => (
-                                                    <div key={group.label}>
-                                                        <div className="px-2 py-1 font-mono text-[10px] uppercase tracking-widest text-muted-foreground/40">
-                                                            {group.label}
-                                                        </div>
-                                                        {group.types.map((t) => (
-                                                            <SelectItem
-                                                                key={t}
-                                                                value={t}
-                                                                className={
-                                                                    disabledTypes.has(t)
-                                                                        ? "text-muted-foreground/50"
-                                                                        : undefined
-                                                                }
-                                                            >
-                                                                {t}
-                                                                {disabledTypes.has(t) && (
-                                                                    <span className="ml-1.5 text-[10px] uppercase tracking-wide text-muted-foreground/50">
-                                                                        disabled
-                                                                    </span>
-                                                                )}
-                                                            </SelectItem>
-                                                        ))}
-                                                    </div>
-                                                ))}
-                                            </SelectContent>
-                                        </Select>
+                                    <Field data-invalid={fieldState.invalid}>
+                                        <FieldLabel>Events</FieldLabel>
+                                        <FieldDescription>
+                                            One or more events can trigger this rule. PuryFi events can carry a scan preview.
+                                        </FieldDescription>
+                                        <EventSelection value={field.value} onChange={field.onChange} />
+                                        {fieldState.invalid && <FieldError errors={[fieldState.error]} />}
                                     </Field>
                                 )}
                             />

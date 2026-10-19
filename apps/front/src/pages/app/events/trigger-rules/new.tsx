@@ -20,7 +20,7 @@ export default function NewTriggerRulesPage() {
                 <div>
                     <h1 className="font-mono text-sm">New Trigger Rule</h1>
                     <p className="font-mono text-xs text-muted-foreground/50">
-                        Run one or more actions when an event fires
+                        Run one or more actions when any selected event fires
                     </p>
                 </div>
             </div>

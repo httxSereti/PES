@@ -23,6 +23,10 @@ export function EventTypeBadge({ type }: { type: string }) {
     if (type.startsWith("custom:wof_"))
         color = "bg-violet-500/15 text-violet-700 border-violet-500/30 dark:text-violet-300"
 
+    // PuryFi detection/lock/state events
+    if (type.startsWith("puryfi_"))
+        color = "bg-pink-500/15 text-pink-700 border-pink-500/30 dark:text-pink-300"
+
     return (
         <span className={`inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-medium border font-mono ${color}`}>
             {type}

@@ -2,7 +2,7 @@
 // by apps/app/scripts/generate_ws_types.py — DO NOT EDIT.
 // Regenerate with: pnpm codegen:ws
 
-export const WS_SCHEMA_VERSION = 14;
+export const WS_SCHEMA_VERSION = 15;
 
 export enum ActionType {
     PROFILE = "PROFILE",
@@ -51,13 +51,15 @@ export interface TriggerRuleUpdatePayload {
     name?: string | null;
     description?: string | null;
     event_type?: string | null;
+    event_types?: string[] | null;
     enabled?: boolean | null;
     priority?: number | null;
 }
 
 export interface TriggerRuleDraft {
     name: string;
-    event_type: string;
+    event_types: string[];
+    event_type?: string | null;
     description?: string | null;
     enabled: boolean;
     priority: number;
@@ -233,6 +235,7 @@ export interface CommandResult {
 export interface TriggerRule {
     id: string;
     event_type: string;
+    event_types: string[];
     name: string;
     description: string | null;
     enabled: boolean;
@@ -386,6 +389,7 @@ export interface IntegrationEvent {
     group: string;
     enabled: boolean;
     data_schema: Record<string, string>;
+    image_url?: string | null;
 }
 
 export interface IntegrationAction {
