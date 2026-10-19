@@ -32,6 +32,33 @@ export const actionSchema = z.discriminatedUnion("action_type", [
         duration_minutes: z.coerce.number().int(),
         only_max: z.boolean(),
     }),
+    baseAction.extend({
+        action_type: z.literal(ActionType.PURYFI_SET_ENABLED),
+        enabled: z.boolean(),
+    }),
+    baseAction.extend({
+        action_type: z.literal(ActionType.PURYFI_SET_LOCK),
+        timer_minutes: z.coerce.number().int().min(0, "Use 0 for no timer"),
+        password: z.string(),
+    }),
+    baseAction.extend({
+        action_type: z.literal(ActionType.PURYFI_SET_LOCK_TIMER),
+        // a minutes expression: 30, +10, -5, [5-25], +[5-25]
+        value: z.string().min(1, "e.g. 30, +10, -5, [5-25]"),
+    }),
+    baseAction.extend({
+        action_type: z.literal(ActionType.PURYFI_ENTER_LOCK_PASSWORD),
+    }),
+    baseAction.extend({
+        action_type: z.literal(ActionType.PURYFI_EMERGENCY_UNLOCK),
+    }),
+    baseAction.extend({
+        action_type: z.literal(ActionType.PURYFI_UPDATE_WBLIST),
+        operation: z.enum(["add", "remove", "set_mode"]),
+        list: z.enum(["blacklist", "whitelist"]),
+        entry_mode: z.enum(["text", "regex"]),
+        value: z.string(),
+    }),
 ]);
 
 export const formSchema = z.object({
@@ -59,6 +86,18 @@ export function defaultAction(action_type: ActionType): ActionValues {
             return { ...base, action_type, target: "all", pct: 0, random: false };
         case ActionType.CHASTER_TIME_UPDATE:
             return { ...base, action_type, duration_minutes: 0, only_max: false };
+        case ActionType.PURYFI_SET_ENABLED:
+            return { ...base, action_type, enabled: true };
+        case ActionType.PURYFI_SET_LOCK:
+            return { ...base, action_type, timer_minutes: 30, password: "" };
+        case ActionType.PURYFI_SET_LOCK_TIMER:
+            return { ...base, action_type, value: "+10" };
+        case ActionType.PURYFI_ENTER_LOCK_PASSWORD:
+            return { ...base, action_type };
+        case ActionType.PURYFI_EMERGENCY_UNLOCK:
+            return { ...base, action_type };
+        case ActionType.PURYFI_UPDATE_WBLIST:
+            return { ...base, action_type, operation: "add", list: "blacklist", entry_mode: "text", value: "" };
     }
 }
 
@@ -81,6 +120,34 @@ export function actionToFormValues(action: TriggerAction): ActionValues {
             return { ...base, action_type: ActionType.MULT, target: String(p["target"] ?? "all"), pct: Number(p["pct"] ?? 0), random: Boolean(p["random"] ?? false) };
         case ActionType.CHASTER_TIME_UPDATE:
             return { ...base, action_type: ActionType.CHASTER_TIME_UPDATE, duration_minutes: Number(p["duration_minutes"] ?? 0), only_max: Boolean(p["only_max"] ?? false) };
+        case ActionType.PURYFI_SET_ENABLED:
+            return { ...base, action_type: ActionType.PURYFI_SET_ENABLED, enabled: Boolean(p["enabled"] ?? true) };
+        case ActionType.PURYFI_SET_LOCK:
+            return {
+                ...base,
+                action_type: ActionType.PURYFI_SET_LOCK,
+                timer_minutes: Number(p["timer_minutes"] ?? 0),
+                password: String(p["password"] ?? ""),
+            };
+        case ActionType.PURYFI_SET_LOCK_TIMER:
+            return { ...base, action_type: ActionType.PURYFI_SET_LOCK_TIMER, value: String(p["value"] ?? "+10") };
+        case ActionType.PURYFI_ENTER_LOCK_PASSWORD:
+            return { ...base, action_type: ActionType.PURYFI_ENTER_LOCK_PASSWORD };
+        case ActionType.PURYFI_EMERGENCY_UNLOCK:
+            return { ...base, action_type: ActionType.PURYFI_EMERGENCY_UNLOCK };
+        case ActionType.PURYFI_UPDATE_WBLIST: {
+            const operation = String(p["operation"] ?? "add");
+            const list = String(p["list"] ?? "blacklist");
+            const entryMode = String(p["entry_mode"] ?? "text");
+            return {
+                ...base,
+                action_type: ActionType.PURYFI_UPDATE_WBLIST,
+                operation: operation === "remove" || operation === "set_mode" ? operation : "add",
+                list: list === "whitelist" ? "whitelist" : "blacklist",
+                entry_mode: entryMode === "regex" ? "regex" : "text",
+                value: String(p["value"] ?? ""),
+            };
+        }
         default:
             return defaultAction(ActionType.LEVEL);
     }
@@ -121,6 +188,27 @@ export function toActionBody(action: ActionValues, sort_order: number) {
             break;
         case ActionType.CHASTER_TIME_UPDATE:
             payload = { duration_minutes: action.duration_minutes, only_max: action.only_max };
+            break;
+        case ActionType.PURYFI_SET_ENABLED:
+            payload = { enabled: action.enabled };
+            break;
+        case ActionType.PURYFI_SET_LOCK:
+            payload = { timer_minutes: action.timer_minutes, password: action.password };
+            break;
+        case ActionType.PURYFI_SET_LOCK_TIMER:
+            payload = { value: action.value };
+            break;
+        case ActionType.PURYFI_ENTER_LOCK_PASSWORD:
+        case ActionType.PURYFI_EMERGENCY_UNLOCK:
+            payload = {};
+            break;
+        case ActionType.PURYFI_UPDATE_WBLIST:
+            payload = {
+                operation: action.operation,
+                list: action.list,
+                entry_mode: action.entry_mode,
+                value: action.value,
+            };
             break;
     }
     return { action_type, payload, duration, cumulative, sort_order };

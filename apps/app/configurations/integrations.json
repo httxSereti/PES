@@ -1,8 +1,8 @@
 {
   "chaster": {
-    "enabled": true,
-    "events": {
-      "chaster_pillory_vote": true
-    }
+    "enabled": true
+  },
+  "puryfi": {
+    "enabled": true
   }
 }

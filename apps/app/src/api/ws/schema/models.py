@@ -356,6 +356,8 @@ class IntegrationCatalogEntry(WireModel):
     description: str
     kind: str
     enabled: bool
+    # user-facing connection URI (e.g. the PuryFi plugin WebSocket URL)
+    endpoint: str | None = None
     events: list[IntegrationEvent]
     actions: list[IntegrationAction]
     settings: list[IntegrationSetting]

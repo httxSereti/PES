@@ -22,6 +22,7 @@ from .base import (
     Integration,
     IntegrationContext,
     IntegrationKind,
+    SettingDef,
     SettingType,
 )
 from .settings_store import IntegrationSettingsStore
@@ -205,10 +206,26 @@ class IntegrationRegistry:
                 raise ValueError(f"Unknown setting '{key}' for '{integration_id}'")
             if definition.source == "env":
                 raise ValueError(f"Setting '{key}' is environment-backed and read-only")
-            updates[key] = value
+            updates[key] = self._coerce_setting(definition, value)
 
         if updates:
             self._settings.update(integration_id, updates)
+
+    @staticmethod
+    def _coerce_setting(definition: SettingDef, value: Any) -> Any:
+        """Coerce a value coming from the UI to the declared setting type."""
+        if definition.type is SettingType.BOOL:
+            if isinstance(value, bool):
+                return value
+            return str(value).strip().lower() in {"1", "true", "yes", "on"}
+        if definition.type is SettingType.INT:
+            try:
+                return int(value)
+            except (TypeError, ValueError):
+                return definition.default
+        if value is None:
+            return definition.default if definition.default is not None else ""
+        return str(value)
 
     def update(
         self,
@@ -268,6 +285,7 @@ class IntegrationRegistry:
             "description": integration.description,
             "kind": integration.kind.value,
             "enabled": self.is_enabled(integration.id),
+            "endpoint": integration.endpoint(),
             "events": [
                 {
                     "id": event.id,

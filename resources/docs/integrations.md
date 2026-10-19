@@ -9,6 +9,28 @@ in one `IntegrationRegistry`.
 | `units`   | core     | —                     | `PROFILE`, `LEVEL`, `MULT`               | — (units/hardware pages)  |
 | `sensors` | core     | `sensor_*_alarm`      | —                                        | — (sensors page)          |
 | `chaster` | external | `chaster_*`           | `CHASTER_TIME_UPDATE`                    | `CHASTER_*` (env, ro)     |
+| `puryfi`  | external | `puryfi_*` (17)       | `PURYFI_*` (6)                           | thresholds, port, secrets |
+
+### PuryFi (browser blocker)
+
+Unlike Chaster, PuryFi **connects to PES**: the integration opens a WebSocket
+server (`ws://127.0.0.1:8088` by default) and speaks the PuryFi plugin
+protocol (msgpack, `ready` handshake, intents). Setup:
+
+1. In PuryFi's options → Plugins → register a WebSocket plugin with the URL
+   shown in the integration drawer (`ws://localhost:8088` by default, with a
+   copy button).
+2. Grant the requested intents when PuryFi asks (they appear in the options).
+
+The integration subscribes to media scans (`staticMediaScan`) and to
+`enabled` / `wblistConfiguration` state, and polls `lockConfiguration` every
+`lock_poll_seconds` to emit lock events (the SDK cannot subscribe to null
+lock paths). Detection events are per category (`puryfi_genitals_detected`,
+`puryfi_breasts_detected`, …) with `min_score_pct`, `min_objects`,
+`cooldown_seconds` and `include_covered` settings.
+
+Censor hooks (`mediaCensorHookRequest`) are answered with `pass` — PES never
+intercepts images.
 
 - **core** integrations are built-in hardware: always enabled, cannot be
   disabled/removed. They are thin facades — the hardware code

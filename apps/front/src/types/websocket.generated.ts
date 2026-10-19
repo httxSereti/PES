@@ -9,6 +9,12 @@ export enum ActionType {
     LEVEL = "LEVEL",
     MULT = "MULT",
     CHASTER_TIME_UPDATE = "CHASTER_TIME_UPDATE",
+    PURYFI_SET_ENABLED = "PURYFI_SET_ENABLED",
+    PURYFI_SET_LOCK = "PURYFI_SET_LOCK",
+    PURYFI_SET_LOCK_TIMER = "PURYFI_SET_LOCK_TIMER",
+    PURYFI_ENTER_LOCK_PASSWORD = "PURYFI_ENTER_LOCK_PASSWORD",
+    PURYFI_EMERGENCY_UNLOCK = "PURYFI_EMERGENCY_UNLOCK",
+    PURYFI_UPDATE_WBLIST = "PURYFI_UPDATE_WBLIST",
 }
 
 export enum RampMode {
@@ -367,6 +373,7 @@ export interface IntegrationCatalogEntry {
     description: string;
     kind: string;
     enabled: boolean;
+    endpoint?: string | null;
     events: IntegrationEvent[];
     actions: IntegrationAction[];
     settings: IntegrationSetting[];

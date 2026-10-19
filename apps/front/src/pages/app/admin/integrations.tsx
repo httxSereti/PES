@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
     Blocks,
+    Check,
+    Copy,
     Cpu,
     Info,
     Lock,
@@ -8,6 +10,7 @@ import {
     RefreshCw,
     Save,
     Settings,
+    Shield,
     Sparkles,
     Zap,
     type LucideIcon,
@@ -57,6 +60,7 @@ const INTEGRATION_ICONS: Record<string, LucideIcon> = {
     units: Cpu,
     sensors: Radio,
     chaster: Lock,
+    puryfi: Shield,
 };
 
 function iconFor(id: string): LucideIcon {
@@ -314,7 +318,9 @@ function SettingRow({
     value: unknown;
     onChange: (value: string) => void;
 }) {
-    const readOnly = setting.source === "env" || setting.secret;
+    // env-backed settings live in config.env and cannot be edited here;
+    // JSON-backed secrets are editable (shown as password fields).
+    const readOnly = setting.source === "env";
 
     return (
         <label className="flex flex-col gap-1.5">
@@ -355,11 +361,23 @@ function IntegrationPanel({
     const { sendCommand } = useWebSocket();
     const [draft, setDraft] = useState<IntegrationValues>(values);
     const [saving, setSaving] = useState(false);
+    const [copied, setCopied] = useState(false);
     const Icon = iconFor(entry.id);
 
     useEffect(() => {
         setDraft(values);
     }, [values]);
+
+    const copyEndpoint = async () => {
+        if (!entry.endpoint) return;
+        try {
+            await navigator.clipboard.writeText(entry.endpoint);
+            setCopied(true);
+            window.setTimeout(() => setCopied(false), 2000);
+        } catch {
+            toast.error("Failed to copy to clipboard");
+        }
+    };
 
     const editable = useMemo(
         () => entry.settings.filter(setting => setting.source !== "env" && !setting.secret),
@@ -436,6 +454,33 @@ function IntegrationPanel({
                             <Switch checked={entry.enabled} onCheckedChange={toggleEnabled} />
                         )}
                     </div>
+                    {entry.endpoint && (
+                        <div className="flex items-center gap-2 rounded-lg border bg-muted/30 p-2.5">
+                            <div className="flex min-w-0 flex-1 flex-col gap-0.5">
+                                <span className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground/50">
+                                    Connection URL
+                                </span>
+                                <code className="truncate font-mono text-[11px] text-violet-600 dark:text-violet-300">
+                                    {entry.endpoint}
+                                </code>
+                            </div>
+                            <Button
+                                type="button"
+                                variant="secondary"
+                                size="sm"
+                                className="h-7 shrink-0 px-2.5 text-[11px]"
+                                onClick={() => void copyEndpoint()}
+                            >
+                                {copied ? <Check className="size-3" /> : <Copy className="size-3" />}
+                                {copied ? "Copied" : "Copy"}
+                            </Button>
+                        </div>
+                    )}
+                    {entry.endpoint && (
+                        <p className="text-[10.5px] text-muted-foreground/50">
+                            Register this URL as a WebSocket plugin in PuryFi&apos;s options page.
+                        </p>
+                    )}
                 </SheetHeader>
 
                 <Separator />
@@ -686,6 +731,7 @@ export default function IntegrationsPage() {
 
             {selectedEntry && selected && (
                 <IntegrationPanel
+                    key={selectedEntry.id}
                     entry={selectedEntry}
                     values={selectedEntry.values ?? {}}
                     tab={selected.tab}

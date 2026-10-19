@@ -152,6 +152,13 @@ class Integration:
         """REST router mounted by the app (webhooks, OAuth callbacks, ...)."""
         return None
 
+    def endpoint(self) -> str | None:
+        """
+        User-facing connection URI shown in the UI (e.g. the WebSocket URL
+        PuryFi must be pointed at). None when the integration has none.
+        """
+        return None
+
     async def start(self, ctx: IntegrationContext) -> None:
         """Called once at app startup, after the core singletons exist."""
 
