@@ -107,7 +107,12 @@ export function actionToFormValues(action: TriggerAction): ActionValues {
     const base = { duration: action.duration ?? -1, cumulative: action.cumulative ?? false };
     switch (action.action_type) {
         case ActionType.PROFILE:
-            return { ...base, action_type: ActionType.PROFILE, profile: String(p["profile"] ?? ""), level_pct: Number(p["level_pct"] ?? 100) };
+            return {
+                ...base,
+                action_type: ActionType.PROFILE,
+                profile: String(p["profile"] ?? ""),
+                level_pct: Number(p["level_pct"] ?? 100),
+            };
         case ActionType.LEVEL:
             return {
                 ...base,
@@ -117,9 +122,20 @@ export function actionToFormValues(action: TriggerAction): ActionValues {
                 value: String(p["value"] ?? ""),
             };
         case ActionType.MULT:
-            return { ...base, action_type: ActionType.MULT, target: String(p["target"] ?? "all"), pct: Number(p["pct"] ?? 0), random: Boolean(p["random"] ?? false) };
+            return {
+                ...base,
+                action_type: ActionType.MULT,
+                target: String(p["target"] ?? "all"),
+                pct: Number(p["pct"] ?? 0),
+                random: Boolean(p["random"] ?? false),
+            };
         case ActionType.CHASTER_TIME_UPDATE:
-            return { ...base, action_type: ActionType.CHASTER_TIME_UPDATE, duration_minutes: Number(p["duration_minutes"] ?? 0), only_max: Boolean(p["only_max"] ?? false) };
+            return {
+                ...base,
+                action_type: ActionType.CHASTER_TIME_UPDATE,
+                duration_minutes: Number(p["duration_minutes"] ?? 0),
+                only_max: Boolean(p["only_max"] ?? false),
+            };
         case ActionType.PURYFI_SET_ENABLED:
             return { ...base, action_type: ActionType.PURYFI_SET_ENABLED, enabled: Boolean(p["enabled"] ?? true) };
         case ActionType.PURYFI_SET_LOCK:
@@ -153,23 +169,50 @@ export function actionToFormValues(action: TriggerAction): ActionValues {
     }
 }
 
+/** Compact one-line summary shown in the collapsed action row. */
+export function actionSummary(action: ActionValues): string {
+    switch (action.action_type) {
+        case ActionType.PROFILE:
+            if (!action.profile) return "Not configured";
+            return `${action.profile} · ${action.level_pct}%`;
+        case ActionType.LEVEL:
+            if (!action.units && !action.channels && !action.value) {
+                return "Not configured";
+            }
+            return `Units ${action.units || "?"} · Channels ${action.channels || "?"} · ${action.value || "?"}`;
+        case ActionType.MULT:
+            return `${action.target || "all"} · ${action.pct}%${action.random ? " · random" : ""}`;
+        case ActionType.CHASTER_TIME_UPDATE:
+            return `${action.duration_minutes} min${action.only_max ? " · max only" : ""}`;
+        case ActionType.PURYFI_SET_ENABLED:
+            return action.enabled ? "Enable blocker" : "Disable blocker";
+        case ActionType.PURYFI_SET_LOCK:
+            return `${action.timer_minutes} min${action.password ? " · password set" : ""}`;
+        case ActionType.PURYFI_SET_LOCK_TIMER:
+            return action.value || "No time set";
+        case ActionType.PURYFI_ENTER_LOCK_PASSWORD:
+        case ActionType.PURYFI_EMERGENCY_UNLOCK:
+            return "Uses saved credentials";
+        case ActionType.PURYFI_UPDATE_WBLIST:
+            return `${action.operation} · ${action.list}${action.value ? ` · ${action.value}` : ""}`;
+        default:
+            return "Configure action";
+    }
+}
+
 /** Build form defaults from an existing rule (for the edit page). */
 export function ruleToFormValues(rule: TriggerRule): FormValues {
     return {
         name: rule.name,
         description: rule.description ?? "",
-        event_types:
-            rule.event_types?.length > 0
-                ? rule.event_types
-                : rule.event_type
-                  ? [rule.event_type]
-                  : [],
+        event_types: rule.event_types?.length > 0 ? rule.event_types : rule.event_type ? [rule.event_type] : [],
         priority: rule.priority,
         enabled: rule.enabled,
         labels: rule.labels.map((l) => l.name),
-        actions: rule.actions.length > 0
-            ? [...rule.actions].sort((a, b) => a.sort_order - b.sort_order).map(actionToFormValues)
-            : [defaultAction(ActionType.LEVEL)],
+        actions:
+            rule.actions.length > 0
+                ? [...rule.actions].sort((a, b) => a.sort_order - b.sort_order).map(actionToFormValues)
+                : [defaultAction(ActionType.LEVEL)],
     };
 }
 

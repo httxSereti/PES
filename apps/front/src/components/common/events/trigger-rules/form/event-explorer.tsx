@@ -235,7 +235,7 @@ export function EventExplorer({ open, onOpenChange, value, onChange }: EventExpl
                     </span>
                 </div>
 
-                <div className="grid min-h-0 flex-1 grid-cols-1 lg:grid-cols-[190px_320px_minmax(0,1fr)]">
+                <div className="flex min-h-0 flex-1 flex-col lg:grid lg:grid-cols-[190px_320px_minmax(0,1fr)]">
                     <aside className="hidden min-h-0 flex-col overflow-y-auto border-r bg-muted/20 p-2 lg:flex">
                         <p className="px-2 pb-1 pt-1 font-mono text-[9px] uppercase tracking-widest text-muted-foreground/50">
                             Sources
@@ -316,7 +316,7 @@ export function EventExplorer({ open, onOpenChange, value, onChange }: EventExpl
                         )}
                     </aside>
 
-                    <div className="min-h-0 overflow-y-auto border-r">
+                    <div className="min-h-0 flex-1 overflow-y-auto border-b lg:border-r lg:border-b-0">
                         {sections.length === 0 ? (
                             <div className="flex h-full flex-col items-center justify-center gap-2 p-8 text-center">
                                 <Search className="size-5 text-muted-foreground/40" />
@@ -365,26 +365,32 @@ export function EventExplorer({ open, onOpenChange, value, onChange }: EventExpl
                                                     <button
                                                         key={event.id}
                                                         type="button"
+                                                        aria-pressed={selected}
                                                         onClick={() => toggle(event.id)}
                                                         onMouseEnter={() => setFocused(event.id)}
                                                         onFocus={() => setFocused(event.id)}
                                                         className={cn(
-                                                            "flex w-full items-center gap-2.5 border-b border-border/50 px-3 py-2.5 text-left transition-colors hover:bg-muted/40",
+                                                            "group flex w-full items-center gap-2.5 border-b border-border/50 px-3 py-2.5 text-left transition-colors hover:bg-muted/40 focus-visible:ring-2 focus-visible:ring-violet-500/40 focus-visible:ring-inset focus-visible:outline-none",
                                                             selected && "bg-violet-500/[0.07]",
                                                             !selected && isFocused && "bg-muted/30",
                                                         )}
                                                     >
                                                         <span
-                                                            role="checkbox"
-                                                            aria-checked={selected}
+                                                            aria-hidden="true"
                                                             className={cn(
-                                                                "flex size-4 shrink-0 items-center justify-center rounded border transition-colors",
+                                                                "flex size-5 shrink-0 items-center justify-center rounded-[4px] border-2 transition-all duration-150",
                                                                 selected
-                                                                    ? "border-violet-500 bg-violet-500 text-white"
-                                                                    : "border-border bg-background",
+                                                                    ? "border-violet-500 bg-violet-500 text-white shadow-sm shadow-violet-500/30"
+                                                                    : "border-muted-foreground/30 bg-background/50 text-transparent group-hover:border-violet-500/50 group-hover:bg-violet-500/5",
                                                             )}
                                                         >
-                                                            {selected && <Check className="size-3" />}
+                                                            <Check
+                                                                className={cn(
+                                                                    "size-3.5 transition-transform duration-150",
+                                                                    selected ? "scale-100" : "scale-50",
+                                                                )}
+                                                                strokeWidth={3}
+                                                            />
                                                         </span>
                                                         <EventMedia event={event} className="size-10 shrink-0" />
                                                         <span className="min-w-0 flex-1">
@@ -420,7 +426,12 @@ export function EventExplorer({ open, onOpenChange, value, onChange }: EventExpl
                         )}
                     </div>
 
-                    <aside className="hidden min-h-0 overflow-y-auto p-4 lg:block">
+                    <aside
+                        className={cn(
+                            "min-h-0 shrink-0 overflow-y-auto border-t p-4 lg:max-h-none lg:border-t-0",
+                            focusedEvent ? "max-h-[45%]" : "hidden lg:block",
+                        )}
+                    >
                         {focusedEvent ? (
                             <EventPreview
                                 event={focusedEvent}
@@ -438,7 +449,7 @@ export function EventExplorer({ open, onOpenChange, value, onChange }: EventExpl
                 </div>
 
                 <div className="flex flex-col gap-3 border-t px-5 py-3 sm:flex-row sm:items-center sm:justify-between">
-                    <div className="flex min-w-0 flex-1 flex-wrap items-center gap-1.5">
+                    <div className="flex max-h-16 min-w-0 flex-1 flex-wrap items-center gap-1.5 overflow-y-auto sm:max-h-none sm:overflow-visible">
                         {draft.length === 0 ? (
                             <span className="font-mono text-[10px] text-muted-foreground/50">No events selected</span>
                         ) : (
@@ -500,7 +511,7 @@ function EventPreview({
     return (
         <div className="flex h-full flex-col">
             {!isPuryfi && (
-                <div className="relative overflow-hidden rounded-xl border bg-muted/20">
+                <div className="relative hidden overflow-hidden rounded-xl border bg-muted/20 lg:block">
                     <EventMedia event={event} className="aspect-[16/9] w-full" fit="contain" showEmptyLabel />
                     <span className="absolute top-2 left-2">
                         <EventSourceBadge integrationId={event.integrationId} />
@@ -521,8 +532,8 @@ function EventPreview({
                 </div>
             )}
 
-            <div className={cn("flex flex-wrap items-center gap-1.5", !isPuryfi && "mt-3")}>
-                {isPuryfi && <EventMedia event={event} className="size-10 shrink-0" />}
+            <div className={cn("flex flex-wrap items-center gap-1.5", !isPuryfi && "mt-0 lg:mt-3")}>
+                <EventMedia event={event} className={cn("size-10 shrink-0", !isPuryfi && "lg:hidden")} />
                 <EventSourceBadge integrationId={event.integrationId} />
                 {event.group && (
                     <Badge variant="outline" className="px-1.5 py-0 font-mono text-[9px]">
