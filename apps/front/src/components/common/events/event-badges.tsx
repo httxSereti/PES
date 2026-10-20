@@ -16,7 +16,7 @@ const EVENT_TYPE_COLORS: Record<string, string> = {
 
 const FALLBACK_COLOR = "bg-slate-500/15 text-slate-700 border-slate-500/30 dark:text-slate-300";
 
-export function EventTypeBadge({ type }: { type: string }) {
+export function EventTypeBadge({ type, className }: { type: string; className?: string }) {
     let color = EVENT_TYPE_COLORS[type] ?? FALLBACK_COLOR;
 
     // custom color for WOF
@@ -28,7 +28,7 @@ export function EventTypeBadge({ type }: { type: string }) {
         color = "bg-pink-500/15 text-pink-700 border-pink-500/30 dark:text-pink-300"
 
     return (
-        <span className={`inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-medium border font-mono ${color}`}>
+        <span className={`inline-flex max-w-full items-center truncate px-2 py-0.5 rounded-md text-[10px] font-medium border font-mono ${color} ${className ?? ""}`}>
             {type}
         </span>
     );

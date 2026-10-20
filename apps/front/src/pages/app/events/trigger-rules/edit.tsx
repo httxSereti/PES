@@ -4,6 +4,13 @@ import TriggerRuleForm from "@/components/common/events/trigger-rules/form/trigg
 import { useAppSelector } from "@/store/hooks";
 import { triggerRulesSelectors } from "@/store/slices/triggerRulesSlice";
 
+export function meta() {
+    return [
+        { title: "PES · Edit trigger rule" },
+        { name: "description", content: "Edit a trigger rule, its events and actions." },
+    ];
+}
+
 export default function EditTriggerRulesPage() {
     const { id } = useParams();
     const rule = useAppSelector((state) => (id ? triggerRulesSelectors.selectById(state, id) : undefined));
