@@ -3,7 +3,7 @@ import { useNavigate } from "react-router";
 import { Controller, useFieldArray, useForm, type Resolver } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { toast } from "sonner";
-import { PlusSquare, Save } from "lucide-react";
+import { PlusSquare, Power, Save } from "lucide-react";
 
 import { Button } from "@pes/ui/components/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@pes/ui/components/card";
@@ -21,7 +21,7 @@ import TriggerRuleActionFields from "./trigger-rule-action-fields";
 import TriggerRuleLabelSelect from "./trigger-rule-label-select";
 import { ActionExplorer } from "./action-explorer";
 import { EventSelection } from "./event-explorer";
-import { SwitchField } from "./switch-field";
+import { SwitchRow } from "./switch-row";
 import { actionSummary, defaultAction, formSchema, ruleToFormValues, toActionBody, type FormValues } from "./schema";
 
 const BACK_PATH = "/app/events/trigger-rules";
@@ -321,36 +321,36 @@ export default function TriggerRuleForm({ rule }: { rule?: TriggerRule }) {
                                             </Field>
                                         )}
                                     />
-                                    <div className="grid grid-cols-2 gap-3">
-                                        <Controller
-                                            name="priority"
-                                            control={form.control}
-                                            render={({ field, fieldState }) => (
-                                                <Field data-invalid={fieldState.invalid}>
-                                                    <FieldLabel>Priority</FieldLabel>
-                                                    <Input
-                                                        {...field}
-                                                        type="number"
-                                                        aria-invalid={fieldState.invalid}
-                                                        placeholder="0"
-                                                    />
-                                                    {fieldState.invalid && <FieldError errors={[fieldState.error]} />}
-                                                </Field>
-                                            )}
-                                        />
-                                        <Controller
-                                            name="enabled"
-                                            control={form.control}
-                                            render={({ field }) => (
-                                                <SwitchField
-                                                    label="Enabled"
-                                                    description="Active immediately"
-                                                    checked={field.value}
-                                                    onCheckedChange={field.onChange}
+                                    <Controller
+                                        name="priority"
+                                        control={form.control}
+                                        render={({ field, fieldState }) => (
+                                            <Field data-invalid={fieldState.invalid}>
+                                                <FieldLabel>Priority</FieldLabel>
+                                                <Input
+                                                    {...field}
+                                                    type="number"
+                                                    aria-invalid={fieldState.invalid}
+                                                    placeholder="0"
                                                 />
-                                            )}
-                                        />
-                                    </div>
+                                                {fieldState.invalid && <FieldError errors={[fieldState.error]} />}
+                                            </Field>
+                                        )}
+                                    />
+                                    <Controller
+                                        name="enabled"
+                                        control={form.control}
+                                        render={({ field }) => (
+                                            <SwitchRow
+                                                icon={Power}
+                                                label="Enabled"
+                                                description="Active immediately"
+                                                checked={field.value}
+                                                onCheckedChange={field.onChange}
+                                                className="border-t"
+                                            />
+                                        )}
+                                    />
                                     <Controller
                                         name="labels"
                                         control={form.control}

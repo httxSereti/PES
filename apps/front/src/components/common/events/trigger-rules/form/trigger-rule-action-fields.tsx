@@ -1,7 +1,17 @@
 import type { DragEvent } from "react";
 import type { Control } from "react-hook-form";
 import { Controller, useWatch } from "react-hook-form";
-import { ChevronDown, ChevronRight, GripVertical, Pencil, Trash2 } from "lucide-react";
+import {
+    ArrowUpToLine,
+    ChevronDown,
+    ChevronRight,
+    GripVertical,
+    Layers,
+    Pencil,
+    Shield,
+    Shuffle,
+    Trash2,
+} from "lucide-react";
 
 import { Button } from "@pes/ui/components/button";
 import { Field, FieldContent, FieldDescription, FieldError, FieldGroup, FieldLabel } from "@pes/ui/components/field";
@@ -16,7 +26,7 @@ import { ActionType } from "@/types/events.types";
 import { useActionCatalog } from "./action-groups";
 import { ActionIcon } from "./action-visuals";
 import { type FormValues } from "./schema";
-import { SwitchField } from "./switch-field";
+import { SwitchRow } from "./switch-row";
 
 export default function TriggerRuleActionFields({
     index,
@@ -305,23 +315,28 @@ export default function TriggerRuleActionFields({
                                         </Field>
                                     )}
                                 />
-                                <Controller
-                                    name={`actions.${index}.random`}
-                                    control={control}
-                                    render={({ field }) => (
-                                        <SwitchField
-                                            label="Random"
-                                            description="Randomize between 0 and percentage"
-                                            checked={field.value}
-                                            onCheckedChange={field.onChange}
-                                        />
-                                    )}
-                                />
                             </div>
                         )}
 
+                        {actionType === ActionType.MULT && (
+                            <Controller
+                                name={`actions.${index}.random`}
+                                control={control}
+                                render={({ field }) => (
+                                    <SwitchRow
+                                        icon={Shuffle}
+                                        label="Random"
+                                        description="Randomize between 0 and percentage"
+                                        checked={field.value}
+                                        onCheckedChange={field.onChange}
+                                        className="border-t"
+                                    />
+                                )}
+                            />
+                        )}
+
                         {actionType === ActionType.CHASTER_TIME_UPDATE && (
-                            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                            <>
                                 <Controller
                                     name={`actions.${index}.duration_minutes`}
                                     control={control}
@@ -343,15 +358,17 @@ export default function TriggerRuleActionFields({
                                     name={`actions.${index}.only_max`}
                                     control={control}
                                     render={({ field }) => (
-                                        <SwitchField
+                                        <SwitchRow
+                                            icon={ArrowUpToLine}
                                             label="Only max"
                                             description="Update max only, not current time"
                                             checked={field.value}
                                             onCheckedChange={field.onChange}
+                                            className="border-t"
                                         />
                                     )}
                                 />
-                            </div>
+                            </>
                         )}
 
                         <Separator />
@@ -361,7 +378,8 @@ export default function TriggerRuleActionFields({
                                 name={`actions.${index}.enabled`}
                                 control={control}
                                 render={({ field }) => (
-                                    <SwitchField
+                                    <SwitchRow
+                                        icon={Shield}
                                         label="Enable PuryFi"
                                         description="On enables the blocker, off disables it"
                                         checked={field.value}
@@ -529,37 +547,37 @@ export default function TriggerRuleActionFields({
                         )}
 
                         {/* ── Common scheduling ── */}
-                        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                            <Controller
-                                name={`actions.${index}.duration`}
-                                control={control}
-                                render={({ field, fieldState }) => (
-                                    <Field data-invalid={fieldState.invalid}>
-                                        <FieldLabel>Duration (seconds)</FieldLabel>
-                                        <FieldDescription>-1 means no expiry</FieldDescription>
-                                        <Input
-                                            {...field}
-                                            type="number"
-                                            aria-invalid={fieldState.invalid}
-                                            placeholder="-1"
-                                        />
-                                        {fieldState.invalid && <FieldError errors={[fieldState.error]} />}
-                                    </Field>
-                                )}
-                            />
-                            <Controller
-                                name={`actions.${index}.cumulative`}
-                                control={control}
-                                render={({ field }) => (
-                                    <SwitchField
-                                        label="Cumulative"
-                                        description="Runs concurrently instead of waiting its turn"
-                                        checked={field.value}
-                                        onCheckedChange={field.onChange}
+                        <Controller
+                            name={`actions.${index}.duration`}
+                            control={control}
+                            render={({ field, fieldState }) => (
+                                <Field data-invalid={fieldState.invalid}>
+                                    <FieldLabel>Duration (seconds)</FieldLabel>
+                                    <FieldDescription>-1 means no expiry</FieldDescription>
+                                    <Input
+                                        {...field}
+                                        type="number"
+                                        aria-invalid={fieldState.invalid}
+                                        placeholder="-1"
                                     />
-                                )}
-                            />
-                        </div>
+                                    {fieldState.invalid && <FieldError errors={[fieldState.error]} />}
+                                </Field>
+                            )}
+                        />
+                        <Controller
+                            name={`actions.${index}.cumulative`}
+                            control={control}
+                            render={({ field }) => (
+                                <SwitchRow
+                                    icon={Layers}
+                                    label="Cumulative"
+                                    description="Runs concurrently instead of waiting its turn"
+                                    checked={field.value}
+                                    onCheckedChange={field.onChange}
+                                    className="border-t"
+                                />
+                            )}
+                        />
                     </FieldGroup>
                 </div>
             )}
