@@ -16,8 +16,14 @@ export const actionSchema = z.discriminatedUnion("action_type", [
     }),
     baseAction.extend({
         action_type: z.literal(ActionType.LEVEL),
-        units: z.string().min(1, "e.g. 123, 12RM, 23RO"),
-        channels: z.string().min(1, "e.g. AB, ABRM"),
+        units: z
+            .string()
+            .min(1, "Choose a unit group, e.g. 123 or 12RM")
+            .regex(/^[1-3]+(?:RM|RO)?$/i, "Use unit IDs 1–3, optionally followed by RM or RO"),
+        channels: z
+            .string()
+            .min(1, "Choose a channel group, e.g. AB or ABRM")
+            .regex(/^[AB]+(?:RM|RO)?$/i, "Use channels A/B, optionally followed by RM or RO"),
         // the operator is part of the value itself (a MagicNumber): 30, +5, -5, %+5, %-[5-10]
         value: z.string().min(1, "e.g. 30, +5, %-[5-10]"),
     }),

@@ -27,6 +27,9 @@ import { useActionCatalog } from "./action-groups";
 import { ActionIcon } from "./action-visuals";
 import { type FormValues } from "./schema";
 import { SwitchRow } from "./switch-row";
+import { TokenComposer } from "./token-composer";
+import { DurationInput } from "./duration-input";
+import { MagicNumberInput } from "./magic-number-input";
 
 export default function TriggerRuleActionFields({
     index,
@@ -226,18 +229,22 @@ export default function TriggerRuleActionFields({
                         )}
 
                         {actionType === ActionType.LEVEL && (
-                            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                            <>
                                 <Controller
                                     name={`actions.${index}.units`}
                                     control={control}
                                     render={({ field, fieldState }) => (
                                         <Field data-invalid={fieldState.invalid}>
-                                            <FieldLabel>Units</FieldLabel>
-                                            <Input
-                                                {...field}
-                                                aria-invalid={fieldState.invalid}
-                                                placeholder="123, 12RM, 23RO"
-                                                autoComplete="off"
+                                            <FieldLabel htmlFor={`trigger-action-${index}-units`}>Units</FieldLabel>
+                                            <TokenComposer
+                                                id={`trigger-action-${index}-units`}
+                                                kind="units"
+                                                value={field.value}
+                                                onChange={field.onChange}
+                                                ariaInvalid={fieldState.invalid}
+                                                placeholder="Type 123 or 12RM…"
+                                                quickAdd={["123", "1", "2", "3", "12RM", "23RO"]}
+                                                hint="One unit group per field. 123 = all units · RM random · RO random once."
                                             />
                                             {fieldState.invalid && <FieldError errors={[fieldState.error]} />}
                                         </Field>
@@ -248,12 +255,18 @@ export default function TriggerRuleActionFields({
                                     control={control}
                                     render={({ field, fieldState }) => (
                                         <Field data-invalid={fieldState.invalid}>
-                                            <FieldLabel>Channels</FieldLabel>
-                                            <Input
-                                                {...field}
-                                                aria-invalid={fieldState.invalid}
-                                                placeholder="AB, ABRM, ABRO"
-                                                autoComplete="off"
+                                            <FieldLabel htmlFor={`trigger-action-${index}-channels`}>
+                                                Channels
+                                            </FieldLabel>
+                                            <TokenComposer
+                                                id={`trigger-action-${index}-channels`}
+                                                kind="channels"
+                                                value={field.value}
+                                                onChange={field.onChange}
+                                                ariaInvalid={fieldState.invalid}
+                                                placeholder="Type AB or ABRM…"
+                                                quickAdd={["AB", "A", "B", "ABRM", "ABRO"]}
+                                                hint="One channel group per field. AB = both · RM random · RO random once."
                                             />
                                             {fieldState.invalid && <FieldError errors={[fieldState.error]} />}
                                         </Field>
@@ -264,21 +277,21 @@ export default function TriggerRuleActionFields({
                                     control={control}
                                     render={({ field, fieldState }) => (
                                         <Field data-invalid={fieldState.invalid}>
-                                            <FieldLabel>Value</FieldLabel>
+                                            <FieldLabel htmlFor={`trigger-action-${index}-value`}>Value</FieldLabel>
                                             <FieldDescription>
                                                 Operator is part of the value: 30, +5, -5, %+5, %-[5-10]
                                             </FieldDescription>
-                                            <Input
-                                                {...field}
-                                                aria-invalid={fieldState.invalid}
-                                                placeholder="30, +5, %-[5-10]"
-                                                autoComplete="off"
+                                            <MagicNumberInput
+                                                id={`trigger-action-${index}-value`}
+                                                value={field.value}
+                                                onChange={field.onChange}
+                                                invalid={fieldState.invalid}
                                             />
                                             {fieldState.invalid && <FieldError errors={[fieldState.error]} />}
                                         </Field>
                                     )}
                                 />
-                            </div>
+                            </>
                         )}
 
                         {actionType === ActionType.MULT && (
@@ -552,13 +565,13 @@ export default function TriggerRuleActionFields({
                             control={control}
                             render={({ field, fieldState }) => (
                                 <Field data-invalid={fieldState.invalid}>
-                                    <FieldLabel>Duration (seconds)</FieldLabel>
-                                    <FieldDescription>-1 means no expiry</FieldDescription>
-                                    <Input
-                                        {...field}
-                                        type="number"
-                                        aria-invalid={fieldState.invalid}
-                                        placeholder="-1"
+                                    <FieldLabel htmlFor={`trigger-action-${index}-duration`}>Duration</FieldLabel>
+                                    <FieldDescription>Seconds · ∞ means no expiry</FieldDescription>
+                                    <DurationInput
+                                        id={`trigger-action-${index}-duration`}
+                                        value={field.value}
+                                        onChange={field.onChange}
+                                        invalid={fieldState.invalid}
                                     />
                                     {fieldState.invalid && <FieldError errors={[fieldState.error]} />}
                                 </Field>

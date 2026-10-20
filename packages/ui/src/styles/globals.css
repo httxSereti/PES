@@ -36,6 +36,20 @@
   *::-webkit-scrollbar-thumb:hover {
     background-color: var(--ring);
   }
+
+  input.duration-input[type="number"] {
+    color-scheme: light;
+  }
+
+  .dark input.duration-input[type="number"] {
+    color-scheme: dark;
+  }
+
+  input.duration-input[type="number"]::-webkit-inner-spin-button,
+  input.duration-input[type="number"]::-webkit-outer-spin-button {
+    opacity: 1;
+    background: transparent;
+  }
 }
 
 /* Accent tile: themed violet surface used for icon boxes and header pills */

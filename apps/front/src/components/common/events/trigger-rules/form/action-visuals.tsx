@@ -46,7 +46,7 @@ export function ActionSourceBadge({ action }: { action: ActionCatalogEntry }) {
     return (
         <span
             className={cn(
-                "inline-flex items-center rounded-md border px-1.5 py-0.5 font-mono text-[9px] font-medium uppercase tracking-wide",
+                "inline-flex items-center rounded-md border px-2 py-0.5 font-mono text-[11px] font-medium uppercase tracking-wide",
                 meta.badgeClass,
             )}
         >

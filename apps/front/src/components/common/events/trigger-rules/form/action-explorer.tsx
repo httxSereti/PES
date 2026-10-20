@@ -122,9 +122,9 @@ export function ActionExplorer({ open, onOpenChange, value, mode, onSelect }: Ac
             <DialogContent
                 showCloseButton={false}
                 style={{
-                    maxWidth: "1020px",
-                    width: "min(1020px, calc(100vw - 2rem))",
-                    height: "min(820px, calc(100vh - 2rem))",
+                    maxWidth: "1120px",
+                    width: "min(1120px, calc(100vw - 2rem))",
+                    height: "min(840px, calc(100vh - 2rem))",
                     padding: 0,
                     gap: 0,
                     display: "flex",
@@ -132,20 +132,23 @@ export function ActionExplorer({ open, onOpenChange, value, mode, onSelect }: Ac
                 }}
                 className="max-w-none overflow-hidden"
             >
-                <div className="flex items-center gap-3 border-b px-5 py-4 text-left">
-                    <span className="flex size-9 shrink-0 items-center justify-center rounded-lg border border-violet-500/25 bg-violet-500/10">
-                        <SlidersHorizontal className="size-4 text-violet-600 dark:text-violet-400" />
+                <div className="flex items-center gap-3 border-b px-4 py-3 text-left sm:px-6 sm:py-4">
+                    <span className="flex size-9 shrink-0 items-center justify-center rounded-lg border border-violet-500/25 bg-violet-500/10 sm:size-10">
+                        <SlidersHorizontal className="size-4 text-violet-600 sm:size-[18px] dark:text-violet-400" />
                     </span>
-                    <div className="min-w-0">
-                        <DialogTitle className="text-base">Choose an action</DialogTitle>
-                        <DialogDescription className="text-xs">
+                    <div className="min-w-0 flex-1">
+                        <DialogTitle className="text-base sm:text-lg">Choose an action</DialogTitle>
+                        <DialogDescription className="text-xs sm:text-sm">
                             {mode === "add"
                                 ? "Pick what should happen after the event fires."
                                 : "Change this action type. Its position is preserved."}
                         </DialogDescription>
                     </div>
                     <div className="ml-auto flex shrink-0 items-center gap-2">
-                        <Badge variant="outline" className="font-mono text-[10px] text-muted-foreground">
+                        <Badge
+                            variant="outline"
+                            className="hidden font-mono text-xs text-muted-foreground sm:inline-flex"
+                        >
                             {actionList.length} actions
                         </Badge>
                         <Button
@@ -160,25 +163,25 @@ export function ActionExplorer({ open, onOpenChange, value, mode, onSelect }: Ac
                     </div>
                 </div>
 
-                <div className="flex items-center gap-3 border-b px-5 py-2.5">
+                <div className="flex items-center gap-3 border-b px-4 py-3 sm:px-6">
                     <div className="relative flex-1">
-                        <Search className="pointer-events-none absolute top-1/2 left-2.5 size-3.5 -translate-y-1/2 text-muted-foreground" />
+                        <Search className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground" />
                         <Input
                             ref={searchRef}
                             value={query}
                             onChange={(event) => setQuery(event.target.value)}
                             placeholder="Search actions, payload fields and sources…"
-                            className="h-8 pl-8 text-xs"
+                            className="h-9 pl-9 text-sm"
                         />
                     </div>
-                    <span className="shrink-0 font-mono text-[10px] text-muted-foreground">
+                    <span className="shrink-0 font-mono text-xs text-muted-foreground">
                         {filtered.length} action{filtered.length === 1 ? "" : "s"}
                     </span>
                 </div>
 
-                <div className="flex min-h-0 flex-1 flex-col lg:grid lg:grid-cols-[180px_320px_minmax(0,1fr)]">
-                    <aside className="hidden min-h-0 flex-col overflow-y-auto border-r bg-muted/20 p-2 lg:flex">
-                        <p className="px-2 pb-1 pt-1 font-mono text-[9px] uppercase tracking-widest text-muted-foreground/50">
+                <div className="flex min-h-0 flex-1 flex-col lg:grid lg:grid-cols-[200px_360px_minmax(0,1fr)]">
+                    <aside className="hidden min-h-0 flex-col overflow-y-auto border-r bg-muted/20 p-2.5 lg:flex">
+                        <p className="px-2 pb-1 pt-1 font-mono text-[11px] uppercase tracking-widest text-muted-foreground/50">
                             Sources
                         </p>
                         <button
@@ -188,15 +191,15 @@ export function ActionExplorer({ open, onOpenChange, value, mode, onSelect }: Ac
                                 setGroup(null);
                             }}
                             className={cn(
-                                "flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-xs transition-colors hover:bg-muted/60",
+                                "flex w-full items-center gap-2 rounded-md px-2 py-2 text-left text-sm transition-colors hover:bg-muted/60",
                                 source === "all" && "bg-violet-500/10 text-violet-700 dark:text-violet-300",
                             )}
                         >
-                            <span className="flex size-6 items-center justify-center rounded-md border bg-background">
-                                <Layers className="size-3.5" />
+                            <span className="flex size-7 items-center justify-center rounded-md border bg-background">
+                                <Layers className="size-4" />
                             </span>
                             <span className="min-w-0 flex-1 truncate">All actions</span>
-                            <span className="font-mono text-[9px] text-muted-foreground">{actionList.length}</span>
+                            <span className="font-mono text-[11px] text-muted-foreground">{actionList.length}</span>
                         </button>
                         {sources.map((entry) => (
                             <button
@@ -207,24 +210,24 @@ export function ActionExplorer({ open, onOpenChange, value, mode, onSelect }: Ac
                                     setGroup(null);
                                 }}
                                 className={cn(
-                                    "flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-xs transition-colors hover:bg-muted/60",
+                                    "flex w-full items-center gap-2 rounded-md px-2 py-2 text-left text-sm transition-colors hover:bg-muted/60",
                                     source === entry.id && "bg-violet-500/10 text-violet-700 dark:text-violet-300",
                                 )}
                             >
                                 <EventSourceIcon
                                     integrationId={entry.id}
-                                    className="size-6 rounded-md"
-                                    iconClassName="size-3.5"
+                                    className="size-7 rounded-md"
+                                    iconClassName="size-4"
                                 />
                                 <span className="min-w-0 flex-1 truncate">{entry.label}</span>
-                                <span className="font-mono text-[9px] text-muted-foreground">{entry.count}</span>
+                                <span className="font-mono text-[11px] text-muted-foreground">{entry.count}</span>
                             </button>
                         ))}
 
                         {sourceGroups.length > 0 && (
                             <>
                                 <div className="my-2 border-t" />
-                                <p className="px-2 pb-1 font-mono text-[9px] uppercase tracking-widest text-muted-foreground/50">
+                                <p className="px-2 pb-1 font-mono text-[11px] uppercase tracking-widest text-muted-foreground/50">
                                     Groups
                                 </p>
                                 {sourceGroups.map((entry) => (
@@ -241,14 +244,14 @@ export function ActionExplorer({ open, onOpenChange, value, mode, onSelect }: Ac
                                             setGroup((current) => (current === entry.label ? null : entry.label));
                                         }}
                                         className={cn(
-                                            "flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-[11px] transition-colors hover:bg-muted/60",
+                                            "flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-xs transition-colors hover:bg-muted/60",
                                             group === entry.label &&
                                                 "bg-violet-500/10 text-violet-700 dark:text-violet-300",
                                         )}
                                     >
                                         <span className="size-1.5 rounded-full bg-muted-foreground/40" />
                                         <span className="min-w-0 flex-1 truncate">{entry.label}</span>
-                                        <span className="font-mono text-[9px] text-muted-foreground">
+                                        <span className="font-mono text-[11px] text-muted-foreground">
                                             {entry.count}
                                         </span>
                                     </button>
@@ -261,7 +264,7 @@ export function ActionExplorer({ open, onOpenChange, value, mode, onSelect }: Ac
                         {sections.length === 0 ? (
                             <div className="flex h-full flex-col items-center justify-center gap-2 p-8 text-center">
                                 <Search className="size-5 text-muted-foreground/40" />
-                                <p className="text-xs text-muted-foreground">No actions match this search.</p>
+                                <p className="text-sm text-muted-foreground">No actions match this search.</p>
                             </div>
                         ) : (
                             sections.map((section) => {
@@ -273,20 +276,20 @@ export function ActionExplorer({ open, onOpenChange, value, mode, onSelect }: Ac
                                             type="button"
                                             onClick={() => toggleSection(section.label)}
                                             aria-expanded={!isCollapsed}
-                                            className="sticky top-0 z-10 flex w-full items-center justify-between border-b bg-background/95 px-3 py-2 text-left backdrop-blur transition-colors hover:bg-muted/30"
+                                            className="sticky top-0 z-10 flex w-full items-center justify-between border-b bg-background/95 px-4 py-2.5 text-left backdrop-blur transition-colors hover:bg-muted/30"
                                         >
                                             <span className="flex min-w-0 items-center gap-1.5">
                                                 <ChevronDown
                                                     className={cn(
-                                                        "size-3 shrink-0 text-muted-foreground/40 transition-transform",
+                                                        "size-3.5 shrink-0 text-muted-foreground/40 transition-transform",
                                                         isCollapsed && "-rotate-90",
                                                     )}
                                                 />
-                                                <span className="truncate font-mono text-[9px] uppercase tracking-widest text-muted-foreground/60">
+                                                <span className="truncate font-mono text-[11px] uppercase tracking-widest text-muted-foreground/60">
                                                     {section.label}
                                                 </span>
                                             </span>
-                                            <span className="shrink-0 font-mono text-[9px] text-muted-foreground/40">
+                                            <span className="shrink-0 font-mono text-[11px] text-muted-foreground/40">
                                                 {section.actions.length}
                                             </span>
                                         </button>
@@ -301,38 +304,38 @@ export function ActionExplorer({ open, onOpenChange, value, mode, onSelect }: Ac
                                                         aria-pressed={selected}
                                                         onClick={() => setFocused(action.id)}
                                                         className={cn(
-                                                            "group flex w-full items-center gap-2.5 border-b border-border/50 px-3 py-2 text-left transition-colors hover:bg-muted/40 focus-visible:ring-2 focus-visible:ring-violet-500/40 focus-visible:ring-inset focus-visible:outline-none",
+                                                            "group flex w-full items-center gap-3 border-b border-border/50 px-4 py-3 text-left transition-colors hover:bg-muted/40 focus-visible:ring-2 focus-visible:ring-violet-500/40 focus-visible:ring-inset focus-visible:outline-none",
                                                             selected && "bg-violet-500/[0.07]",
                                                         )}
                                                     >
                                                         <span
                                                             className={cn(
-                                                                "flex size-8 shrink-0 items-center justify-center rounded-lg border",
+                                                                "flex size-9 shrink-0 items-center justify-center rounded-lg border",
                                                                 selected
                                                                     ? "border-violet-500/40 bg-violet-500/15 text-violet-700 dark:text-violet-300"
                                                                     : "border-border bg-muted/30 text-muted-foreground",
                                                             )}
                                                         >
-                                                            <Icon className="size-4" />
+                                                            <Icon className="size-[18px]" />
                                                         </span>
                                                         <span className="min-w-0 flex-1">
                                                             <span className="flex items-center gap-1.5">
-                                                                <span className="truncate text-xs font-medium">
+                                                                <span className="truncate text-sm font-medium">
                                                                     {action.label}
                                                                 </span>
                                                                 {!action.enabled && (
                                                                     <Badge
                                                                         variant="outline"
-                                                                        className="shrink-0 px-1 py-0 font-mono text-[8px] uppercase text-muted-foreground"
+                                                                        className="shrink-0 px-1 py-0 font-mono text-[10px] uppercase text-muted-foreground"
                                                                     >
                                                                         disabled
                                                                     </Badge>
                                                                 )}
                                                             </span>
-                                                            <span className="block truncate text-[10px] text-muted-foreground/65">
+                                                            <span className="line-clamp-2 text-xs leading-snug text-muted-foreground/65">
                                                                 {action.description || "No description available."}
                                                             </span>
-                                                            <span className="mt-0.5 flex items-center gap-1 font-mono text-[8px] uppercase tracking-wide text-muted-foreground/40">
+                                                            <span className="mt-1 flex items-center gap-1 font-mono text-[11px] uppercase tracking-wide text-muted-foreground/40">
                                                                 {action.integrationName}
                                                                 {action.group ? ` · ${action.group}` : ""}
                                                                 {" · "}
@@ -367,7 +370,7 @@ export function ActionExplorer({ open, onOpenChange, value, mode, onSelect }: Ac
 
                     <aside
                         className={cn(
-                            "min-h-0 shrink-0 overflow-y-auto border-t p-4 lg:max-h-none lg:border-t-0",
+                            "min-h-0 shrink-0 overflow-y-auto border-t p-4 sm:p-5 lg:max-h-none lg:border-t-0",
                             focusedAction ? "max-h-[45%]" : "hidden lg:block",
                         )}
                     >
@@ -383,16 +386,16 @@ export function ActionExplorer({ open, onOpenChange, value, mode, onSelect }: Ac
                         ) : (
                             <div className="flex h-full flex-col items-center justify-center gap-2 text-center">
                                 <ImageOff className="size-5 text-muted-foreground/40" />
-                                <p className="text-xs text-muted-foreground">Select an action to preview it.</p>
+                                <p className="text-sm text-muted-foreground">Select an action to preview it.</p>
                             </div>
                         )}
                     </aside>
                 </div>
 
-                <div className="flex shrink-0 items-center gap-2 border-t bg-background/95 px-4 py-2.5 lg:hidden">
+                <div className="flex shrink-0 items-center gap-2 border-t bg-background/95 px-4 py-3 lg:hidden">
                     <div className="min-w-0 flex-1">
-                        <p className="truncate text-xs font-medium">{focusedAction?.label ?? "Choose an action"}</p>
-                        <p className="truncate font-mono text-[9px] text-muted-foreground/60">
+                        <p className="truncate text-sm font-medium">{focusedAction?.label ?? "Choose an action"}</p>
+                        <p className="truncate font-mono text-[11px] text-muted-foreground/60">
                             {focusedAction
                                 ? `${focusedAction.integrationName} · ${Object.keys(focusedAction.payloadSchema).length} fields`
                                 : "Tap an action to preview it"}
@@ -437,77 +440,77 @@ function ActionPreview({
 
     return (
         <div className="flex h-full flex-col">
-            <div className="flex items-center gap-2.5">
+            <div className="flex items-center gap-3">
                 <span
                     className={cn(
-                        "flex size-10 shrink-0 items-center justify-center rounded-xl border",
+                        "flex size-12 shrink-0 items-center justify-center rounded-xl border",
                         meta.tileClass,
                     )}
                 >
-                    <Icon className={cn("size-5", meta.iconClass)} />
+                    <Icon className={cn("size-6", meta.iconClass)} />
                 </span>
                 <div className="min-w-0">
                     <div className="flex flex-wrap items-center gap-1.5">
                         <ActionSourceBadge action={action} />
                         {action.group && (
-                            <Badge variant="outline" className="px-1.5 py-0 font-mono text-[9px]">
+                            <Badge variant="outline" className="px-2 py-0 font-mono text-[11px]">
                                 {action.group}
                             </Badge>
                         )}
                         {action.reversible && (
                             <Badge
                                 variant="outline"
-                                className="border-emerald-500/30 px-1.5 py-0 font-mono text-[9px] text-emerald-700 dark:text-emerald-300"
+                                className="border-emerald-500/30 px-2 py-0 font-mono text-[11px] text-emerald-700 dark:text-emerald-300"
                             >
                                 REVERSIBLE
                             </Badge>
                         )}
                     </div>
-                    <h3 className="mt-1 text-lg leading-tight font-semibold">{action.label}</h3>
+                    <h3 className="mt-1 text-xl leading-tight font-semibold">{action.label}</h3>
                 </div>
             </div>
 
-            <p className="mt-3 text-xs leading-relaxed text-muted-foreground">
+            <p className="mt-3 text-sm leading-relaxed text-muted-foreground">
                 {action.description || "No description available."}
             </p>
 
-            <p className="mt-4 font-mono text-[8px] uppercase tracking-widest text-muted-foreground/50">
+            <p className="mt-4 font-mono text-[11px] uppercase tracking-widest text-muted-foreground/50">
                 Payload fields
             </p>
             {fields.length > 0 ? (
-                <div className="mt-1.5 grid grid-cols-2 gap-2">
+                <div className="mt-2 grid grid-cols-2 gap-2">
                     {fields.map(([field, description], index) => {
                         const isLastOdd = index === fields.length - 1 && fields.length % 2 === 1;
                         return (
                             <div
                                 key={field}
-                                className={cn("rounded-lg border bg-muted/25 px-2 py-1.5", isLastOdd && "col-span-2")}
+                                className={cn("rounded-lg border bg-muted/25 px-3 py-2", isLastOdd && "col-span-2")}
                             >
-                                <p className="truncate font-mono text-[8px] uppercase tracking-wide text-muted-foreground/50">
+                                <p className="truncate font-mono text-[11px] uppercase tracking-wide text-muted-foreground/50">
                                     {field}
                                 </p>
-                                <p className="mt-0.5 text-[9px] leading-snug text-muted-foreground">{description}</p>
+                                <p className="mt-0.5 text-xs leading-snug text-muted-foreground">{description}</p>
                             </div>
                         );
                     })}
                 </div>
             ) : (
-                <p className="mt-1 text-[10px] text-muted-foreground/60">This action has no payload fields.</p>
+                <p className="mt-1 text-xs text-muted-foreground/60">This action has no payload fields.</p>
             )}
 
-            <div className="mt-4 flex items-center gap-2 rounded-lg border bg-muted/25 px-2.5 py-2">
-                <span className="flex size-7 items-center justify-center rounded-md bg-violet-500/10 text-violet-700 dark:text-violet-300">
+            <div className="mt-4 flex items-center gap-2 rounded-lg border bg-muted/25 px-3 py-2.5">
+                <span className="flex size-8 items-center justify-center rounded-md bg-violet-500/10 text-violet-700 dark:text-violet-300">
                     <TimerIcon />
                 </span>
                 <div className="min-w-0">
-                    <p className="text-[10px] font-medium">Runs in the action queue</p>
-                    <p className="font-mono text-[8px] text-muted-foreground/60">
+                    <p className="text-xs font-medium">Runs in the action queue</p>
+                    <p className="font-mono text-[11px] text-muted-foreground/60">
                         Duration and cumulative are configured on the action card.
                     </p>
                 </div>
             </div>
 
-            <div className="mt-3 flex items-center justify-between font-mono text-[9px] text-muted-foreground/50">
+            <div className="mt-3 flex items-center justify-between font-mono text-[11px] text-muted-foreground/50">
                 <span>
                     Used by {usedBy} rule{usedBy === 1 ? "" : "s"}
                 </span>
