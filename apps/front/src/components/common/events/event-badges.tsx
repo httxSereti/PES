@@ -12,11 +12,14 @@ const EVENT_TYPE_COLORS: Record<string, string> = {
     chaster_pillory_vote: "bg-pink-500/15 text-pink-700 border-pink-500/30 dark:text-pink-300",
     chaster_pillory_started: "bg-pink-600/15 text-pink-700 border-pink-600/30 dark:text-pink-200",
     chaster_pillory_ended: "bg-slate-500/15 text-slate-700 border-slate-500/30 dark:text-slate-300",
+    sensor_sound_alarm: "bg-teal-500/15 text-teal-700 border-teal-500/30 dark:text-teal-300",
+    sensor_move_alarm: "bg-teal-500/15 text-teal-700 border-teal-500/30 dark:text-teal-300",
+    sensor_position_alarm: "bg-teal-500/15 text-teal-700 border-teal-500/30 dark:text-teal-300",
 };
 
 const FALLBACK_COLOR = "bg-slate-500/15 text-slate-700 border-slate-500/30 dark:text-slate-300";
 
-export function EventTypeBadge({ type, className }: { type: string; className?: string }) {
+export function EventTypeBadge({ type, className, title }: { type: string; className?: string; title?: string }) {
     let color = EVENT_TYPE_COLORS[type] ?? FALLBACK_COLOR;
 
     // custom color for WOF
@@ -28,7 +31,7 @@ export function EventTypeBadge({ type, className }: { type: string; className?: 
         color = "bg-pink-500/15 text-pink-700 border-pink-500/30 dark:text-pink-300"
 
     return (
-        <span className={`inline-flex max-w-full items-center truncate px-2 py-0.5 rounded-md text-[10px] font-medium border font-mono ${color} ${className ?? ""}`}>
+        <span className={`inline-flex max-w-full items-center truncate px-2.5 py-0.5 rounded-md text-[11px] font-medium border font-mono ${color} ${className ?? ""}`} title={title}>
             {type}
         </span>
     );

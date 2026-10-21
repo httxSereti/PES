@@ -1,8 +1,9 @@
 import { useAppSelector } from "@/store/hooks";
-import { useEffect, useRef } from "react";
+import { useEffect, useMemo, useRef } from "react";
 import { Link, Navigate, Outlet, useLocation } from "react-router";
 import { Activity, History, LayoutDashboard, Plus, Zap } from "lucide-react";
 import { Button } from "@pes/ui/components/button";
+import { triggerRulesSelectors } from "@/store/slices/triggerRulesSlice";
 
 const TABS = [
     { to: "/app/events", label: "Dashboard", icon: LayoutDashboard, end: true },
@@ -24,9 +25,27 @@ function isTabActive(pathname: string, to: string, end: boolean): boolean {
 
 export default function EventsLayout() {
     const { user, loading } = useAppSelector((state) => state.auth);
-    const eventsCount = useAppSelector(state => state.events.events.length);
+    const events = useAppSelector(state => state.events.events);
+    const rulesCount = useAppSelector(triggerRulesSelectors.selectTotal);
     const { pathname } = useLocation();
     const activeTabRef = useRef<HTMLAnchorElement>(null);
+
+    // Distinct rules that appear in the in-memory event history.
+    const firedRulesCount = useMemo(() => {
+        const fired = new Set<string>();
+        for (const event of events) {
+            for (const rule of event.triggered_rules ?? []) {
+                fired.add(rule.rule_id ?? `transient:${rule.rule_name}`);
+            }
+        }
+        return fired.size;
+    }, [events]);
+
+    const tabCounts: Record<string, number> = {
+        "/app/events/triggered": events.length,
+        "/app/events/trigger-rules": rulesCount,
+        "/app/events/trigger-rules/triggered": firedRulesCount,
+    };
 
     // On narrow screens the tab bar scrolls; keep the active tab visible.
     useEffect(() => {
@@ -51,7 +70,7 @@ export default function EventsLayout() {
                 </div>
                 <div className="ml-auto flex items-center gap-2">
                     <div className="flex items-center gap-2 px-3 py-1.5 rounded-md accent-tile text-xs text-muted-foreground/70">
-                        <span>{eventsCount}</span>
+                        <span>{events.length}</span>
                         <Activity size={11} className="accent-tile-icon" />
                     </div>
                     <Button asChild variant="outline" size="sm">
@@ -71,6 +90,7 @@ export default function EventsLayout() {
                 >
                     {TABS.map(({ to, label, icon: Icon, end }) => {
                         const active = isTabActive(pathname, to, end);
+                        const count = tabCounts[to];
                         return (
                             <Link
                                 key={to}
@@ -85,6 +105,16 @@ export default function EventsLayout() {
                             >
                                 <Icon size={13} />
                                 {label}
+                                {count !== undefined && (
+                                    <span
+                                        className={`min-w-5 rounded-full px-1.5 py-px text-center font-mono text-[10px] leading-4 tabular-nums transition-colors ${active
+                                            ? "bg-violet-500/15 text-violet-700 dark:text-violet-300"
+                                            : "bg-muted text-muted-foreground/70"
+                                        }`}
+                                    >
+                                        {count}
+                                    </span>
+                                )}
                             </Link>
                         );
                     })}

@@ -8,6 +8,18 @@ export function formatDateTime(iso: string | null | undefined): string {
         d.toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" });
 }
 
+/** Clock time used by the event stream, e.g. "14:32:08". */
+export function formatClockTime(iso: string | null | undefined, withSeconds = true): string {
+    if (!iso) return "—";
+    const d = new Date(iso);
+    if (Number.isNaN(d.getTime())) return "—";
+    return d.toLocaleTimeString("fr-FR", {
+        hour: "2-digit",
+        minute: "2-digit",
+        second: withSeconds ? "2-digit" : undefined,
+    });
+}
+
 /**
  * Compact relative time for live feeds ("just now", "2m ago", "3h ago").
  * Falls back to a date-time once the timestamp is more than a week old.

@@ -1,4 +1,5 @@
 import type { TriggeredEvent } from "@/store/slices/eventsSlice";
+import { describeEvent } from "@/lib/trigger-rules/describe-event";
 
 export type TriggeredFilterMode = "any" | "yes" | "no";
 export type TimeWindowKey = "all" | "5m" | "15m" | "1h" | "24h";
@@ -74,7 +75,7 @@ export function toggleGroupTypes(groupTypes: string[], selected: string[]): stri
 }
 
 function eventSearchHaystack(e: TriggeredEvent): string {
-    const parts: string[] = [e.event_type, e.origin];
+    const parts: string[] = [e.event_type, e.origin, describeEvent(e).title];
     for (const r of e.triggered_rules ?? []) {
         parts.push(r.rule_name);
         for (const a of r.actions) {
