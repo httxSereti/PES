@@ -210,7 +210,7 @@ function RuleDetail({
                         size="sm"
                         className={`${detailButton} border-violet-500/30 bg-violet-500/10 text-violet-700 hover:bg-violet-500/15 hover:text-violet-800 dark:text-violet-300 dark:hover:text-violet-200`}
                     >
-                        <Link to="/app/events/trigger-rules/triggered">
+                        <Link to={`/app/events/trigger-rules/triggered?rule=${encodeURIComponent(rule.id)}`}>
                             <History />
                             Rule history
                         </Link>

@@ -1,5 +1,5 @@
 import type { TriggerAction } from "@/types/events.types";
-import { describeAction, type ActionTone } from "@/lib/trigger-rules/describe-action";
+import { describeAction, actionTone, type ActionTone } from "@/lib/trigger-rules/describe-action";
 import { cn } from "@pes/ui/lib/utils";
 
 const TONE_CHIP: Record<ActionTone, string> = {
@@ -13,6 +13,21 @@ const TONE_CHIP: Record<ActionTone, string> = {
 
 function ordered(actions: TriggerAction[]): TriggerAction[] {
     return [...actions].sort((a, b) => a.sort_order - b.sort_order);
+}
+
+/** Colored action-type chip shared by the console and the history page. */
+export function ActionTypeChip({ type, className }: { type: string; className?: string }) {
+    return (
+        <span
+            className={cn(
+                "shrink-0 rounded border px-1.5 py-0.5 font-mono text-[9px] font-medium",
+                TONE_CHIP[actionTone(type)],
+                className,
+            )}
+        >
+            {type}
+        </span>
+    );
 }
 
 /** Compact chain used in the table cell and mobile card. */
@@ -78,14 +93,7 @@ export function RuleActionChainDetailed({ actions }: { actions: TriggerAction[] 
                         <span className="flex size-[18px] shrink-0 items-center justify-center rounded-full bg-violet-500/10 font-mono text-[9px] text-violet-700 dark:text-violet-300">
                             {index + 1}
                         </span>
-                        <span
-                            className={cn(
-                                "shrink-0 rounded border px-1.5 py-0.5 font-mono text-[9px] font-medium",
-                                TONE_CHIP[described.tone],
-                            )}
-                        >
-                            {described.type}
-                        </span>
+                        <ActionTypeChip type={described.type} />
                         <div className="min-w-0 flex-1">
                             <p className="truncate text-xs font-medium text-foreground">{described.title}</p>
                             <p className="truncate font-mono text-[9px] text-muted-foreground/55">
