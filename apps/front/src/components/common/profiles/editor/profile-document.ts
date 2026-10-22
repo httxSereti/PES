@@ -49,6 +49,10 @@ export type RampDraft = {
     step: number;
     stepUnit: "percent" | "absolute";
     mode: RampMode;
+    /** DWELL: seconds held at 100% and back at start. */
+    dwell: number;
+    /** SURGE: descent speed multiplier. */
+    release: number;
     /** Seconds; -1 runs forever. */
     duration: number;
     start: RampTargetDraft;
@@ -220,6 +224,8 @@ function parseRamp(cfg: unknown): RampDraft | null {
     const stepUnit = cfg.step_unit === "absolute" ? "absolute" : "percent";
     const duration = typeof cfg.duration === "number" ? cfg.duration : -1;
     const rawMode = typeof cfg.mode === "string" ? cfg.mode : "reset";
+    const dwell = cfg.dwell === undefined ? 0 : cfg.dwell;
+    const release = cfg.release === undefined ? 4 : cfg.release;
 
     if (!Number.isFinite(timer) || timer <= 0) return null;
     if (
@@ -232,12 +238,18 @@ function parseRamp(cfg: unknown): RampDraft | null {
     if (!Object.values(RampMode).includes(rawMode as RampMode)) return null;
     if (!Number.isFinite(duration) || (duration !== -1 && duration <= 0))
         return null;
+    if (typeof dwell !== "number" || !Number.isFinite(dwell) || dwell < 0)
+        return null;
+    if (typeof release !== "number" || !Number.isFinite(release) || release <= 0)
+        return null;
 
     return {
         timer,
         step,
         stepUnit,
         mode: rawMode as RampMode,
+        dwell,
+        release,
         duration,
         start: parseRampTarget(cfg.start),
         max: parseRampTarget(cfg.max),
@@ -476,6 +488,8 @@ function serializeRamp(ramp: RampDraft): Record<string, unknown> {
         step: ramp.step,
         step_unit: ramp.stepUnit,
         mode: ramp.mode,
+        dwell: ramp.dwell,
+        release: ramp.release,
         duration: ramp.duration,
     };
     const start = serializeRampTarget(ramp.start);
@@ -585,6 +599,12 @@ export function validateDraft(draft: ProfileDraft): string | null {
             }
             if (ramp.stepUnit === "percent" && ramp.step > 100) {
                 return `${path}: step cannot exceed 100% of the max`;
+            }
+            if (!Number.isFinite(ramp.dwell) || ramp.dwell < 0) {
+                return `${path}: dwell must be 0 or greater`;
+            }
+            if (!Number.isFinite(ramp.release) || ramp.release <= 0) {
+                return `${path}: release must be greater than 0`;
             }
             if (
                 ramp.duration !== -1 &&

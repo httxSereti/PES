@@ -57,6 +57,26 @@ const MODE_OPTIONS: Array<{ value: RampMode; label: string; hint: string }> = [
         label: "Ascend",
         hint: "Climbs to the max and holds",
     },
+    {
+        value: RampMode.SQUARE,
+        label: "Square",
+        hint: "Toggles between start and max",
+    },
+    {
+        value: RampMode.DRIFT,
+        label: "Drift",
+        hint: "Wanders randomly inside the range",
+    },
+    {
+        value: RampMode.SURGE,
+        label: "Surge",
+        hint: "Climbs slowly, releases fast",
+    },
+    {
+        value: RampMode.DWELL,
+        label: "Dwell",
+        hint: "Wave with a pause at both ends",
+    },
 ];
 
 function midpoint(range: string): number | null {
@@ -206,9 +226,15 @@ function RampCard({
 
     const summary = [
         ramp.mode.toUpperCase(),
-        `${ramp.step}${ramp.stepUnit === "absolute" ? "" : "%"}/${ramp.timer}s`,
+        ramp.mode === RampMode.SQUARE
+            ? `${ramp.timer}s/step`
+            : `${ramp.step}${ramp.stepUnit === "absolute" ? "" : "%"}/${ramp.timer}s`,
+        ramp.mode === RampMode.SURGE ? `release ×${ramp.release}` : null,
+        ramp.mode === RampMode.DWELL ? `hold ${ramp.dwell}s` : null,
         ramp.duration === -1 ? "∞" : `${ramp.duration}s`,
-    ].join(" · ");
+    ]
+        .filter(Boolean)
+        .join(" · ");
 
     const applyPreset = (presetId: string) => {
         const preset = presets.find((entry) => entry.id === presetId);
@@ -231,6 +257,8 @@ function RampCard({
             stepUnit:
                 defaults.step_unit === "absolute" ? "absolute" : "percent",
             mode: defaults.mode,
+            dwell: defaults.dwell ?? 0,
+            release: defaults.release ?? 4,
             duration: defaults.duration,
             start: targetFrom(defaults.start_value),
             max: targetFrom(defaults.max_value),
@@ -280,6 +308,8 @@ function RampCard({
                         timer: ramp.timer,
                         step: ramp.step,
                         stepUnit: ramp.stepUnit,
+                        dwell: ramp.dwell,
+                        release: ramp.release,
                         max: resolvedMax,
                         start: resolvedStart,
                     }}
@@ -456,6 +486,61 @@ function RampCard({
                             </label>
                         </div>
 
+                        {ramp.mode === RampMode.DWELL && (
+                            <label className="flex flex-col gap-1.5">
+                                <span className="font-mono text-[10px] tracking-wide text-muted-foreground uppercase">
+                                    Dwell (s)
+                                </span>
+                                <Input
+                                    type="number"
+                                    step="0.1"
+                                    min="0"
+                                    value={ramp.dwell}
+                                    onChange={(event) =>
+                                        actions.patchRamp(unit.id, field, {
+                                            dwell: Number(event.target.value),
+                                        })
+                                    }
+                                    className="h-8 font-mono text-xs"
+                                />
+                                <span className="text-[10px] leading-snug text-muted-foreground/70">
+                                    Held at 100% and back at the start level.
+                                </span>
+                            </label>
+                        )}
+
+                        {ramp.mode === RampMode.SURGE && (
+                            <label className="flex flex-col gap-1.5">
+                                <span className="font-mono text-[10px] tracking-wide text-muted-foreground uppercase">
+                                    Release ×
+                                </span>
+                                <Input
+                                    type="number"
+                                    step="0.1"
+                                    min="0.1"
+                                    value={ramp.release}
+                                    onChange={(event) =>
+                                        actions.patchRamp(unit.id, field, {
+                                            release: Number(
+                                                event.target.value,
+                                            ),
+                                        })
+                                    }
+                                    className="h-8 font-mono text-xs"
+                                />
+                                <span className="text-[10px] leading-snug text-muted-foreground/70">
+                                    Descent speed multiplier (1 = wave).
+                                </span>
+                            </label>
+                        )}
+
+                        {ramp.mode === RampMode.SQUARE && (
+                            <p className="self-end text-[10px] leading-snug text-amber-500/80 sm:col-span-2">
+                                Square ignores Step and jumps straight to Max
+                                every timer — keep Max conservative.
+                            </p>
+                        )}
+
                         <div className="flex items-end">
                             <RampSparkline
                                 className="h-12 w-full"
@@ -464,6 +549,8 @@ function RampCard({
                                     timer: ramp.timer,
                                     step: ramp.step,
                                     stepUnit: ramp.stepUnit,
+                                    dwell: ramp.dwell,
+                                    release: ramp.release,
                                     max: resolvedMax,
                                     start: resolvedStart,
                                 }}

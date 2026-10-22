@@ -62,6 +62,10 @@ export type RampCurveInput = {
     step: number;
     /** "percent" (default) or "absolute" field levels per step. */
     stepUnit?: string;
+    /** DWELL: seconds held at 100% and back at start. */
+    dwell?: number;
+    /** SURGE: descent speed multiplier (default 4). */
+    release?: number;
     /** Absolute field level (0-100) treated as 100% — the ramp target. */
     max: number;
     /** Absolute field level (0-100) the cycle rests at — the ramp start. */
@@ -77,9 +81,33 @@ function positiveModulo(value: number, modulus: number): number {
     return ((value % modulus) + modulus) % modulus;
 }
 
+/** Small deterministic PRNG, so a DRIFT preview is stable across renders. */
+function mulberry32(seed: number): () => number {
+    let state = seed >>> 0;
+    return () => {
+        state = (state + 0x6d2b79f5) >>> 0;
+        let value = state;
+        value = Math.imul(value ^ (value >>> 15), value | 1);
+        value ^= value + Math.imul(value ^ (value >>> 7), value | 61);
+        return ((value ^ (value >>> 14)) >>> 0) / 4294967296;
+    };
+}
+
+function curveSeed(...values: number[]): number {
+    let seed = 0x9e3779b9;
+    for (const value of values) {
+        seed = (seed ^ Math.round(value * 1000)) >>> 0;
+        seed = Math.imul(seed, 0x85ebca6b) >>> 0;
+        seed = (seed ^ (seed >>> 13)) >>> 0;
+    }
+    return seed;
+}
+
 /**
  * Cycle of one ramp: climb from `start` to 100% of `max`, then loop by mode —
- * WAVE goes back down, RESET dwells one step at the top, ASCEND holds there.
+ * WAVE goes back down, RESET dwells one step at the top, ASCEND holds there,
+ * SQUARE toggles between the ends, DRIFT wanders randomly, SURGE drops faster
+ * than it climbs and DWELL pauses at both ends.
  */
 export function buildRampCurve(input: RampCurveInput): RampCurve {
     const maxLevel = clampLevel(input.max);
@@ -106,6 +134,97 @@ export function buildRampCurve(input: RampCurveInput): RampCurve {
 
     const level = (progressPct: number) =>
         clampLevel((maxLevel * progressPct) / 100);
+
+    const release =
+        input.release !== undefined && input.release > 0 ? input.release : 4;
+    const dwell = input.dwell ?? 0;
+    // Extra hold steps after the step that reaches an end (see hardware/ramp.py).
+    const dwellSeconds =
+        input.mode === RampMode.DWELL
+            ? Math.max(0, Math.ceil(dwell / timer) - 1) * timer
+            : 0;
+
+    if (input.mode === RampMode.SQUARE) {
+        // On/off: start for one step, max for one step.
+        const periodSeconds = timer * 2;
+        return {
+            periodSeconds,
+            levelAt: (seconds) => {
+                const phase = positiveModulo(seconds, periodSeconds);
+                return phase < timer ? level(startPct) : maxLevel;
+            },
+        };
+    }
+
+    if (input.mode === RampMode.DRIFT) {
+        // One deterministic random walk per settings combo, one sample per
+        // step, so the preview mirrors the backend's bounded walk.
+        const samples = 32;
+        const span = 100 - startPct;
+        const random = mulberry32(curveSeed(startPct, stepPct, timer));
+        const levels: number[] = [];
+        let offset = startPct;
+        for (let index = 0; index < samples; index += 1) {
+            if (index > 0) {
+                offset += (random() * 2 - 1) * stepPct;
+                let relative = offset - startPct;
+                relative = Math.abs(relative) % (2 * span);
+                if (relative > span) relative = 2 * span - relative;
+                offset = startPct + relative;
+            }
+            levels.push(level(offset));
+        }
+        // Close the loop on the starting level so the preview repeats cleanly.
+        levels[samples - 1] = levels[0] ?? level(startPct);
+        const periodSeconds = samples * timer;
+        return {
+            periodSeconds,
+            levelAt: (seconds) => {
+                const phase = positiveModulo(seconds, periodSeconds);
+                const index = Math.min(samples - 1, Math.floor(phase / timer));
+                return levels[index] ?? level(startPct);
+            },
+        };
+    }
+
+    if (input.mode === RampMode.SURGE) {
+        // Asymmetric wave: the descent is `release` times faster.
+        const descentSeconds = climbSeconds / release;
+        const periodSeconds = climbSeconds + descentSeconds;
+        return {
+            periodSeconds,
+            levelAt: (seconds) => {
+                const phase = positiveModulo(seconds, periodSeconds);
+                if (phase <= climbSeconds) {
+                    return level(startPct + (climbPct * phase) / climbSeconds);
+                }
+                const descentPhase = phase - climbSeconds;
+                return level(100 - (climbPct * descentPhase) / descentSeconds);
+            },
+        };
+    }
+
+    if (input.mode === RampMode.DWELL) {
+        // Triangle with a hold at 100% and back at the start level.
+        const periodSeconds = climbSeconds * 2 + dwellSeconds * 2;
+        return {
+            periodSeconds,
+            levelAt: (seconds) => {
+                const phase = positiveModulo(seconds, periodSeconds);
+                if (phase <= climbSeconds) {
+                    return level(startPct + (climbPct * phase) / climbSeconds);
+                }
+                if (phase <= climbSeconds + dwellSeconds) {
+                    return maxLevel;
+                }
+                if (phase <= climbSeconds * 2 + dwellSeconds) {
+                    const descentPhase = phase - climbSeconds - dwellSeconds;
+                    return level(100 - (climbPct * descentPhase) / climbSeconds);
+                }
+                return level(startPct);
+            },
+        };
+    }
 
     if (input.mode === RampMode.WAVE) {
         const periodSeconds = climbSeconds * 2;
@@ -153,6 +272,8 @@ function buildCurve(ramp: ProfileRampPreview): RampCurve {
         timer: ramp.timer,
         step: ramp.step,
         stepUnit: "percent",
+        dwell: ramp.dwell,
+        release: ramp.release,
         max: ramp.max,
         start: ramp.start,
     });

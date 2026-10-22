@@ -113,6 +113,8 @@ class RampStartPayload(RampTarget):
     step: float = 1
     step_unit: Literal["percent", "absolute"] = "percent"
     mode: RampMode = RampMode.RESET
+    dwell: float = 0  # DWELL: seconds held at 100% and at start
+    release: float = 4  # SURGE: descent speed multiplier
     duration: float = -1  # seconds, -1 = permanent
     # defaults to the field's current level; int or MagicNumber-style range
     # string "[25-35]" (random value resolved once at start)

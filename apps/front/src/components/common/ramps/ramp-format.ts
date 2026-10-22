@@ -1,3 +1,4 @@
+import { RampMode } from "@/types";
 import type { RampDefaults } from "@/hooks/useRampDefaults";
 
 /** "5:03" (or "1:02:03" past an hour). */
@@ -18,15 +19,41 @@ export function formatDuration(duration: number): string {
 }
 
 /** "step 1% · every 1s" — step_unit "absolute" drops the %. */
-export function describeRampSettings(step: number, stepUnit: string, timer: number): string {
-    return `step ${step}${stepUnit === "absolute" ? "" : "%"} · every ${timer}s`;
+export function describeRampSettings(
+    step: number,
+    stepUnit: string,
+    timer: number,
+    mode: RampMode,
+    dwell = 0,
+    release = 4,
+): string {
+    const stepText =
+        mode === RampMode.SQUARE
+            ? `every ${timer}s`
+            : `step ${step}${stepUnit === "absolute" ? "" : "%"} · every ${timer}s`;
+    const extra =
+        mode === RampMode.SURGE
+            ? ` · release ×${release}`
+            : mode === RampMode.DWELL
+              ? ` · hold ${dwell}s`
+              : "";
+    return `${stepText}${extra}`;
 }
 
 /** "WAVE · 1%/1s · → 60" — compact summary of remembered settings. */
 export function describeDefaults(defaults: RampDefaults): string {
-    const step = `${defaults.step}${defaults.step_unit === "absolute" ? "" : "%"}/${defaults.timer}s`;
+    const step =
+        defaults.mode === RampMode.SQUARE
+            ? `${defaults.timer}s/step`
+            : `${defaults.step}${defaults.step_unit === "absolute" ? "" : "%"}/${defaults.timer}s`;
+    const modeExtra =
+        defaults.mode === RampMode.SURGE
+            ? `release ×${defaults.release ?? 4}`
+            : defaults.mode === RampMode.DWELL
+              ? `hold ${defaults.dwell ?? 0}s`
+              : null;
     const target = summarizeValue(defaults.max_value);
-    return [defaults.mode.toUpperCase(), step, target ? `→ ${target}` : null]
+    return [defaults.mode.toUpperCase(), step, modeExtra, target ? `→ ${target}` : null]
         .filter(Boolean)
         .join(" · ");
 }

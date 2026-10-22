@@ -33,6 +33,8 @@ function newRamp(): RampDraft {
         step: 1,
         stepUnit: "percent",
         mode: RampMode.WAVE,
+        dwell: 0,
+        release: 4,
         duration: -1,
         start: { mode: "live", value: 0, range: "" },
         max: { mode: "live", value: 100, range: "" },
@@ -47,6 +49,8 @@ export type LiveRampLike = {
     step: number;
     step_unit: string;
     mode: RampMode;
+    dwell: number;
+    release: number;
     duration: number;
     start_value: number;
     max_value: number;
@@ -229,6 +233,8 @@ export function useProfileEditorDraft(
                     stepUnit:
                         live.step_unit === "absolute" ? "absolute" : "percent",
                     mode: live.mode,
+                    dwell: live.dwell ?? 0,
+                    release: live.release ?? 4,
                     duration: live.duration,
                     start: {
                         mode: "fixed",

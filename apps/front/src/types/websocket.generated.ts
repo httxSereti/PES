@@ -21,6 +21,10 @@ export enum RampMode {
     RESET = "reset",
     WAVE = "wave",
     ASCEND = "ascend",
+    SQUARE = "square",
+    DRIFT = "drift",
+    SURGE = "surge",
+    DWELL = "dwell",
 }
 
 export interface UnitLevelChanges {
@@ -366,6 +370,8 @@ export interface Ramp {
     progress: number;
     start_value: number;
     value: number;
+    dwell: number;
+    release: number;
     owner?: string | null;
 }
 
@@ -478,6 +484,8 @@ export interface ProfileRampPreview {
     mode: RampMode;
     timer: number;
     step: number;
+    dwell: number;
+    release: number;
     duration: number;
     start: number;
     max: number;
@@ -630,6 +638,8 @@ export interface RampStartPayload extends RampTarget {
     step: number;
     step_unit: 'percent' | 'absolute';
     mode: RampMode;
+    dwell: number;
+    release: number;
     duration: number;
     max_value: number | string | null;
     start_value: number | string | null;

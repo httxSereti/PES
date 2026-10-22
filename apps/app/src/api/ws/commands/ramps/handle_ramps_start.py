@@ -26,6 +26,8 @@ async def handle_ramps_start(
             step=p.step,
             step_unit=p.step_unit,
             mode=p.mode,
+            dwell=p.dwell,
+            release=p.release,
             duration=p.duration,
             max_value=p.max_value,
             start_value=p.start_value,

@@ -13,7 +13,7 @@ never at 0 unless that's where the field actually is. Each ramp has its own:
   run forever; when the active time reaches ``duration`` the ramp stops
   (field restored to the max value). Paused time doesn't count.
 
-Three modes (``RampMode``):
+Seven modes (``RampMode``):
 
 - ``RESET``  — sawtooth: climb start% -> 100%, dwell one step at 100%,
   reset to start% and start over.
@@ -21,6 +21,14 @@ Three modes (``RampMode``):
   and start over.
 - ``ASCEND`` — one-shot: climb (or descend) from start% to 100% and hold
   there; the "ramp to a target and keep it" case.
+- ``SQUARE`` — on/off: hold start% one step, jump to 100%, hold one step,
+  jump back; ``step`` is ignored.
+- ``DRIFT``  — random walk: move by a random amount up to ``step`` in
+  either direction, reflected inside start%..100%.
+- ``SURGE``  — asymmetric wave: climb at ``step``, descend at
+  ``step * release`` (``release`` > 1 is a slow build and a fast release).
+- ``DWELL``  — wave with a configurable ``dwell`` (seconds) at 100% and
+  back at start% before the next climb.
 
 The max value is the field's current level captured when the ramp starts (or
 an explicit ``max_value``, which may also be a MagicNumber-style range
@@ -40,6 +48,7 @@ keeps clients live when no unit is connected (or it is disabled).
 are controlled through the ``ramp_manager`` singleton.
 """
 
+import math
 import random
 import re
 import threading
@@ -80,13 +89,17 @@ class Ramp:
     step: float = 1.0  # progress increment per step
     step_unit: str = "percent"  # "percent" (of max) or "absolute" (level)
     mode: RampMode = RampMode.RESET
+    dwell: float = 0.0  # DWELL: seconds held at 100% and at start
+    release: float = 4.0  # SURGE: descent increment multiplier
     duration: float = DURATION_PERMANENT  # seconds, -1 = permanent
     paused: bool = False
     progress: float = 0.0  # current position in percent of max_value
     start_progress: float = 0.0  # progress captured from the field at start
     elapsed: float = 0.0  # active seconds (paused time excluded)
-    direction: int = 1  # +1 climbing toward 100, -1 decreasing toward 100
+    direction: int = 1  # +1 toward 100, -1 toward start (SQUARE: +1 = at start)
     reset_pending: bool = False  # RESET only: dwelling one step at 100%
+    dwell_steps: int = 0  # DWELL: extra steps held at each end
+    hold_steps: int = 0  # DWELL: remaining extra hold steps at the current end
     last_step_at: float = 0.0  # monotonic time of the last step
     last_seen: float = 0.0  # monotonic time of the last tick
     last_output: int = -1  # last value written to the store
@@ -112,6 +125,40 @@ class Ramp:
                 self.progress = max(self.progress - inc, PROGRESS_MAX)
                 if self.progress <= PROGRESS_MAX:
                     self.direction = 0
+        elif self.mode is RampMode.SQUARE:
+            # on/off: the field jumps between start and 100% each step
+            if self.direction > 0:
+                self.progress = PROGRESS_MAX
+                self.direction = -1
+            else:
+                self.progress = self.start_progress
+                self.direction = 1
+        elif self.mode is RampMode.DRIFT:
+            self._drift(inc)
+        elif self.mode is RampMode.SURGE:
+            if self.direction > 0:
+                self.progress = min(self.progress + inc, PROGRESS_MAX)
+                if self.progress >= PROGRESS_MAX:
+                    self.direction = -1
+            else:
+                self.progress = max(
+                    self.progress - inc * self.release, self.start_progress
+                )
+                if self.progress <= self.start_progress:
+                    self.direction = 1
+        elif self.mode is RampMode.DWELL:
+            if self.hold_steps > 0:
+                self.hold_steps -= 1
+                return
+            self.progress += inc * self.direction
+            if self.progress >= PROGRESS_MAX:
+                self.progress = PROGRESS_MAX
+                self.direction = -1
+                self.hold_steps = self.dwell_steps
+            elif self.progress <= self.start_progress:
+                self.progress = self.start_progress
+                self.direction = 1
+                self.hold_steps = self.dwell_steps
         elif self.mode is RampMode.WAVE:
             self.progress += inc * self.direction
             if self.progress >= PROGRESS_MAX:
@@ -130,6 +177,21 @@ class Ramp:
                     self.progress = PROGRESS_MAX
                     self.reset_pending = True
 
+    def _drift(self, inc: float) -> None:
+        """Random walk inside start%..100%, reflected at both bounds."""
+        span = PROGRESS_MAX - self.start_progress
+        if span <= 0:
+            self.progress = PROGRESS_MAX
+            return
+        offset = self.progress - self.start_progress
+        offset += random.uniform(-inc, inc)
+        # Triangle-wave reflection keeps the walk inside the range even when
+        # one random step is larger than the range itself.
+        offset = abs(offset) % (2 * span)
+        if offset > span:
+            offset = 2 * span - offset
+        self.progress = self.start_progress + offset
+
     def output_value(self) -> int:
         """Field value for the current progress, clamped to 0-100."""
         return max(0, min(100, round(self.max_value * self.progress / 100)))
@@ -143,6 +205,8 @@ class Ramp:
             "step": self.step,
             "step_unit": self.step_unit,
             "mode": self.mode.value,
+            "dwell": self.dwell,
+            "release": self.release,
             "duration": self.duration,
             "elapsed": round(self.elapsed, 1),
             "paused": self.paused,
@@ -171,6 +235,8 @@ class RampManager:
         step: float = 1,
         step_unit: str = "percent",
         mode: RampMode = RampMode.RESET,
+        dwell: float = 0,
+        release: float = 4,
         duration: float = DURATION_PERMANENT,
         max_value: Optional[Union[int, str]] = None,
         start_value: Optional[Union[int, str]] = None,
@@ -190,7 +256,13 @@ class RampManager:
                 step_unit is "percent" (<= 100), absolute field level when
                 step_unit is "absolute"
             step_unit: "percent" (default) or "absolute"
-            mode: RESET (sawtooth), WAVE (triangle) or ASCEND (to max, hold)
+            mode: RESET (sawtooth), WAVE (triangle), ASCEND (to max, hold),
+                SQUARE (on/off), DRIFT (random walk), SURGE (slow up, fast
+                down) or DWELL (wave with holds at both ends)
+            dwell: DWELL only, seconds to hold at 100% and at start (>= 0,
+                default 0 = plain WAVE)
+            release: SURGE only, descent speed multiplier (> 0, default 4;
+                1 = plain WAVE)
             duration: total run time in seconds, DURATION_PERMANENT (-1,
                 default) to run until stopped
             max_value: field level at 100% progress, defaults to the field's
@@ -223,6 +295,12 @@ class RampManager:
         if step_unit == "percent" and step > PROGRESS_MAX:
             raise ValueError(f"Percent step must be <= {PROGRESS_MAX}, got {step}")
         step = float(step)
+        dwell = float(dwell)
+        if dwell < 0:
+            raise ValueError(f"Dwell must be >= 0, got {dwell}")
+        release = float(release)
+        if release <= 0:
+            raise ValueError(f"Release must be > 0, got {release}")
         if duration != DURATION_PERMANENT and duration <= 0:
             raise ValueError(
                 f"Duration must be > 0 or {DURATION_PERMANENT} (permanent), "
@@ -239,6 +317,10 @@ class RampManager:
         raw_progress = start_value * 100 / max_value if max_value > 0 else 0.0
 
         mode = RampMode(mode)
+        # Extra steps after the step that reaches an end: the total hold is
+        # (dwell_steps + 1) * timer, i.e. `dwell` rounded up to the step grid
+        # (and at least one step, like WAVE).
+        dwell_steps = max(0, math.ceil(dwell / timer) - 1) if dwell > 0 else 0
         if mode is RampMode.ASCEND:
             # progress may exceed 100% when the target is below the start
             # level: the ramp then descends toward the max value
@@ -246,11 +328,18 @@ class RampManager:
             progress = raw_progress
             direction = 1 if raw_progress < 100 else (-1 if raw_progress > 100 else 0)
             reset_pending = False
+            hold_steps = 0
         else:
             start_progress = max(0, min(100, raw_progress))
             progress = start_progress
-            direction = -1 if mode is RampMode.WAVE and start_progress >= 100 else 1
+            direction = -1 if start_progress >= 100 else 1
             reset_pending = mode is RampMode.RESET and start_progress >= 100
+            # DWELL that starts at the top pauses there before descending
+            hold_steps = (
+                dwell_steps
+                if mode is RampMode.DWELL and start_progress >= 100
+                else 0
+            )
 
         now = time.monotonic()
         ramp = Ramp(
@@ -261,11 +350,15 @@ class RampManager:
             step=step,
             step_unit=step_unit,
             mode=mode,
+            dwell=dwell,
+            release=release,
             duration=float(duration),
             progress=progress,
             start_progress=start_progress,
             direction=direction,
             reset_pending=reset_pending,
+            dwell_steps=dwell_steps,
+            hold_steps=hold_steps,
             last_step_at=now,
             last_seen=now,
             owner=owner,

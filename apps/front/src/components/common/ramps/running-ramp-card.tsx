@@ -57,12 +57,17 @@ export function RunningRampCard({ ramp }: RunningRampCardProps) {
             ? Math.min(100, Math.max(0, Math.round((liveValue / ramp.max_value) * 100)))
             : Math.min(100, Math.max(0, Math.round(ramp.progress)));
 
-    const DirectionIcon =
-        ramp.mode === RampMode.WAVE
-            ? ArrowUpDown
-            : ramp.max_value >= ramp.start_value
-              ? ArrowUp
-              : ArrowDown;
+    const oscillating =
+        ramp.mode === RampMode.WAVE ||
+        ramp.mode === RampMode.SQUARE ||
+        ramp.mode === RampMode.DRIFT ||
+        ramp.mode === RampMode.SURGE ||
+        ramp.mode === RampMode.DWELL;
+    const DirectionIcon = oscillating
+        ? ArrowUpDown
+        : ramp.max_value >= ramp.start_value
+          ? ArrowUp
+          : ArrowDown;
 
     const viaProfile = (ramp.owner ?? "").startsWith("profile:");
 
@@ -133,7 +138,14 @@ export function RunningRampCard({ ramp }: RunningRampCardProps) {
 
                 <div className="flex items-center justify-between gap-2">
                     <span className="truncate font-mono text-[10px] uppercase text-primary/40">
-                        {describeRampSettings(ramp.step, ramp.step_unit, ramp.timer)}
+                        {describeRampSettings(
+                            ramp.step,
+                            ramp.step_unit,
+                            ramp.timer,
+                            ramp.mode,
+                            ramp.dwell,
+                            ramp.release,
+                        )}
                     </span>
                     <div className="flex shrink-0 items-center gap-1.5">
                         <Button

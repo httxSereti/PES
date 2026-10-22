@@ -385,6 +385,8 @@ class ActionExecutor:
                         step=ramp_cfg.get("step", 1),
                         step_unit=ramp_cfg.get("step_unit", "percent"),
                         mode=RampMode(ramp_cfg.get("mode", "reset")),
+                        dwell=ramp_cfg.get("dwell", 0),
+                        release=ramp_cfg.get("release", 4),
                         duration=ramp_cfg.get("duration", -1),
                         max_value=ramp_cfg.get("max"),
                         start_value=ramp_cfg.get("start"),

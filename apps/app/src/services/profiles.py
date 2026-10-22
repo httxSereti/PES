@@ -183,16 +183,24 @@ def _preview_ramps(units: dict) -> list[dict]:
                 continue
 
             step_unit = cfg.get("step_unit", "percent")
+            dwell = cfg.get("dwell", 0)
+            release = cfg.get("release", 4)
             if (
                 not isinstance(timer, (int, float))
                 or isinstance(timer, bool)
                 or not isinstance(duration, (int, float))
                 or isinstance(duration, bool)
+                or not isinstance(dwell, (int, float))
+                or isinstance(dwell, bool)
+                or not isinstance(release, (int, float))
+                or isinstance(release, bool)
                 or step_unit not in ("percent", "absolute")
                 or timer <= 0
                 or step <= 0
                 or (step_unit == "percent" and step > 100)
                 or (duration != -1 and duration <= 0)
+                or dwell < 0
+                or release <= 0
             ):
                 continue
 
@@ -216,6 +224,8 @@ def _preview_ramps(units: dict) -> list[dict]:
                     "mode": mode.value,
                     "timer": float(timer),
                     "step": round(step, 2),
+                    "dwell": float(dwell),
+                    "release": float(release),
                     "duration": float(duration),
                     "start": start_level,
                     "max": max_level,
@@ -359,10 +369,29 @@ def _validate_ramps(unit_name: str, ramps: dict) -> dict:
             raise ProfileError(f"{path}.step cannot exceed 100% of the max")
         config["step"] = float(step)
 
+        dwell = cfg.get("dwell", 0)
+        if (
+            isinstance(dwell, bool)
+            or not isinstance(dwell, (int, float))
+            or dwell < 0
+        ):
+            raise ProfileError(f"{path}.dwell must be 0 or greater")
+        config["dwell"] = float(dwell)
+
+        release = cfg.get("release", 4)
+        if (
+            isinstance(release, bool)
+            or not isinstance(release, (int, float))
+            or release <= 0
+        ):
+            raise ProfileError(f"{path}.release must be greater than 0")
+        config["release"] = float(release)
+
         try:
             mode = RampMode(cfg.get("mode", "reset"))
         except ValueError:
-            raise ProfileError(f"{path}.mode must be reset, wave or ascend")
+            allowed = ", ".join(entry.value for entry in RampMode)
+            raise ProfileError(f"{path}.mode must be one of {allowed}")
         config["mode"] = mode.value
 
         duration = cfg.get("duration", -1)
@@ -655,6 +684,8 @@ def capture_threads_settings(include_ramps: bool) -> dict:
                     "step": ramp["step"],
                     "step_unit": ramp.get("step_unit", "percent"),
                     "mode": ramp["mode"],
+                    "dwell": ramp.get("dwell", 0),
+                    "release": ramp.get("release", 4),
                     "duration": ramp["duration"],
                     "max": ramp["max_value"],
                     "start": ramp["start_value"],

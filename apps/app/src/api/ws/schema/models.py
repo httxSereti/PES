@@ -194,6 +194,8 @@ class Ramp(WireModel):
     progress: float
     start_value: int
     value: int
+    dwell: float = 0
+    release: float = 4
     owner: str | None = None
 
 
@@ -210,6 +212,8 @@ class ProfileRampPreview(WireModel):
     mode: RampMode = RampMode.RESET
     timer: float = 1.0
     step: float = 1.0
+    dwell: float = 0
+    release: float = 4
     duration: float = -1
     start: int = 0
     max: int = 0

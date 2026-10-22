@@ -35,6 +35,8 @@ const rampSchema = z.object({
     step: z.coerce.number().positive("Step must be greater than 0"),
     step_unit: z.enum(["percent", "absolute"]),
     mode: z.nativeEnum(RampMode),
+    dwell: z.coerce.number().min(0, "Dwell must be 0 or greater"),
+    release: z.coerce.number().positive("Release must be greater than 0"),
     duration: z.coerce.number().refine(
         (v) => v === -1 || v > 0,
         "Use -1 for permanent, or a positive duration"
@@ -61,6 +63,8 @@ const DEFAULT_FORM_VALUES: FormValues = {
     step: 1,
     step_unit: "percent",
     mode: RampMode.RESET,
+    dwell: 0,
+    release: 4,
     duration: -1,
     max_value: "",
     start_value: "",
@@ -73,6 +77,8 @@ function formValuesToDefaults(values: FormValues): RampDefaults {
         step: values.step,
         step_unit: values.step_unit,
         mode: values.mode,
+        dwell: values.dwell,
+        release: values.release,
         duration: values.duration,
         max_value: values.max_value === "" ? null : values.max_value,
         start_value: values.start_value === "" ? null : values.start_value,
@@ -105,6 +111,7 @@ export function RampStartDialog({
         resolver: zodResolver(rampSchema) as unknown as Resolver<FormValues>,
         defaultValues: DEFAULT_FORM_VALUES,
     });
+    const mode = form.watch("mode");
 
     // Prefill with the user's remembered settings for this channel.
     React.useEffect(() => {
@@ -119,6 +126,8 @@ export function RampStartDialog({
                       step: stored.step,
                       step_unit: stored.step_unit,
                       mode: stored.mode,
+                      dwell: stored.dwell ?? 0,
+                      release: stored.release ?? 4,
                       duration: stored.duration,
                       max_value: stored.max_value ?? "",
                       start_value: stored.start_value ?? "",
@@ -189,7 +198,7 @@ export function RampStartDialog({
                 <DialogHeader>
                     <DialogTitle>Start ramp on {unitId}.{field}</DialogTitle>
                     <DialogDescription>
-                        The ramp drives the field from its current value toward the max value, step by step.
+                        The ramp drives the field from its current value toward the max value, according to the selected mode.
                     </DialogDescription>
                 </DialogHeader>
 
@@ -203,28 +212,30 @@ export function RampStartDialog({
                             )}
                         </Field>
 
-                        <Field>
-                            <FieldLabel>Step</FieldLabel>
-                            <div className="flex gap-2">
-                                <Input type="number" step="0.1" placeholder="1" className="flex-1" {...form.register("step")} />
-                                <Select
-                                    name="step_unit"
-                                    value={form.watch("step_unit")}
-                                    onValueChange={(v) => form.setValue("step_unit", v as FormValues["step_unit"])}
-                                >
-                                    <SelectTrigger className="w-28 shrink-0">
-                                        <SelectValue />
-                                    </SelectTrigger>
-                                    <SelectContent position="item-aligned">
-                                        <SelectItem value="percent">% of max</SelectItem>
-                                        <SelectItem value="absolute">value</SelectItem>
-                                    </SelectContent>
-                                </Select>
-                            </div>
-                            {form.formState.errors.step && (
-                                <FieldError errors={[form.formState.errors.step]} />
-                            )}
-                        </Field>
+                        {mode !== RampMode.SQUARE && (
+                            <Field>
+                                <FieldLabel>Step</FieldLabel>
+                                <div className="flex gap-2">
+                                    <Input type="number" step="0.1" placeholder="1" className="flex-1" {...form.register("step")} />
+                                    <Select
+                                        name="step_unit"
+                                        value={form.watch("step_unit")}
+                                        onValueChange={(v) => form.setValue("step_unit", v as FormValues["step_unit"])}
+                                    >
+                                        <SelectTrigger className="w-28 shrink-0">
+                                            <SelectValue />
+                                        </SelectTrigger>
+                                        <SelectContent position="item-aligned">
+                                            <SelectItem value="percent">% of max</SelectItem>
+                                            <SelectItem value="absolute">value</SelectItem>
+                                        </SelectContent>
+                                    </Select>
+                                </div>
+                                {form.formState.errors.step && (
+                                    <FieldError errors={[form.formState.errors.step]} />
+                                )}
+                            </Field>
+                        )}
 
                         <Field>
                             <FieldLabel>Mode</FieldLabel>
@@ -240,12 +251,42 @@ export function RampStartDialog({
                                     <SelectItem value={RampMode.RESET}>Reset (current → max, repeat)</SelectItem>
                                     <SelectItem value={RampMode.WAVE}>Wave (current → max → current)</SelectItem>
                                     <SelectItem value={RampMode.ASCEND}>Ascend (current → max, hold)</SelectItem>
+                                    <SelectItem value={RampMode.SQUARE}>Square (current ↔ max, on/off)</SelectItem>
+                                    <SelectItem value={RampMode.DRIFT}>Drift (random inside start–max)</SelectItem>
+                                    <SelectItem value={RampMode.SURGE}>Surge (slow up, fast down)</SelectItem>
+                                    <SelectItem value={RampMode.DWELL}>Dwell (wave with holds)</SelectItem>
                                 </SelectContent>
                             </Select>
                             {form.formState.errors.mode && (
                                 <FieldError errors={[form.formState.errors.mode]} />
                             )}
                         </Field>
+
+                        {mode === RampMode.DWELL && (
+                            <Field>
+                                <FieldLabel>Dwell (s)</FieldLabel>
+                                <Input type="number" step="0.1" placeholder="0 = no hold" {...form.register("dwell")} />
+                                {form.formState.errors.dwell && (
+                                    <FieldError errors={[form.formState.errors.dwell]} />
+                                )}
+                            </Field>
+                        )}
+
+                        {mode === RampMode.SURGE && (
+                            <Field>
+                                <FieldLabel>Release ×</FieldLabel>
+                                <Input type="number" step="0.1" placeholder="4" {...form.register("release")} />
+                                {form.formState.errors.release && (
+                                    <FieldError errors={[form.formState.errors.release]} />
+                                )}
+                            </Field>
+                        )}
+
+                        {mode === RampMode.SQUARE && (
+                            <p className="text-[10px] leading-snug text-amber-500/80">
+                                Square jumps straight to Max each cycle — keep Max conservative.
+                            </p>
+                        )}
 
                         <Field>
                             <FieldLabel>Duration (s)</FieldLabel>
