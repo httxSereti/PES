@@ -12,8 +12,8 @@ type ChannelColors = {
 };
 
 const CHANNEL_META = [
-    { key: 'ch_A' as const, label: 'CH · A' },
-    { key: 'ch_B' as const, label: 'CH · B' },
+    { key: 'ch_A' as const, label: 'CH A' },
+    { key: 'ch_B' as const, label: 'CH B' },
 ] as const;
 
 const CHANNEL_COLORS: Record<"dark" | "light", [ChannelColors, ChannelColors]> = {
@@ -134,16 +134,16 @@ export const UnitGraph: FC<UnitGraphProps> = ({ unitId }) => {
         return null;
 
     return (
-        <div className="flex flex-col overflow-hidden rounded-md border border-border/60 bg-zinc-50 dark:bg-zinc-950">
-            <div className="flex items-center justify-between border-b border-border/60 px-4 py-2">
-                <span className="font-mono text-[11px] tracking-widest text-muted-foreground uppercase">
+        <div className="flex flex-col overflow-hidden rounded-lg border border-border/60 bg-zinc-50 dark:bg-zinc-950">
+            <div className="flex items-center justify-between border-b border-border/60 px-3 py-1.5">
+                <span className="font-mono text-[9px] text-muted-foreground uppercase tracking-widest">
                     {unitId}
                 </span>
-                <div className="flex items-center gap-4">
+                <div className="flex items-center gap-3">
                     {channels.map(({ label, color }) => (
                         <div key={label} className="flex items-center gap-1.5">
                             <span className="block h-[2px] w-3 rounded-full" style={{ background: color }} />
-                            <span className="font-mono text-[10px] tracking-wider" style={{ color }}>
+                            <span className="font-mono text-[9px] tracking-wider" style={{ color }}>
                                 {label}
                             </span>
                         </div>
@@ -166,12 +166,12 @@ export const UnitGraph: FC<UnitGraphProps> = ({ unitId }) => {
                 {channels.map(({ key, label, color }) => {
                     const val = key === 'ch_A' ? valA : valB;
                     return (
-                        <div key={key} className="flex items-center justify-between px-2 py-2.5">
-                            <div className="flex flex-col gap-1.5">
-                                <span className="font-mono text-[10px] tracking-widest text-muted-foreground uppercase">
+                        <div key={key} className="flex items-center justify-between px-2.5 py-2">
+                            <div className="flex flex-col gap-1">
+                                <span className="font-mono text-[9px] text-muted-foreground uppercase tracking-widest">
                                     {label}
                                 </span>
-                                <div className="h-[2px] w-20 overflow-hidden rounded-full bg-foreground/10">
+                                <div className="h-[2px] w-16 overflow-hidden rounded-full bg-foreground/10">
                                     <div
                                         className="h-full rounded-full transition-[width] duration-75 ease-linear"
                                         style={{ width: `${val}%`, background: color }}
@@ -179,7 +179,7 @@ export const UnitGraph: FC<UnitGraphProps> = ({ unitId }) => {
                                 </div>
                             </div>
                             <span
-                                className="font-mono text-2xl font-semibold tabular-nums leading-none"
+                                className="font-mono text-xl font-semibold tabular-nums leading-none"
                                 style={{ color }}
                             >
                                 {String(val).padStart(3, '0')}

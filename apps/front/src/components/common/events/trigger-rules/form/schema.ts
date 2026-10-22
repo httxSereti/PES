@@ -16,8 +16,14 @@ export const actionSchema = z.discriminatedUnion("action_type", [
     }),
     baseAction.extend({
         action_type: z.literal(ActionType.LEVEL),
-        units: z.string().min(1, "e.g. 123, 12RM, 23RO"),
-        channels: z.string().min(1, "e.g. AB, ABRM"),
+        units: z
+            .string()
+            .min(1, "Choose a unit group, e.g. 123 or 12RM")
+            .regex(/^[1-3]+(?:RM|RO)?$/i, "Use unit IDs 1–3, optionally followed by RM or RO"),
+        channels: z
+            .string()
+            .min(1, "Choose a channel group, e.g. AB or ABRM")
+            .regex(/^[AB]+(?:RM|RO)?$/i, "Use channels A/B, optionally followed by RM or RO"),
         // the operator is part of the value itself (a MagicNumber): 30, +5, -5, %+5, %-[5-10]
         value: z.string().min(1, "e.g. 30, +5, %-[5-10]"),
     }),
@@ -64,7 +70,7 @@ export const actionSchema = z.discriminatedUnion("action_type", [
 export const formSchema = z.object({
     name: z.string().min(3, "Name must be at least 3 characters.").max(64, "Name must be at most 64 characters."),
     description: z.string().max(256, "Description must be at most 256 characters.").optional(),
-    event_type: z.string().min(1, "Please select an event."),
+    event_types: z.array(z.string().min(1)).min(1, "Select at least one event."),
     priority: z.coerce.number().int().min(0).max(100),
     enabled: z.boolean(),
     labels: z.array(z.string().min(1)),
@@ -107,7 +113,12 @@ export function actionToFormValues(action: TriggerAction): ActionValues {
     const base = { duration: action.duration ?? -1, cumulative: action.cumulative ?? false };
     switch (action.action_type) {
         case ActionType.PROFILE:
-            return { ...base, action_type: ActionType.PROFILE, profile: String(p["profile"] ?? ""), level_pct: Number(p["level_pct"] ?? 100) };
+            return {
+                ...base,
+                action_type: ActionType.PROFILE,
+                profile: String(p["profile"] ?? ""),
+                level_pct: Number(p["level_pct"] ?? 100),
+            };
         case ActionType.LEVEL:
             return {
                 ...base,
@@ -117,9 +128,20 @@ export function actionToFormValues(action: TriggerAction): ActionValues {
                 value: String(p["value"] ?? ""),
             };
         case ActionType.MULT:
-            return { ...base, action_type: ActionType.MULT, target: String(p["target"] ?? "all"), pct: Number(p["pct"] ?? 0), random: Boolean(p["random"] ?? false) };
+            return {
+                ...base,
+                action_type: ActionType.MULT,
+                target: String(p["target"] ?? "all"),
+                pct: Number(p["pct"] ?? 0),
+                random: Boolean(p["random"] ?? false),
+            };
         case ActionType.CHASTER_TIME_UPDATE:
-            return { ...base, action_type: ActionType.CHASTER_TIME_UPDATE, duration_minutes: Number(p["duration_minutes"] ?? 0), only_max: Boolean(p["only_max"] ?? false) };
+            return {
+                ...base,
+                action_type: ActionType.CHASTER_TIME_UPDATE,
+                duration_minutes: Number(p["duration_minutes"] ?? 0),
+                only_max: Boolean(p["only_max"] ?? false),
+            };
         case ActionType.PURYFI_SET_ENABLED:
             return { ...base, action_type: ActionType.PURYFI_SET_ENABLED, enabled: Boolean(p["enabled"] ?? true) };
         case ActionType.PURYFI_SET_LOCK:
@@ -153,18 +175,50 @@ export function actionToFormValues(action: TriggerAction): ActionValues {
     }
 }
 
+/** Compact one-line summary shown in the collapsed action row. */
+export function actionSummary(action: ActionValues): string {
+    switch (action.action_type) {
+        case ActionType.PROFILE:
+            if (!action.profile) return "Not configured";
+            return `${action.profile} · ${action.level_pct}%`;
+        case ActionType.LEVEL:
+            if (!action.units && !action.channels && !action.value) {
+                return "Not configured";
+            }
+            return `Units ${action.units || "?"} · Channels ${action.channels || "?"} · ${action.value || "?"}`;
+        case ActionType.MULT:
+            return `${action.target || "all"} · ${action.pct}%${action.random ? " · random" : ""}`;
+        case ActionType.CHASTER_TIME_UPDATE:
+            return `${action.duration_minutes} min${action.only_max ? " · max only" : ""}`;
+        case ActionType.PURYFI_SET_ENABLED:
+            return action.enabled ? "Enable blocker" : "Disable blocker";
+        case ActionType.PURYFI_SET_LOCK:
+            return `${action.timer_minutes} min${action.password ? " · password set" : ""}`;
+        case ActionType.PURYFI_SET_LOCK_TIMER:
+            return action.value || "No time set";
+        case ActionType.PURYFI_ENTER_LOCK_PASSWORD:
+        case ActionType.PURYFI_EMERGENCY_UNLOCK:
+            return "Uses saved credentials";
+        case ActionType.PURYFI_UPDATE_WBLIST:
+            return `${action.operation} · ${action.list}${action.value ? ` · ${action.value}` : ""}`;
+        default:
+            return "Configure action";
+    }
+}
+
 /** Build form defaults from an existing rule (for the edit page). */
 export function ruleToFormValues(rule: TriggerRule): FormValues {
     return {
         name: rule.name,
         description: rule.description ?? "",
-        event_type: rule.event_type,
+        event_types: rule.event_types?.length > 0 ? rule.event_types : rule.event_type ? [rule.event_type] : [],
         priority: rule.priority,
         enabled: rule.enabled,
         labels: rule.labels.map((l) => l.name),
-        actions: rule.actions.length > 0
-            ? [...rule.actions].sort((a, b) => a.sort_order - b.sort_order).map(actionToFormValues)
-            : [defaultAction(ActionType.LEVEL)],
+        actions:
+            rule.actions.length > 0
+                ? [...rule.actions].sort((a, b) => a.sort_order - b.sort_order).map(actionToFormValues)
+                : [defaultAction(ActionType.LEVEL)],
     };
 }
 

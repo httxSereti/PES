@@ -129,7 +129,9 @@ class TriggerAction(WireModel):
 
 class TriggerRule(WireModel):
     id: str
+    # Legacy single-event field (the first selection) kept for older readers
     event_type: str
+    event_types: list[str]
     name: str
     description: str | None
     enabled: bool
@@ -321,6 +323,8 @@ class IntegrationEvent(WireModel):
     # False = the event is ignored by the dispatcher (rule pipeline only)
     enabled: bool = True
     data_schema: dict[str, str]
+    # Optional preview shown by the event picker (e.g. a PuryFi scan thumbnail)
+    image_url: str | None = None
 
 
 class IntegrationAction(WireModel):

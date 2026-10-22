@@ -1,7 +1,8 @@
 import structlog
-from utils import to_utc_iso
+
 from api.ws.websocket_manager import WebSocketManager
-from database.repositories.trigger_rule_repo import TriggerRuleRepo
+from database.repositories.trigger_rule_repo import TriggerRuleRepo, rule_event_types
+from utils import to_utc_iso
 
 logger = structlog.get_logger("pes")
 
@@ -9,7 +10,9 @@ logger = structlog.get_logger("pes")
 def _serialize_rule(rule) -> dict:
     return {
         "id": rule.id,
+        # legacy single field (first event) + the full selection
         "event_type": rule.event_type,
+        "event_types": rule_event_types(rule),
         "name": rule.name,
         "description": rule.description,
         "enabled": rule.enabled,

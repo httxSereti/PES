@@ -21,7 +21,6 @@ export const UnitSelectMode: FC<UnitSelectModeProps> = ({ unitId }) => {
         const index = Number(value);
         const selected = MODE_2B[index]; // Mode2BEntry
 
-        console.log(index)
         try {
             await sendCommand('units:update_mode', {
                 [unitId]: {
@@ -37,26 +36,16 @@ export const UnitSelectMode: FC<UnitSelectModeProps> = ({ unitId }) => {
             }));
         } catch (error) {
             console.error(`Failed to update mode to '${selected?.id}' on unit '${unitId}'`, error);
-
-            // rollback optimistic update
-            // dispatch(unitUpdated({
-            //     id: unitId,
-            //     changes: { [propertyKey]: currentLevel }
-            // }));
         }
     };
 
-    console.log(MODE_2B[unit.mode]?.id)
-
     return (
-        <div className={`flex items-center justify-between`}>
-            <div className="flex items-center gap-2">
-                <span className={`text-[14px]`}>
-                    Mode
-                </span>
-            </div>
+        <div className="flex items-center justify-between gap-2">
+            <span className="font-mono-dm text-[10px] text-muted-foreground uppercase tracking-wider">
+                Mode
+            </span>
             <Select value={String(unit.mode)} onValueChange={updateMode}>
-                <SelectTrigger>
+                <SelectTrigger size="sm" className="font-mono-dm h-7 w-[104px] px-2 text-[10px]">
                     <SelectValue placeholder="Choose a mode" />
                 </SelectTrigger>
                 <SelectContent>

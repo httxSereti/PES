@@ -19,6 +19,7 @@ import { UnitSelectChannel } from "@/components/common/units/unit-select-channel
 import { UnitSelectMode } from "@/components/common/units/unit-select-mode"
 import { UnitPowerMode } from "@/components/common/units/unit-power-mode"
 import { UnitAdj } from "./unit-adj"
+import { UnitStopButton } from "./unit-stop-button"
 import { UnitRamps } from "@/components/common/ramps/unit-ramps"
 
 type UnitProps = {
@@ -48,24 +49,25 @@ export const Unit: FC<UnitProps> = ({ unitId }) => {
 
     return (
         <Card
+            id={`unit-${unitId.toLowerCase()}`}
             onClick={(event) => dispatch(unitSelected({ unitId, additive: event.altKey }))}
             className={cn(
-                "cursor-pointer transition-all",
+                "scroll-mt-32 cursor-pointer gap-3 overflow-hidden py-0 transition-all",
                 highlighted && "border-primary/60 shadow-md",
-                selected && "ring-2 ring-violet-500/70",
+                selected && "ring-2 ring-violet-500/60",
             )}
         >
-            <CardHeader className="flex flex-row justify-between items-center">
-                <CardTitle className="flex gap-2">
-                    <div className="p-2 rounded-lg accent-tile" >
-                        <Computer size={18} className="accent-tile-icon" />
+            <CardHeader className="flex flex-row items-center justify-between gap-2 px-4 pt-4 pb-0">
+                <CardTitle className="flex min-w-0 items-center gap-2">
+                    <div className="accent-tile flex size-8 shrink-0 items-center justify-center rounded-lg">
+                        <Computer size={16} className="accent-tile-icon" />
                     </div>
-                    <div className="flex flex-col justify-center">
-                        <div className="flex items-center gap-2 text-sm">
+                    <div className="flex min-w-0 flex-col justify-center">
+                        <div className="font-mono-dm flex items-center gap-2 text-[13px] font-semibold">
                             {unit?.id}
                             <Kbd
                                 className={cn(
-                                    "font-mono",
+                                    "h-5 min-w-5 px-1 font-mono text-[10px]",
                                     selected && "bg-violet-500! text-white!",
                                 )}
                             >
@@ -76,19 +78,21 @@ export const Unit: FC<UnitProps> = ({ unitId }) => {
                 </CardTitle>
 
                 <div className="flex items-center gap-1">
-                    <Button variant="ghost" size="icon" className="h-8 w-8">
+                    <Button variant="ghost" size="icon" className="h-7 w-7">
                         <span
-                            className={`h-3 w-3 rounded-full ${dotColor} cursor-pointer hover:opacity-80 transition-opacity`}
+                            className={`size-2.5 rounded-full ${dotColor} cursor-pointer transition-opacity hover:opacity-80`}
                         />
                     </Button>
+
+                    <UnitStopButton unitId={unitId} />
 
                     <UnitDropdown unitId={unitId} />
                 </div>
 
             </CardHeader>
 
-            <CardContent>
-                <div className="flex flex-col gap-4 justify-center">
+            <CardContent className="px-4 pb-4 pt-3">
+                <div className="flex flex-col justify-center gap-3">
                     <UnitGraph unitId={unitId} />
 
                     <UnitSelectChannel
@@ -102,15 +106,15 @@ export const Unit: FC<UnitProps> = ({ unitId }) => {
                         selectedChannel={currentChannel}
                     />
 
-                    <div className="flex flex-col gap-3.5 px-3 py-3 rounded-lg border border-border/35 bg-muted/20">
-                        <p className="font-mono text-[10px] tracking-widest uppercase text-primary/40 border-b pb-2">Unit Settings</p>
+                    <div className="flex flex-col gap-2.5 rounded-lg border border-border/35 bg-muted/20 px-3 py-3">
+                        <p className="font-mono text-[10px] tracking-widest text-primary/40 uppercase border-b pb-1.5">Unit Settings</p>
 
-                        <div className="grid grid-cols-2 divide-x divide-border/60 py-2 border-b border-border/60">
+                        <div className="grid grid-cols-2 divide-x divide-border/60 border-b border-border/60 py-1">
                             {(["adj_1", "adj_2"] as const).map((adj_name) => {
                                 const val = adj_name === 'adj_1' ? unit?.adj_1 : unit?.adj_2;
                                 return (
-                                    <div key={adj_name} className="flex justify-center items-center px-1 py-2">
-                                        <div className="flex flex-col gap-2.5">
+                                    <div key={adj_name} className="flex items-center justify-center px-1 py-1.5">
+                                        <div className="flex w-full flex-col">
                                             <UnitAdj unitId={unitId} adjId={adj_name} val={val} />
                                         </div>
                                     </div>

@@ -1,7 +1,7 @@
 /**
  * Program-preview helpers for saved profiles.
  *
- * The bars and the time axis are derived from the profile's real ramps
+ * The sparklines and the time axis are derived from the profile's real ramps
  * (`ProfileSummary.ramps`, resolved by `services/profiles.py` with the same
  * semantics the action executor uses) and mirror `hardware/ramp.py`: a ramp
  * climbs from `start` to 100% of `max` in `step`-percent increments every
@@ -10,12 +10,10 @@
 import { RampMode } from "@/types";
 import type { ProfileRampPreview, ProfileSummary } from "@/types";
 
-/** Samples drawn per lane by the inspector chart / by the list sparkline. */
-export const CHART_SAMPLES = 12;
-export const SPARKLINE_SAMPLES = 10;
-
-/** Flat marker bar shown when there is no shape to draw (no ramps at all). */
-const NO_RAMPS_BAR = 33;
+/** Samples drawn per lane by the inspector chart. */
+export const CHART_SAMPLES = 24;
+/** Samples per stim channel used by the table sparkline. */
+export const SPARKLINE_SAMPLES = 24;
 
 /** Lanes of the program shape: A/B are the stim channels, C the adjusters. */
 const SHAPE_LANES = [
@@ -26,14 +24,26 @@ const SHAPE_LANES = [
 
 export type ProfileLane = {
     label: string;
-    /** Bar heights in % of the track (empty when nothing drives the lane). */
-    bars: number[];
+    /** Sample levels in % of the track (empty when nothing drives the lane). */
+    samples: number[];
 };
 
 export type ProfilePreview = {
     /** Program window in seconds — 0 when there is nothing to plot. */
     durationSeconds: number;
     lanes: ProfileLane[];
+};
+
+/** Table sparkline data. A/B are stim channels; adjusters are intentionally absent. */
+export type ProfileSparkline = {
+    /** Channel A samples (0-100), empty when no A ramp drives the profile. */
+    a: number[];
+    /** Channel B samples (0-100), empty when no B ramp drives the profile. */
+    b: number[];
+    /** Highest stim channel per sample — the neutral trace shown when unselected. */
+    envelope: number[];
+    /** Stim-channel window in seconds, used for the row tooltip. */
+    durationSeconds: number;
 };
 
 type RampCurve = {
@@ -173,9 +183,11 @@ function sampleCurves(
     windowSeconds: number,
     samples: number,
 ): number[] {
-    if (windowSeconds <= 0 || curves.length === 0) return [];
+    if (curves.length === 0) return [];
+    // A static ramp (period 0) still has a level to show: sample it flat.
+    const span = windowSeconds > 0 ? windowSeconds : 1;
     return Array.from({ length: samples }, (_, index) => {
-        const at = (windowSeconds * index) / Math.max(samples - 1, 1);
+        const at = (span * index) / Math.max(samples - 1, 1);
         return curves.reduce(
             (top, curve) => Math.max(top, curve.levelAt(at)),
             0,
@@ -183,7 +195,7 @@ function sampleCurves(
     });
 }
 
-/** Builds the inspector preview: bar heights per lane + the program window. */
+/** Builds the inspector preview: sample levels per lane + the program window. */
 export function buildProfilePreview(
     profile: ProfileSummary,
     samples = CHART_SAMPLES,
@@ -203,7 +215,7 @@ export function buildProfilePreview(
     const durationSeconds = sampleWindow(ramps, curves);
     const lanes = SHAPE_LANES.map((lane) => ({
         label: lane.label,
-        bars: sampleCurves(
+        samples: sampleCurves(
             lane.fields.flatMap((field) => curvesByField.get(field) ?? []),
             durationSeconds,
             samples,
@@ -213,15 +225,141 @@ export function buildProfilePreview(
     return { durationSeconds, lanes };
 }
 
-/** Overall intensity envelope of every ramp — used by the list sparkline. */
-export function sparklineBars(
+/**
+ * Table sparkline for the two stim channels only.
+ *
+ * Adjuster ramps (`adj_1`, `adj_2`) are deliberately excluded: they change the
+ * feel of a profile but do not describe the intensity envelope of A/B, and a
+ * third line in an 88 px cell would be noise. The window is also based on the
+ * A/B ramps so an adjuster ramp cannot flatten the visible shape.
+ */
+export function buildSparkline(
     profile: ProfileSummary,
     samples = SPARKLINE_SAMPLES,
-): number[] {
-    const ramps = profile.ramps ?? [];
-    const curves = ramps.map(buildCurve);
-    const bars = sampleCurves(curves, sampleWindow(ramps, curves), samples);
-    return bars.length > 0 ? bars : [NO_RAMPS_BAR];
+): ProfileSparkline {
+    const ramps = (profile.ramps ?? []).filter(
+        (ramp) => ramp.field === "ch_A" || ramp.field === "ch_B",
+    );
+    const curves: RampCurve[] = [];
+    const curvesByField = new Map<string, RampCurve[]>();
+
+    for (const ramp of ramps) {
+        const curve = buildCurve(ramp);
+        curves.push(curve);
+        const fieldCurves = curvesByField.get(ramp.field);
+        if (fieldCurves) fieldCurves.push(curve);
+        else curvesByField.set(ramp.field, [curve]);
+    }
+
+    const durationSeconds = sampleWindow(ramps, curves);
+    const a = sampleCurves(
+        curvesByField.get("ch_A") ?? [],
+        durationSeconds,
+        samples,
+    );
+    const b = sampleCurves(
+        curvesByField.get("ch_B") ?? [],
+        durationSeconds,
+        samples,
+    );
+    const envelope =
+        a.length === 0
+            ? b
+            : b.length === 0
+              ? a
+              : a.map((value, index) => Math.max(value, b[index] ?? 0));
+
+    return { a, b, envelope, durationSeconds };
+}
+
+/** Padding (in viewBox units) kept above and below a sparkline trace. */
+const SHAPE_PADDING = 2.5;
+
+function roundPath(value: number): number {
+    return Math.round(value * 100) / 100;
+}
+
+/**
+ * Smooth SVG path through the sampled levels. Control-point Y values are
+ * clamped inside the plot so a fast edge cannot overshoot the 24 px cell.
+ */
+export function shapeLinePath(
+    points: number[],
+    width = 88,
+    height = 24,
+    padding = SHAPE_PADDING,
+): string {
+    if (points.length === 0) return "";
+
+    const top = padding;
+    const bottom = height - padding;
+    const yFor = (value: number) => {
+        const level = clampLevel(value);
+        return roundPath(bottom - ((bottom - top) * level) / 100);
+    };
+
+    if (points.length === 1) {
+        const only = points[0];
+        if (only === undefined) return "";
+        const y = yFor(only);
+        return `M0 ${y} L${width} ${y}`;
+    }
+
+    const step = width / (points.length - 1);
+    const coords = points.map((value, index) => ({
+        x: roundPath(index * step),
+        y: yFor(value),
+    }));
+    const firstCoord = coords[0];
+    if (!firstCoord) return "";
+
+    let path = `M${firstCoord.x} ${firstCoord.y}`;
+    for (let index = 0; index < coords.length - 1; index += 1) {
+        const start = coords[index];
+        const end = coords[index + 1];
+        if (!start || !end) break;
+        const previous = coords[index - 1] ?? start;
+        const next = coords[index + 2] ?? end;
+
+        const control1Y = Math.min(
+            bottom,
+            Math.max(top, start.y + (end.y - previous.y) / 6),
+        );
+        const control2Y = Math.min(
+            bottom,
+            Math.max(top, end.y - (next.y - start.y) / 6),
+        );
+
+        path += ` C${roundPath(start.x + (end.x - previous.x) / 6)} ${roundPath(
+            control1Y,
+        )} ${roundPath(end.x - (next.x - start.x) / 6)} ${roundPath(
+            control2Y,
+        )} ${end.x} ${end.y}`;
+    }
+
+    return path;
+}
+
+/** Closed path that fills the area below a sparkline trace, down to the plot baseline. */
+export function shapeAreaPath(
+    points: number[],
+    width = 88,
+    height = 24,
+    padding = SHAPE_PADDING,
+): string {
+    const line = shapeLinePath(points, width, height, padding);
+    const baseline = height - padding;
+    return line ? `${line} L${width} ${baseline} L0 ${baseline} Z` : "";
+}
+
+/** Y coordinate of the last sample, used for the end dot. */
+export function shapeEndY(
+    points: number[],
+    height = 24,
+    padding = SHAPE_PADDING,
+): number {
+    const last = clampLevel(points[points.length - 1] ?? 0);
+    return roundPath(height - padding - ((height - padding * 2) * last) / 100);
 }
 
 /** `m:ss` clock label (rounded to the nearest second), e.g. 1080 → "18:00". */

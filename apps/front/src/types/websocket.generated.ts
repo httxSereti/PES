@@ -2,7 +2,7 @@
 // by apps/app/scripts/generate_ws_types.py — DO NOT EDIT.
 // Regenerate with: pnpm codegen:ws
 
-export const WS_SCHEMA_VERSION = 14;
+export const WS_SCHEMA_VERSION = 15;
 
 export enum ActionType {
     PROFILE = "PROFILE",
@@ -41,6 +41,10 @@ export interface UnitAdjChange {
     adj_2?: number | null;
 }
 
+export interface UnitStopPayload {
+    id: 'UNIT1' | 'UNIT2' | 'UNIT3';
+}
+
 export interface RampTarget {
     unit: 'UNIT1' | 'UNIT2' | 'UNIT3';
     field: 'ch_A' | 'ch_B' | 'adj_1' | 'adj_2';
@@ -51,13 +55,15 @@ export interface TriggerRuleUpdatePayload {
     name?: string | null;
     description?: string | null;
     event_type?: string | null;
+    event_types?: string[] | null;
     enabled?: boolean | null;
     priority?: number | null;
 }
 
 export interface TriggerRuleDraft {
     name: string;
-    event_type: string;
+    event_types: string[];
+    event_type?: string | null;
     description?: string | null;
     enabled: boolean;
     priority: number;
@@ -233,6 +239,7 @@ export interface CommandResult {
 export interface TriggerRule {
     id: string;
     event_type: string;
+    event_types: string[];
     name: string;
     description: string | null;
     enabled: boolean;
@@ -386,6 +393,7 @@ export interface IntegrationEvent {
     group: string;
     enabled: boolean;
     data_schema: Record<string, string>;
+    image_url?: string | null;
 }
 
 export interface IntegrationAction {
@@ -710,6 +718,12 @@ export interface UnitsUpdateAdjCommand {
     id?: string | null;
     type: 'units:update_adj';
     payload: Record<string, UnitAdjChange>;
+}
+
+export interface UnitsStopCommand {
+    id?: string | null;
+    type: 'units:stop';
+    payload: UnitStopPayload;
 }
 
 export interface RampsStartCommand {
@@ -1217,6 +1231,7 @@ export type WebSocketClientMessage =
     | UnitsUpdateModeCommand
     | UnitsUpdatePowerModeCommand
     | UnitsUpdateAdjCommand
+    | UnitsStopCommand
     | RampsStartCommand
     | RampsPauseCommand
     | RampsResumeCommand

@@ -5,6 +5,41 @@ import type { IntegrationCatalogEntry } from "@/types/integrations.types";
 
 export type EventGroupDef = { key: string; label: string; types: string[] };
 
+/** Everything the event picker needs to render one event. */
+export interface EventCatalogEvent {
+    id: string;
+    label: string;
+    description: string;
+    /** Integration id/name, e.g. "puryfi" / "PuryFi". */
+    integrationId: string;
+    integrationName: string;
+    /** Optional subgroup declared by the integration, e.g. "Detection". */
+    group: string;
+    enabled: boolean;
+    /** Optional preview image (PuryFi scan thumbnails, illustrations, ...). */
+    imageUrl: string | null;
+    dataSchema: Record<string, string>;
+}
+
+const EVENT_ID_PREFIXES = new Set([
+    "chaster",
+    "puryfi",
+    "sensor",
+    "sensors",
+    "units",
+    "unit",
+]);
+
+/** Readable fallback label while the live integration catalog is loading. */
+export function humanizeEventId(id: string): string {
+    const base = id.includes(":") ? id.split(":").pop() ?? id : id;
+    const parts = base.split("_").filter(Boolean);
+    const first = parts[0];
+    if (first && parts.length > 1 && EVENT_ID_PREFIXES.has(first)) parts.shift();
+    const label = parts.join(" ");
+    return label.charAt(0).toUpperCase() + label.slice(1);
+}
+
 /**
  * Static fallback used until the integrations catalog arrives (and offline).
  * The live catalog (WS `integrations:load`) supersedes it; event ids must
@@ -51,6 +86,8 @@ export interface EventCatalog {
     descriptions: Record<string, string>;
     /** Event type id → human label. */
     labels: Record<string, string>;
+    /** Event type id → full display metadata used by the event picker. */
+    events: Record<string, EventCatalogEvent>;
 }
 
 export function buildEventGroups(
@@ -86,15 +123,46 @@ export function useEventCatalog(): EventCatalog {
 
         const descriptions: Record<string, string> = {};
         const labels: Record<string, string> = {};
+        const events: Record<string, EventCatalogEvent> = {};
+
+        // Start from the group catalog so the picker still renders while the
+        // live integrations catalog is loading.
+        for (const [integrationId, group] of Object.entries(groups)) {
+            for (const id of group.types) {
+                events[id] = {
+                    id,
+                    label: humanizeEventId(id),
+                    description: "",
+                    integrationId,
+                    integrationName: group.label,
+                    group: "",
+                    enabled: true,
+                    imageUrl: null,
+                    dataSchema: {},
+                };
+            }
+        }
+
         for (const entry of entries ?? []) {
             for (const event of entry.events) {
                 descriptions[event.id] = event.description;
                 labels[event.id] = event.label;
                 if (event.enabled === false) disabledTypes.add(event.id);
+                events[event.id] = {
+                    id: event.id,
+                    label: event.label,
+                    description: event.description,
+                    integrationId: entry.id,
+                    integrationName: entry.name,
+                    group: event.group ?? "",
+                    enabled: event.enabled !== false,
+                    imageUrl: event.image_url ?? null,
+                    dataSchema: event.data_schema ?? {},
+                };
             }
         }
 
-        return { groups, grouped, knownTypes, disabledTypes, descriptions, labels };
+        return { groups, grouped, knownTypes, disabledTypes, descriptions, labels, events };
     }, [integrations]);
 }
 

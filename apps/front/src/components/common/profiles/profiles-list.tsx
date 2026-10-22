@@ -1,4 +1,4 @@
-import { useEffect, useState, type KeyboardEvent } from "react";
+import { useEffect, useMemo, useState, type KeyboardEvent } from "react";
 import { Play } from "lucide-react";
 
 import { Button } from "@pes/ui/components/button";
@@ -10,7 +10,13 @@ import type { ProfileSummary } from "@/types";
 import { ApplyProfileDialog } from "./apply-profile-dialog";
 import { ProfileInspector } from "./profile-inspector";
 import { ProfileMonogram } from "./profile-badges";
-import { sparklineBars } from "./profile-shape";
+import {
+    buildSparkline,
+    formatClock,
+    shapeAreaPath,
+    shapeEndY,
+    shapeLinePath,
+} from "./profile-shape";
 
 type ProfilesListProps = {
     profiles: ProfileSummary[];
@@ -20,40 +26,174 @@ type ProfilesListProps = {
     onExport: (name: string) => void;
 };
 
-/** Intensity envelope of the profile's real ramps, sampled over one program window. */
+const SPARK_WIDTH = 88;
+const SPARK_HEIGHT = 24;
+
+/**
+ * Stim-channel sparkline. Unselected rows show one neutral A+B envelope; the
+ * selected row splits into the violet A and blue B lines from the Units graph.
+ * Adjuster ramps are intentionally left to the inspector.
+ */
 function ShapeSparkline({
     profile,
-    active,
+    selected,
     className,
 }: {
     profile: ProfileSummary;
-    active: boolean;
+    selected: boolean;
     className?: string;
 }) {
-    const bars = sparklineBars(profile);
+    const sparkline = useMemo(() => buildSparkline(profile), [profile]);
+    const { a, b, envelope } = sparkline;
+    const hasA = a.length > 0;
+    const hasB = b.length > 0;
+    const hasData = hasA || hasB;
+    const emptyTitle =
+        profile.ramp_count > 0
+            ? "Adjuster-only profile: no stim channel ramps"
+            : "No ramps";
+    const durationLabel =
+        sparkline.durationSeconds > 0
+            ? ` · ${formatClock(sparkline.durationSeconds)}`
+            : "";
+    const shapeTitle = hasData
+        ? `Stim channels A/B${durationLabel}`
+        : emptyTitle;
+
+    if (!hasData) {
+        return (
+            <div
+                className={cn(
+                    "flex h-6 w-[88px] shrink-0 items-center",
+                    className,
+                )}
+                title={shapeTitle}
+            >
+                <svg
+                    viewBox={`0 0 ${SPARK_WIDTH} ${SPARK_HEIGHT}`}
+                    preserveAspectRatio="none"
+                    className="h-full w-full text-slate-500"
+                    aria-hidden="true"
+                >
+                    <line
+                        x1={0}
+                        y1={SPARK_HEIGHT - 3}
+                        x2={SPARK_WIDTH}
+                        y2={SPARK_HEIGHT - 3}
+                        stroke="currentColor"
+                        strokeWidth={1.5}
+                        strokeDasharray="2 3"
+                        strokeLinecap="round"
+                        opacity={0.6}
+                        vectorEffect="non-scaling-stroke"
+                    />
+                </svg>
+            </div>
+        );
+    }
+
+    if (!selected) {
+        return (
+            <div
+                className={cn(
+                    "flex h-6 w-[88px] shrink-0 items-center",
+                    className,
+                )}
+                title={shapeTitle}
+            >
+                <svg
+                    viewBox={`0 0 ${SPARK_WIDTH} ${SPARK_HEIGHT}`}
+                    preserveAspectRatio="none"
+                    className="h-full w-full text-slate-500"
+                    aria-hidden="true"
+                >
+                    <path
+                        d={shapeLinePath(envelope, SPARK_WIDTH, SPARK_HEIGHT)}
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth={1.5}
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        vectorEffect="non-scaling-stroke"
+                    />
+                    <circle
+                        cx={SPARK_WIDTH - 1.5}
+                        cy={shapeEndY(envelope, SPARK_HEIGHT)}
+                        r={1.5}
+                        fill="currentColor"
+                    />
+                </svg>
+            </div>
+        );
+    }
+
+    const areaPoints = hasA ? a : b;
+
     return (
         <div
-            className={cn(
-                "flex h-6 w-[88px] shrink-0 items-end gap-[2px]",
-                className,
-            )}
+            className={cn("flex h-6 w-[88px] shrink-0 items-center", className)}
+            title={shapeTitle}
         >
-            {bars.map((height, index) => (
-                <span
-                    key={index}
-                    style={{
-                        height: `${height}%`,
-                        opacity: active
-                            ? 1
-                            : 0.45 +
-                              (0.45 * index) / Math.max(bars.length - 1, 1),
-                    }}
-                    className={cn(
-                        "min-w-0 flex-1 rounded-[2px]",
-                        active ? "bg-purple-500" : "bg-slate-500",
-                    )}
+            <svg
+                viewBox={`0 0 ${SPARK_WIDTH} ${SPARK_HEIGHT}`}
+                preserveAspectRatio="none"
+                className="h-full w-full text-purple-500 dark:text-purple-400"
+                aria-hidden="true"
+            >
+                <path
+                    d={shapeAreaPath(areaPoints, SPARK_WIDTH, SPARK_HEIGHT)}
+                    fill="currentColor"
+                    fillOpacity={0.14}
+                    className={
+                        hasA
+                            ? "text-purple-500 dark:text-purple-400"
+                            : "text-blue-500 dark:text-blue-400"
+                    }
                 />
-            ))}
+
+                {hasA && (
+                    <>
+                        <path
+                            d={shapeLinePath(a, SPARK_WIDTH, SPARK_HEIGHT)}
+                            fill="none"
+                            stroke="currentColor"
+                            strokeWidth={1.75}
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            vectorEffect="non-scaling-stroke"
+                        />
+                        <circle
+                            cx={SPARK_WIDTH - 2}
+                            cy={shapeEndY(a, SPARK_HEIGHT)}
+                            r={1.75}
+                            fill="currentColor"
+                            className="text-purple-400 dark:text-purple-300"
+                        />
+                    </>
+                )}
+
+                {hasB && (
+                    <>
+                        <path
+                            d={shapeLinePath(b, SPARK_WIDTH, SPARK_HEIGHT)}
+                            fill="none"
+                            stroke="currentColor"
+                            strokeWidth={1.75}
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            vectorEffect="non-scaling-stroke"
+                            className="text-blue-500 dark:text-blue-400"
+                        />
+                        <circle
+                            cx={SPARK_WIDTH - 2}
+                            cy={shapeEndY(b, SPARK_HEIGHT)}
+                            r={1.75}
+                            fill="currentColor"
+                            className="text-blue-500 dark:text-blue-400"
+                        />
+                    </>
+                )}
+            </svg>
         </div>
     );
 }
@@ -161,7 +301,7 @@ function ProfileListRow({
                 )}
             </span>
 
-            <ShapeSparkline profile={profile} active={selected} />
+            <ShapeSparkline profile={profile} selected={selected} />
 
             <span className="w-[60px] shrink-0 text-[11px] text-muted-foreground">
                 {profile.unit_count} unit
@@ -238,8 +378,8 @@ function ProfileMobileRow({
             <div className="flex flex-wrap items-center gap-x-3 gap-y-1 pl-[38px]">
                 <ShapeSparkline
                     profile={profile}
-                    active={selected}
-                    className="w-16"
+                    selected={selected}
+                    className="w-20"
                 />
                 <span className="truncate text-[11px] text-muted-foreground">
                     {profile.unit_count} unit
@@ -283,7 +423,12 @@ export function ProfilesList({
             <div className="hidden min-w-0 flex-1 flex-col overflow-hidden rounded-xl border bg-card lg:flex">
                 <div className="flex h-[30px] shrink-0 items-center gap-4 border-b px-4 font-mono text-[10px] tracking-[0.5px] text-muted-foreground uppercase">
                     <span className="flex-1">Profile</span>
-                    <span className="w-[88px] shrink-0">Shape</span>
+                    <span
+                        className="w-[88px] shrink-0"
+                        title="Stim channels A and B. Adjuster ramps stay in the inspector."
+                    >
+                        Shape A/B
+                    </span>
                     <span className="w-[60px] shrink-0">Units</span>
                     <span className="w-[60px] shrink-0">Ramps</span>
                     <span className="w-[98px] shrink-0">Updated</span>

@@ -1,14 +1,49 @@
 from __future__ import annotations
 from typing import List, Optional
 from cuid2 import cuid_wrapper
-from sqlalchemy import select, delete
+from sqlalchemy import and_, delete, or_, select
 from sqlalchemy.orm import selectinload
 
 from database.connection import Database
-from database.models import TriggerRule, TriggerAction, TriggerRuleLabel
+from database.models import (
+    TriggerRule,
+    TriggerAction,
+    TriggerRuleEvent,
+    TriggerRuleLabel,
+)
 from events.enums import ActionType
 
 generate_id = cuid_wrapper()
+
+
+def unique_event_types(event_types: List[str]) -> List[str]:
+    """Trim, drop blanks and de-duplicate while preserving selection order."""
+    seen: set[str] = set()
+    ordered: List[str] = []
+    for raw in event_types:
+        event_type = raw.strip()
+        if event_type and event_type not in seen:
+            seen.add(event_type)
+            ordered.append(event_type)
+    return ordered
+
+
+def rule_event_types(rule: TriggerRule) -> List[str]:
+    """Event types of a rule, with a fallback for pre-multi-event rows."""
+    linked = sorted(rule.event_links, key=lambda link: link.sort_order)
+    types = [link.event_type for link in linked]
+    return types or ([rule.event_type] if rule.event_type else [])
+
+
+def _matches_event(event_type: str):
+    """A rule matches through its links, or its legacy column when unlinked."""
+    return or_(
+        TriggerRule.event_links.any(TriggerRuleEvent.event_type == event_type),
+        and_(
+            ~TriggerRule.event_links.any(),
+            TriggerRule.event_type == event_type,
+        ),
+    )
 
 
 class TriggerRuleRepo:
@@ -27,10 +62,12 @@ class TriggerRuleRepo:
         """Get all rules, optionally filtered by event_type."""
         async with self._db.session_maker() as session:
             stmt = select(TriggerRule).options(
-                selectinload(TriggerRule.actions), selectinload(TriggerRule.labels)
+                selectinload(TriggerRule.actions),
+                selectinload(TriggerRule.labels),
+                selectinload(TriggerRule.event_links),
             )
             if event_type:
-                stmt = stmt.where(TriggerRule.event_type == event_type).order_by(
+                stmt = stmt.where(_matches_event(event_type)).order_by(
                     TriggerRule.priority.desc()
                 )
             else:
@@ -47,9 +84,11 @@ class TriggerRuleRepo:
             stmt = (
                 select(TriggerRule)
                 .options(
-                    selectinload(TriggerRule.actions), selectinload(TriggerRule.labels)
+                    selectinload(TriggerRule.actions),
+                    selectinload(TriggerRule.labels),
+                    selectinload(TriggerRule.event_links),
                 )
-                .where(TriggerRule.event_type == event_type)
+                .where(_matches_event(event_type))
                 .where(TriggerRule.enabled == True)
                 .order_by(TriggerRule.priority.desc())
             )
@@ -62,7 +101,9 @@ class TriggerRuleRepo:
             stmt = (
                 select(TriggerRule)
                 .options(
-                    selectinload(TriggerRule.actions), selectinload(TriggerRule.labels)
+                    selectinload(TriggerRule.actions),
+                    selectinload(TriggerRule.labels),
+                    selectinload(TriggerRule.event_links),
                 )
                 .where(TriggerRule.id == rule_id)
             )
@@ -92,20 +133,28 @@ class TriggerRuleRepo:
 
     async def create_rule(
         self,
-        event_type: str,
+        event_types: List[str],
         name: str,
         description: Optional[str] = None,
         enabled: bool = True,
         priority: int = 0,
     ) -> TriggerRule:
-        """Create a new trigger rule."""
+        """Create a new trigger rule bound to one or more event types."""
+        types = unique_event_types(event_types)
+        if not types:
+            raise ValueError("A trigger rule needs at least one event type")
+
         rule = TriggerRule(
             id=generate_id(),
-            event_type=event_type,
+            event_type=types[0],
             name=name,
             description=description,
             enabled=enabled,
             priority=priority,
+            event_links=[
+                TriggerRuleEvent(event_type=event_type, sort_order=index)
+                for index, event_type in enumerate(types)
+            ],
         )
         async with self._db.session_maker() as session:
             session.add(rule)
@@ -120,11 +169,19 @@ class TriggerRuleRepo:
         description: Optional[str] = None,
         enabled: Optional[bool] = None,
         priority: Optional[int] = None,
-        event_type: Optional[str] = None,
+        event_types: Optional[List[str]] = None,
     ) -> Optional[TriggerRule]:
         """Update a trigger rule. Only provided fields are updated."""
+        types = unique_event_types(event_types) if event_types is not None else None
+        if types is not None and not types:
+            raise ValueError("A trigger rule needs at least one event type")
+
         async with self._db.session_maker() as session:
-            rule = await session.get(TriggerRule, rule_id)
+            rule = await session.get(
+                TriggerRule,
+                rule_id,
+                options=[selectinload(TriggerRule.event_links)],
+            )
             if not rule:
                 return None
 
@@ -136,8 +193,12 @@ class TriggerRuleRepo:
                 rule.enabled = enabled
             if priority is not None:
                 rule.priority = priority
-            if event_type is not None:
-                rule.event_type = event_type
+            if types is not None:
+                rule.event_type = types[0]
+                rule.event_links = [
+                    TriggerRuleEvent(event_type=event_type, sort_order=index)
+                    for index, event_type in enumerate(types)
+                ]
 
             await session.commit()
             await session.refresh(rule)
@@ -149,12 +210,14 @@ class TriggerRuleRepo:
         return await self.update_rule(rule_id, enabled=enabled)
 
     async def delete_rule(self, rule_id: str) -> bool:
-        """Delete a rule and its actions (CASCADE due to models config)."""
+        """Delete a rule and its actions/labels/event links."""
         async with self._db.session_maker() as session:
-            stmt = delete(TriggerRule).where(TriggerRule.id == rule_id)
-            result = await session.execute(stmt)
+            rule = await session.get(TriggerRule, rule_id)
+            if not rule:
+                return False
+            await session.delete(rule)
             await session.commit()
-            return result.rowcount > 0
+            return True
 
     # ───────── TriggerAction CRUD ─────────
 

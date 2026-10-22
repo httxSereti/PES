@@ -87,7 +87,7 @@ export default function EventsWiki() {
     const { groups, descriptions } = useEventCatalog();
 
     return (
-        <Collapsible defaultOpen className="group/wiki-card">
+        <Collapsible className="group/wiki-card">
             <Card>
                 <CollapsibleTrigger asChild>
                     <CardHeader className="pb-3 cursor-pointer select-none transition-colors hover:bg-accent/30">

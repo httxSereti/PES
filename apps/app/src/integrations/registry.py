@@ -294,6 +294,7 @@ class IntegrationRegistry:
                     "group": event.group,
                     "enabled": self.is_event_enabled(event.id),
                     "data_schema": event.data_schema,
+                    "image_url": event.image_url,
                 }
                 for event in integration.events()
             ],

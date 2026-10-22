@@ -62,6 +62,8 @@ class EventDef:
     group: str = ""
     # Documentation only: {field: "description"} shown in the UI/reference.
     data_schema: dict[str, str] = field(default_factory=dict)
+    # Optional event-picker preview (e.g. a PuryFi scan thumbnail URL).
+    image_url: str | None = None
 
 
 @dataclass(frozen=True)

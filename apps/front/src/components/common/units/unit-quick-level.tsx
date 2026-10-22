@@ -1,5 +1,6 @@
 import { type FC } from "react"
 import { Button } from "@pes/ui/components/button"
+import { cn } from "@pes/ui/lib/utils"
 import { useAppDispatch, useAppSelector } from "@/store/hooks"
 import { unitsSelectors } from "@/store/slices/unitsSlice"
 import { undoPushed } from "@/store/slices/unitsUiSlice"
@@ -9,6 +10,17 @@ type UnitQuickLevelProps = {
     unitId: string;
     selectedChannel: "channelA" | "channelB";
 };
+
+const LEVEL_STEPS = [
+    { label: "−5", operator: "-5" },
+    { label: "−1", operator: "-1" },
+    { label: "+1", operator: "+1" },
+    { label: "+5", operator: "+5" },
+    { label: "−10%", operator: "%-10" },
+    { label: "−5%", operator: "%-5" },
+    { label: "+5%", operator: "%+5" },
+    { label: "+10%", operator: "%+10" },
+] as const;
 
 export const UnitQuickLevel: FC<UnitQuickLevelProps> = ({ unitId, selectedChannel }) => {
     const dispatch = useAppDispatch();
@@ -45,80 +57,21 @@ export const UnitQuickLevel: FC<UnitQuickLevelProps> = ({ unitId, selectedChanne
         : "text-blue-600 dark:text-blue-400"
 
     return (
-        <div className="flex flex-col gap-2">
-            <div className="flex flex-row justify-center w-full gap-2 flex-wrap">
-                <div className="flex gap-2">
-                    <Button
-                        variant="outline"
-                        className="cursor-pointer"
-                        onClick={() => updateLevel("-5")}
-                    >
-                        <span className={`uppercase ${channelColor}`}>- 5</span>
-                    </Button>
-                    <Button
-                        variant="outline"
-                        className="cursor-pointer"
-                        onClick={() => updateLevel("-1")}
-
-                    >
-                        <span className={`uppercase ${channelColor}`}>- 1</span>
-                    </Button>
-                </div>
-
-                <div className="flex gap-2">
-                    <Button
-                        variant="outline"
-                        className="cursor-pointer"
-                        onClick={() => updateLevel("+1")}
-                    >
-                        <span className={`uppercase ${channelColor}`}>+ 1</span>
-                    </Button>
-                    <Button
-                        variant="outline"
-                        className="cursor-pointer"
-                        onClick={() => updateLevel("+5")}
-                    >
-                        <span className={`uppercase ${channelColor}`}>+ 5</span>
-                    </Button>
-                </div>
-            </div>
-            <div className="flex flex-row justify-center w-full gap-2 flex-wrap">
-                <div className="flex gap-2">
-                    <Button
-                        variant="outline"
-                        className="cursor-pointer"
-                        onClick={() => updateLevel("%-10")}
-                    >
-                        <span className={`uppercase ${channelColor}`}>- 10%</span>
-                    </Button>
-                    <Button
-                        variant="outline"
-                        className="cursor-pointer"
-                        onClick={() => updateLevel("%-5")}
-
-                    >
-                        <span className={`uppercase ${channelColor}`}>- 5%</span>
-                    </Button>
-                </div>
-
-                <div className="flex gap-2">
-                    <Button
-                        variant="outline"
-                        className="cursor-pointer"
-                        onClick={() => updateLevel("%+5")}
-                    >
-                        <span className={`uppercase ${channelColor}`}>+ 5%</span>
-                    </Button>
-                    <Button
-                        variant="outline"
-                        className="cursor-pointer"
-                        onClick={() => updateLevel("%+10")}
-                    >
-                        <span className={`uppercase ${channelColor}`}>+ 10%</span>
-                    </Button>
-                </div>
-            </div>
+        <div className="grid grid-cols-4 gap-1.5">
+            {LEVEL_STEPS.map(({ label, operator }) => (
+                <Button
+                    key={operator}
+                    variant="outline"
+                    aria-label={`${label} on ${unitId}`}
+                    className={cn(
+                        "font-mono-dm h-8 cursor-pointer px-1 text-[10px] font-semibold tracking-tight",
+                        channelColor,
+                    )}
+                    onClick={() => updateLevel(operator)}
+                >
+                    {label}
+                </Button>
+            ))}
         </div>
-
     )
 }

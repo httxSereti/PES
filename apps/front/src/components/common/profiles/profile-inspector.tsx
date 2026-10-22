@@ -16,7 +16,6 @@ import {
     DropdownMenuSeparator,
     DropdownMenuTrigger,
 } from "@pes/ui/components/dropdown-menu";
-import { cn } from "@pes/ui/lib/utils";
 
 import { ConfirmDeleteDialog } from "@/components/common/dialogs/confirm-delete-dialog";
 import { formatDateTime } from "@/lib/format-date";
@@ -31,6 +30,8 @@ import {
     buildProfilePreview,
     descriptionTags,
     formatClock,
+    shapeAreaPath,
+    shapeLinePath,
 } from "./profile-shape";
 import { useProfileDelete } from "./use-profile-delete";
 
@@ -42,14 +43,25 @@ type ProfileInspectorProps = {
     onExport: (name: string) => void;
 };
 
-/** Lane A/B are purple, lane C slate — mirrors the design export. */
-const LANE_BAR_COLORS: Record<string, string> = {
-    A: "bg-purple-500",
-    B: "bg-purple-400",
-    C: "bg-slate-500",
+/** A/B are the stim channels (violet/blue), C is the adjuster lane (slate). */
+const LANE_COLORS: Record<string, string> = {
+    A: "text-purple-500 dark:text-purple-400",
+    B: "text-blue-500 dark:text-blue-400",
+    C: "text-slate-500",
 };
 
 const AXIS_TICKS = 5;
+const CHART_WIDTH = 100;
+const CHART_HEIGHT = 100;
+const CHART_PADDING = 8;
+const GRID_LEVELS = [0, 25, 50, 75, 100] as const;
+
+function gridY(level: number): number {
+    return (
+        CHART_PADDING +
+        ((CHART_HEIGHT - CHART_PADDING * 2) * (100 - level)) / 100
+    );
+}
 
 function MetaCell({ label, value }: { label: string; value: string }) {
     return (
@@ -190,18 +202,72 @@ export function ProfileInspector({
                             <span className="w-2.5 pb-0.5 text-center font-mono text-[10px] text-muted-foreground">
                                 {lane.label}
                             </span>
-                            <div className="flex h-20 flex-1 items-end gap-[3px] rounded-lg bg-muted/40 px-2 md:h-[120px]">
-                                {lane.bars.map((height, index) => (
-                                    <span
-                                        key={index}
-                                        style={{ height: `${height}%` }}
-                                        className={cn(
-                                            "min-w-0 flex-1 rounded-[3px]",
-                                            LANE_BAR_COLORS[lane.label] ??
-                                                "bg-slate-500",
-                                        )}
-                                    />
-                                ))}
+                            <div className="relative h-20 flex-1 overflow-hidden rounded-lg bg-muted/40 px-2 md:h-[120px]">
+                                <svg
+                                    viewBox={`0 0 ${CHART_WIDTH} ${CHART_HEIGHT}`}
+                                    preserveAspectRatio="none"
+                                    className={`h-full w-full ${
+                                        LANE_COLORS[lane.label] ??
+                                        "text-slate-500"
+                                    }`}
+                                    aria-hidden="true"
+                                >
+                                    {GRID_LEVELS.map((level) => (
+                                        <line
+                                            key={level}
+                                            x1={0}
+                                            y1={gridY(level)}
+                                            x2={CHART_WIDTH}
+                                            y2={gridY(level)}
+                                            stroke="currentColor"
+                                            strokeOpacity={0.08}
+                                            strokeWidth={1}
+                                            vectorEffect="non-scaling-stroke"
+                                        />
+                                    ))}
+
+                                    {lane.samples.length > 0 ? (
+                                        <>
+                                            <path
+                                                d={shapeAreaPath(
+                                                    lane.samples,
+                                                    CHART_WIDTH,
+                                                    CHART_HEIGHT,
+                                                    CHART_PADDING,
+                                                )}
+                                                fill="currentColor"
+                                                fillOpacity={0.12}
+                                            />
+                                            <path
+                                                d={shapeLinePath(
+                                                    lane.samples,
+                                                    CHART_WIDTH,
+                                                    CHART_HEIGHT,
+                                                    CHART_PADDING,
+                                                )}
+                                                fill="none"
+                                                stroke="currentColor"
+                                                strokeWidth={2}
+                                                strokeLinecap="round"
+                                                strokeLinejoin="round"
+                                                vectorEffect="non-scaling-stroke"
+                                            />
+                                        </>
+                                    ) : (
+                                        <line
+                                            x1={0}
+                                            y1={gridY(0)}
+                                            x2={CHART_WIDTH}
+                                            y2={gridY(0)}
+                                            stroke="currentColor"
+                                            strokeWidth={1.5}
+                                            strokeDasharray="2 3"
+                                            strokeLinecap="round"
+                                            strokeOpacity={0.5}
+                                            vectorEffect="non-scaling-stroke"
+                                        />
+                                    )}
+                                </svg>
                             </div>
                         </div>
                     ))}
