@@ -27,6 +27,7 @@ import { unitsSelectors, unitUpdated } from "@/store/slices/unitsSlice"
 import { useWebSocket } from "@/hooks/useWebSocket"
 import { MODE_2B } from "@/types/units.types"
 import { Link } from "react-router"
+import { toast } from "sonner"
 
 export function UnitAdj({ unitId, adjId, val }: { unitId: string, adjId: "adj_1" | "adj_2", val: number | undefined }) {
     const [open, setOpen] = React.useState(false)
@@ -47,16 +48,13 @@ export function UnitAdj({ unitId, adjId, val }: { unitId: string, adjId: "adj_1"
         return (
             <Dialog open={open} onOpenChange={setOpen}>
                 <DialogTrigger asChild>
-                    <Button variant="outline" className="cursor-pointer">
-                        {val}
-                        <p className="text-xs text-primary/40">({adjLabel})</p>
-                    </Button>
+                    <AdjTrigger val={val} label={adjLabel} />
                 </DialogTrigger>
                 <DialogContent className="sm:max-w-[425px]">
                     <DialogHeader>
                         <DialogTitle>Update {adjId} ({adjLabel})</DialogTitle>
                         <DialogDescription>
-                            Make changes to the {adjId}, adjusting the "{adjLabel}".
+                            Make changes to the {adjId}, adjusting the &ldquo;{adjLabel}&rdquo;.
 
                             <div className="flex flex-col gap-3.5 mt-3 px-3 py-3 rounded-lg border border-border/35 bg-muted/20">
                                 <p className="font-mono text-[10px] tracking-widest uppercase text-primary/40">Tips & Tricks</p>
@@ -76,15 +74,13 @@ export function UnitAdj({ unitId, adjId, val }: { unitId: string, adjId: "adj_1"
     return (
         <Drawer open={open} onOpenChange={setOpen}>
             <DrawerTrigger asChild>
-                <Button variant="outline" className="cursor-pointer">
-                    {val} ({adjLabel})
-                </Button>
+                <AdjTrigger val={val} label={adjLabel} />
             </DrawerTrigger>
             <DrawerContent>
                 <DrawerHeader className="text-left">
                     <DrawerTitle>Update {adjId} ({adjLabel})</DrawerTitle>
                     <DrawerDescription>
-                        Make changes to the {adjId}, adjusting the "{adjLabel}".
+                        Make changes to the {adjId}, adjusting the &ldquo;{adjLabel}&rdquo;.
 
 
                         <div className="flex flex-col gap-3.5 mt-3 px-3 py-3 rounded-lg border border-border/35 bg-muted/20">
@@ -107,6 +103,28 @@ export function UnitAdj({ unitId, adjId, val }: { unitId: string, adjId: "adj_1"
     )
 }
 
+function AdjTrigger({
+    val,
+    label,
+    className,
+    ...props
+}: { val: number | undefined; label: string } & React.ComponentProps<typeof Button>) {
+    return (
+        <Button
+            {...props}
+            variant="outline"
+            className={cn("flex h-auto w-full cursor-pointer flex-col gap-0.5 px-2 py-1.5", className)}
+        >
+            <span className="font-mono-dm text-base leading-none font-semibold text-foreground">
+                {val ?? "—"}
+            </span>
+            {label && (
+                <span className="text-[9px] text-muted-foreground">({label})</span>
+            )}
+        </Button>
+    );
+}
+
 function AdjForm({ unitId, adjId, val, className, onClose }: { unitId: string, adjId: "adj_1" | "adj_2", val: number | undefined, className?: string, onClose?: () => void }) {
     const dispatch = useAppDispatch();
     const { sendCommand } = useWebSocket();
@@ -125,11 +143,14 @@ function AdjForm({ unitId, adjId, val, className, onClose }: { unitId: string, a
 
     const updateLevel = async () => {
         try {
-            await sendCommand('units:update_adj', {
+            const result = await sendCommand('units:update_adj', {
                 [unitId]: {
                     [adjId]: localVal,
                 },
             });
+
+            if (result.status !== "ok")
+                throw new Error(result.message ?? "Command failed");
 
             dispatch(unitUpdated({
                 id: unitId,
@@ -139,6 +160,10 @@ function AdjForm({ unitId, adjId, val, className, onClose }: { unitId: string, a
             onClose?.();
         } catch (error) {
             console.error(`Failed to update ${adjId} to ${localVal}:`, error);
+            toast.error(`Failed to update ${adjId}`, {
+                description: error instanceof Error ? error.message : "Unknown error",
+                position: "top-center",
+            });
         }
     };
 

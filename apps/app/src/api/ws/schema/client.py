@@ -87,6 +87,17 @@ class UnitsUpdateAdjCommand(ClientMessage):
     payload: dict[str, UnitAdjChange]
 
 
+class UnitStopPayload(WireModel):
+    id: Literal["UNIT1", "UNIT2", "UNIT3"]
+
+
+class UnitsStopCommand(ClientMessage):
+    """Stop one unit: cancel every ramp and set both channels to zero."""
+
+    type: Literal["units:stop"] = "units:stop"
+    payload: UnitStopPayload
+
+
 # ─────────────────────────────── Ramps ───────────────────────────────
 
 
@@ -554,6 +565,8 @@ __all__ = [
     "UnitsUpdatePowerModeCommand",
     "UnitAdjChange",
     "UnitsUpdateAdjCommand",
+    "UnitStopPayload",
+    "UnitsStopCommand",
     "RampTarget",
     "RampStartPayload",
     "RampsStartCommand",

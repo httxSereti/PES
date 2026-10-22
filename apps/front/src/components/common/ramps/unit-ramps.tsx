@@ -7,8 +7,8 @@ type UnitRampsProps = {
 
 export function UnitRamps({ unitId }: UnitRampsProps) {
     return (
-        <div className="flex flex-col gap-3.5 px-3 py-3 rounded-lg border border-border/35 bg-muted/20">
-            <p className="font-mono text-[10px] tracking-widest uppercase text-primary/40 border-b pb-2">
+        <div className="flex flex-col gap-1 rounded-lg border border-border/35 bg-muted/20 px-3 py-2.5">
+            <p className="font-mono text-[10px] tracking-widest text-primary/40 uppercase border-b pb-1.5">
                 Ramp Settings
             </p>
             <div className="flex flex-col">

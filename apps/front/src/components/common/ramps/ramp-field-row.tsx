@@ -38,51 +38,51 @@ export function RampFieldRow({ unitId, field }: RampFieldRowProps) {
     };
 
     return (
-        <div className="flex items-center justify-between gap-2 py-2 border-b border-border/60 last:border-b-0">
-            <div className="flex flex-col min-w-0">
+        <div className="flex items-center justify-between gap-2 border-b border-border/60 py-1.5 last:border-b-0">
+            <div className="flex min-w-0 flex-col">
                 <div className="flex items-center gap-2">
-                    <span className="font-mono text-xs text-primary/60">{FIELD_LABELS[field]}</span>
-                    <span className="font-mono text-sm font-bold">{value ?? "—"}</span>
+                    <span className="font-mono text-[10px] text-primary/60">{FIELD_LABELS[field]}</span>
+                    <span className="font-mono text-xs font-bold">{value ?? "—"}</span>
                 </div>
                 {ramp ? (
-                    <div className="flex items-center gap-1.5 flex-wrap">
-                        <span className="text-[10px] font-mono uppercase text-primary/40">
+                    <div className="flex flex-wrap items-center gap-1.5">
+                        <span className="font-mono text-[9px] text-primary/40 uppercase">
                             {ramp.mode} · step {ramp.step}{ramp.step_unit === "absolute" ? "" : "%"} · {ramp.timer}s
                         </span>
                         {ramp.duration > 0 && (
-                            <span className="text-[10px] font-mono text-primary/40">max {ramp.duration}s</span>
+                            <span className="font-mono text-[9px] text-primary/40">max {ramp.duration}s</span>
                         )}
                         {ramp.paused && (
-                            <span className="text-[10px] font-mono uppercase text-amber-500">paused</span>
+                            <span className="font-mono text-[9px] text-amber-500 uppercase">paused</span>
                         )}
                     </div>
                 ) : null}
             </div>
 
-            <div className="flex items-center gap-1 shrink-0">
+            <div className="flex shrink-0 items-center gap-1">
                 {ramp ? (
                     <>
                         <Button
                             variant="outline"
                             size="icon"
-                            className="h-7 w-7 cursor-pointer"
+                            className="h-6 w-6 cursor-pointer"
                             title={ramp.paused ? "Resume" : "Pause"}
                             onClick={() => control(ramp.paused ? "ramps:resume" : "ramps:pause")}
                         >
-                            {ramp.paused ? <Play size={14} /> : <Pause size={14} />}
+                            {ramp.paused ? <Play size={12} /> : <Pause size={12} />}
                         </Button>
                         <Button
                             variant="outline"
                             size="icon"
-                            className="h-7 w-7 cursor-pointer"
+                            className="h-6 w-6 cursor-pointer"
                             title="Stop"
                             onClick={() => control("ramps:stop")}
                         >
-                            <Square size={14} />
+                            <Square size={12} />
                         </Button>
                     </>
                 ) : (
-                    <Button variant="outline" size="sm" className="h-7 cursor-pointer" onClick={() => setOpen(true)}>
+                    <Button variant="outline" size="sm" className="h-6 cursor-pointer px-2 text-[10px]" onClick={() => setOpen(true)}>
                         Start
                     </Button>
                 )}

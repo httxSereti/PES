@@ -1,8 +1,8 @@
 import { type FC } from "react"
+import { cn } from "@pes/ui/lib/utils"
 import { useAppDispatch, useAppSelector } from "@/store/hooks"
 import { unitsSelectors, unitUpdated } from "@/store/slices/unitsSlice"
 import { useWebSocket } from "@/hooks/useWebSocket"
-import { Button } from "@pes/ui/components/button";
 
 type UnitPowerModeProps = {
     unitId: string;
@@ -40,24 +40,28 @@ export const UnitPowerMode: FC<UnitPowerModeProps> = ({ unitId }) => {
     };
 
     return (
-        <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-                <span className="text-[14px]">
-                    Power Mode
-                </span>
-            </div>
-            <div className="flex gap-2">
+        <div className="flex items-center justify-between gap-2">
+            <span className="font-mono-dm text-[10px] text-muted-foreground uppercase tracking-wider">
+                Power
+            </span>
+            <div className="flex items-center gap-0.5 rounded-md border border-border/40 bg-muted/20 p-0.5">
                 {(['L', 'H', 'D'] as const).map((m) => {
                     const isSelected = currentMode === m;
                     return (
-                        <Button
+                        <button
                             key={m}
-                            variant={isSelected ? "default" : "ghost"}
+                            type="button"
+                            aria-pressed={isSelected}
                             onClick={() => updatePowerMode(m)}
-                            className={`w-8 h-8 rounded-md flex items-center justify-center font-medium transition-colors text-sm`}
+                            className={cn(
+                                "font-mono-dm h-6 w-7 cursor-pointer rounded-none border-b-2 text-[10px] transition-colors",
+                                isSelected
+                                    ? "border-violet-500 text-foreground"
+                                    : "border-transparent text-muted-foreground hover:text-foreground",
+                            )}
                         >
                             {m}
-                        </Button>
+                        </button>
                     )
                 })}
             </div>

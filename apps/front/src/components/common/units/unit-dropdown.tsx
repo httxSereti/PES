@@ -5,8 +5,9 @@ import { unitsSelectors } from "@/store/slices/unitsSlice"
 import { useWebSocket } from "@/hooks/useWebSocket"
 import type { HardwareUnitId } from "@/types"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@pes/ui/components/dropdown-menu"
-import { Link, MoreVertical, PowerOff, RefreshCw, Wifi, WifiOff } from "lucide-react"
+import { Link, MoreVertical, RefreshCw, Square, Wifi, WifiOff } from "lucide-react"
 import { toast } from "sonner"
+import { useUnitStop } from "@/hooks/useUnitStop"
 
 type UnitDropdownProps = {
     unitId: string;
@@ -19,6 +20,7 @@ export const UnitDropdown: FC<UnitDropdownProps> = ({ unitId }) => {
     const unit = useAppSelector(state => unitsSelectors.selectById(state, unitId));
     const enabled = useAppSelector(state => state.hardware[unitId] ?? true);
     const { sendCommand } = useWebSocket();
+    const { stopping, stop } = useUnitStop(unitId);
 
     if (!unit)
         return null;
@@ -74,8 +76,12 @@ export const UnitDropdown: FC<UnitDropdownProps> = ({ unitId }) => {
                     <Link className="mr-2 h-4 w-4" />
                     <span>Link Channel A & B</span>
                 </DropdownMenuItem>
-                <DropdownMenuItem className="text-red-600">
-                    <PowerOff className="mr-2 h-4 w-4" />
+                <DropdownMenuItem
+                    className="text-red-600"
+                    disabled={stopping}
+                    onClick={stop}
+                >
+                    <Square className="mr-2 h-4 w-4 fill-current" />
                     <span>Stop {unit.id}</span>
                 </DropdownMenuItem>
             </DropdownMenuContent>

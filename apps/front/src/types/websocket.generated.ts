@@ -41,6 +41,10 @@ export interface UnitAdjChange {
     adj_2?: number | null;
 }
 
+export interface UnitStopPayload {
+    id: 'UNIT1' | 'UNIT2' | 'UNIT3';
+}
+
 export interface RampTarget {
     unit: 'UNIT1' | 'UNIT2' | 'UNIT3';
     field: 'ch_A' | 'ch_B' | 'adj_1' | 'adj_2';
@@ -716,6 +720,12 @@ export interface UnitsUpdateAdjCommand {
     payload: Record<string, UnitAdjChange>;
 }
 
+export interface UnitsStopCommand {
+    id?: string | null;
+    type: 'units:stop';
+    payload: UnitStopPayload;
+}
+
 export interface RampsStartCommand {
     id?: string | null;
     type: 'ramps:start';
@@ -1221,6 +1231,7 @@ export type WebSocketClientMessage =
     | UnitsUpdateModeCommand
     | UnitsUpdatePowerModeCommand
     | UnitsUpdateAdjCommand
+    | UnitsStopCommand
     | RampsStartCommand
     | RampsPauseCommand
     | RampsResumeCommand
