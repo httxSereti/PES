@@ -83,7 +83,7 @@ export function RampFieldRow({ unitId, field }: RampFieldRowProps) {
                     </>
                 ) : (
                     <Button variant="outline" size="sm" className="h-6 cursor-pointer px-2 text-[10px]" onClick={() => setOpen(true)}>
-                        Start
+                        Custom start
                     </Button>
                 )}
             </div>

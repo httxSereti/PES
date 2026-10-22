@@ -1,590 +1,293 @@
-import { useState } from "react";
-import { ChevronDown, ClipboardCopy, Plus, Trash2 } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import { ClipboardCopy, Plus } from "lucide-react";
 
-import { Badge } from "@pes/ui/components/badge";
 import { Button } from "@pes/ui/components/button";
-import {
-    Collapsible,
-    CollapsibleContent,
-    CollapsibleTrigger,
-} from "@pes/ui/components/collapsible";
-import {
-    DropdownMenu,
-    DropdownMenuContent,
-    DropdownMenuItem,
-    DropdownMenuTrigger,
-} from "@pes/ui/components/dropdown-menu";
-import { Input } from "@pes/ui/components/input";
-import {
-    Select,
-    SelectContent,
-    SelectItem,
-    SelectTrigger,
-    SelectValue,
-} from "@pes/ui/components/select";
 import { cn } from "@pes/ui/lib/utils";
 
-import { useRampPresets } from "@/hooks/useRampPresets";
-import { RampMode } from "@/types";
-
-import { buildRampCurve, type RampCurveInput } from "../profile-shape";
-import { ToggleChip } from "./editor-controls";
 import {
-    DURATION_PRESETS,
-    RAMP_FIELD_LABELS,
-    RAMP_RANGE_RE,
+    buildRampCurve,
+    formatClock,
+    shapeAreaPath,
+    shapeLinePath,
+} from "../profile-shape";
+import {
     RAMPABLE_FIELDS,
-    type RampDraft,
     type RampField,
-    type RampTargetDraft,
     type UnitDraft,
 } from "./profile-document";
 import type { LiveRampLike, ProfileEditorActions } from "./use-profile-editor";
+import {
+    PLOT_HEIGHT,
+    PLOT_PADDING,
+    PLOT_WIDTH,
+    Playhead,
+    RAMP_LANE_STYLES,
+    RampCurveChart,
+    RampInspector,
+    TimelineRuler,
+    TimelineToolbar,
+    gridY,
+    laneLevelAt,
+    modeLabelOf,
+    rampCurveInput,
+    resolveRampTarget,
+    sampleCurve,
+    type RampStudioLane,
+} from "../../ramps/ramp-studio-parts";
 
-const MODE_OPTIONS: Array<{ value: RampMode; label: string; hint: string }> = [
-    {
-        value: RampMode.RESET,
-        label: "Reset",
-        hint: "Climbs to the max, then restarts",
-    },
-    {
-        value: RampMode.WAVE,
-        label: "Wave",
-        hint: "Climbs to the max then back down",
-    },
-    {
-        value: RampMode.ASCEND,
-        label: "Ascend",
-        hint: "Climbs to the max and holds",
-    },
-    {
-        value: RampMode.SQUARE,
-        label: "Square",
-        hint: "Toggles between start and max",
-    },
-    {
-        value: RampMode.DRIFT,
-        label: "Drift",
-        hint: "Wanders randomly inside the range",
-    },
-    {
-        value: RampMode.SURGE,
-        label: "Surge",
-        hint: "Climbs slowly, releases fast",
-    },
-    {
-        value: RampMode.DWELL,
-        label: "Dwell",
-        hint: "Wave with a pause at both ends",
-    },
-];
+type LaneModel = RampStudioLane & {
+    samples: number[];
+};
 
-function midpoint(range: string): number | null {
-    const match = RAMP_RANGE_RE.exec(range.trim());
-    if (!match) return null;
-    return Math.round((Number(match[1]) + Number(match[2])) / 2);
-}
-
-function resolveTarget(target: RampTargetDraft, fallback: number): number {
-    if (target.mode === "fixed") return target.value;
-    if (target.mode === "range") return midpoint(target.range) ?? fallback;
-    return fallback;
-}
-
-function fieldLevelOf(unit: UnitDraft, field: RampField): number {
-    return unit[field];
-}
-
-/** Compact curve preview of one ramp inside the editor. */
-function RampSparkline({
-    curveInput,
-    className,
-}: {
-    curveInput: RampCurveInput;
-    className?: string;
-}) {
-    const curve = buildRampCurve(curveInput);
-    const spanSeconds = curve.periodSeconds;
-    const samples = 14;
-    const bars =
-        spanSeconds <= 0
-            ? [33]
-            : Array.from({ length: samples }, (_, index) =>
-                  curve.levelAt((spanSeconds * index) / (samples - 1)),
-              );
-
-    return (
-        <div className={cn("flex h-8 items-end gap-[2px]", className)}>
-            {bars.map((height, index) => (
-                <span
-                    key={index}
-                    style={{ height: `${Math.max(4, height)}%` }}
-                    className="min-w-0 flex-1 rounded-[2px] bg-purple-500/70"
-                />
-            ))}
-        </div>
-    );
-}
-
-function TargetField({
-    label,
-    target,
-    hint,
-    onChange,
-}: {
-    label: string;
-    target: RampTargetDraft;
-    hint: string;
-    onChange: (target: RampTargetDraft) => void;
-}) {
-    return (
-        <div className="flex flex-col gap-1.5">
-            <span className="font-mono text-[10px] tracking-wide text-muted-foreground uppercase">
-                {label}
-            </span>
-            <div className="flex items-center gap-2">
-                <Select
-                    value={target.mode}
-                    onValueChange={(mode) =>
-                        onChange({
-                            ...target,
-                            mode: mode as RampTargetDraft["mode"],
-                        })
-                    }
-                >
-                    <SelectTrigger size="sm" className="h-8 w-36 text-xs">
-                        <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent position="popper">
-                        <SelectItem value="live">Live at apply</SelectItem>
-                        <SelectItem value="fixed">Fixed value</SelectItem>
-                        <SelectItem value="range">Range</SelectItem>
-                    </SelectContent>
-                </Select>
-
-                {target.mode === "fixed" && (
-                    <Input
-                        type="number"
-                        min={0}
-                        max={100}
-                        value={target.value}
-                        aria-label={`${label} value`}
-                        onChange={(event) =>
-                            onChange({
-                                ...target,
-                                value: Math.min(
-                                    100,
-                                    Math.max(
-                                        0,
-                                        Number(event.target.value) || 0,
-                                    ),
-                                ),
-                            })
-                        }
-                        className="h-8 w-20 text-center font-mono text-xs"
-                    />
-                )}
-                {target.mode === "range" && (
-                    <Input
-                        type="text"
-                        value={target.range}
-                        placeholder="[25-35]"
-                        aria-label={`${label} range`}
-                        onChange={(event) =>
-                            onChange({ ...target, range: event.target.value })
-                        }
-                        className="h-8 w-24 text-center font-mono text-xs"
-                    />
-                )}
-            </div>
-            <span className="text-[10px] leading-snug text-muted-foreground/70">
-                {hint}
-            </span>
-        </div>
-    );
-}
-
-function RampCard({
+function StudioHeader({
     unit,
-    field,
-    ramp,
-    startExpanded,
-    actions,
+    rampCount,
+    liveRampCount,
+    onCopyLive,
 }: {
     unit: UnitDraft;
-    field: RampField;
-    ramp: RampDraft;
-    startExpanded: boolean;
-    actions: ProfileEditorActions;
+    rampCount: number;
+    liveRampCount: number;
+    onCopyLive: () => void;
 }) {
-    const [expanded, setExpanded] = useState(startExpanded);
-    const { presets } = useRampPresets();
-
-    const level = fieldLevelOf(unit, field);
-    const resolvedMax = resolveTarget(ramp.max, level);
-    const resolvedStart = resolveTarget(ramp.start, level);
-
-    const summary = [
-        ramp.mode.toUpperCase(),
-        ramp.mode === RampMode.SQUARE
-            ? `${ramp.timer}s/step`
-            : `${ramp.step}${ramp.stepUnit === "absolute" ? "" : "%"}/${ramp.timer}s`,
-        ramp.mode === RampMode.SURGE ? `release ×${ramp.release}` : null,
-        ramp.mode === RampMode.DWELL ? `hold ${ramp.dwell}s` : null,
-        ramp.duration === -1 ? "∞" : `${ramp.duration}s`,
-    ]
-        .filter(Boolean)
-        .join(" · ");
-
-    const applyPreset = (presetId: string) => {
-        const preset = presets.find((entry) => entry.id === presetId);
-        if (!preset) return;
-        const { defaults } = preset;
-        const targetFrom = (
-            value: number | string | null | undefined,
-        ): RampTargetDraft => {
-            if (typeof value === "number") {
-                return { mode: "fixed", value, range: "" };
-            }
-            if (typeof value === "string") {
-                return { mode: "range", value: 50, range: value };
-            }
-            return { mode: "live", value: 50, range: "" };
-        };
-        actions.patchRamp(unit.id, field, {
-            timer: defaults.timer,
-            step: defaults.step,
-            stepUnit:
-                defaults.step_unit === "absolute" ? "absolute" : "percent",
-            mode: defaults.mode,
-            dwell: defaults.dwell ?? 0,
-            release: defaults.release ?? 4,
-            duration: defaults.duration,
-            start: targetFrom(defaults.start_value),
-            max: targetFrom(defaults.max_value),
-        });
-    };
-
     return (
-        <Collapsible
-            open={expanded}
-            onOpenChange={setExpanded}
-            className="rounded-xl border bg-card"
-        >
-            <div className="flex items-center gap-2 px-3 py-2.5">
-                <CollapsibleTrigger asChild>
-                    <button
-                        type="button"
-                        className="flex min-w-0 flex-1 cursor-pointer items-center gap-2.5 text-left"
-                    >
-                        <ChevronDown
-                            className={cn(
-                                "h-4 w-4 shrink-0 text-muted-foreground transition-transform",
-                                !expanded && "-rotate-90",
-                            )}
-                        />
-                        <span className="shrink-0 font-mono text-[11px] font-semibold">
-                            {RAMP_FIELD_LABELS[field]}
-                        </span>
-                        <Badge
-                            variant="secondary"
-                            className="shrink-0 rounded-full font-mono text-[9px]"
-                        >
-                            {ramp.mode}
-                        </Badge>
-                        <span className="hidden min-w-0 flex-1 truncate font-mono text-[10px] text-muted-foreground sm:block">
-                            {summary}
-                        </span>
-                        <span className="ml-auto shrink-0 font-mono text-[10px] text-muted-foreground">
-                            level {level}
-                        </span>
-                    </button>
-                </CollapsibleTrigger>
-
-                <RampSparkline
-                    className="hidden w-20 shrink-0 lg:flex"
-                    curveInput={{
-                        mode: ramp.mode,
-                        timer: ramp.timer,
-                        step: ramp.step,
-                        stepUnit: ramp.stepUnit,
-                        dwell: ramp.dwell,
-                        release: ramp.release,
-                        max: resolvedMax,
-                        start: resolvedStart,
-                    }}
-                />
-
-                {presets.length > 0 && (
-                    <DropdownMenu>
-                        <DropdownMenuTrigger asChild>
-                            <Button
-                                variant="ghost"
-                                size="sm"
-                                className="h-7 text-[11px]"
-                            >
-                                Preset
-                            </Button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end">
-                            {presets.map((preset) => (
-                                <DropdownMenuItem
-                                    key={preset.id}
-                                    onClick={() => applyPreset(preset.id)}
-                                >
-                                    {preset.name}
-                                </DropdownMenuItem>
-                            ))}
-                        </DropdownMenuContent>
-                    </DropdownMenu>
-                )}
-
-                <Button
-                    variant="ghost"
-                    size="icon"
-                    aria-label={`Remove ${RAMP_FIELD_LABELS[field]} ramp`}
-                    title="Remove ramp"
-                    className="h-7 w-7 shrink-0 text-muted-foreground/60 hover:text-foreground"
-                    onClick={() => actions.removeRamp(unit.id, field)}
-                >
-                    <Trash2 className="h-3.5 w-3.5" />
-                </Button>
+        <div className="flex flex-wrap items-start justify-between gap-3">
+            <div className="flex min-w-0 flex-col gap-1">
+                <p className="font-mono text-[9px] tracking-[0.16em] text-primary/50 uppercase">
+                    Ramp studio · {unit.id}
+                </p>
+                <h3 className="text-[16px] leading-tight font-semibold tracking-tight">
+                    Shape how this unit moves.
+                </h3>
+                <p className="max-w-[460px] text-[11px] leading-snug text-muted-foreground">
+                    Pick a lane, choose a shape, then dial in the feel. Ramps
+                    start when the profile is applied.
+                </p>
             </div>
 
-            <CollapsibleContent className="border-t px-3.5 py-3.5">
-                <div className="flex flex-col gap-4">
-                    <div className="grid gap-3.5 sm:grid-cols-2">
-                        <div className="flex flex-col gap-1.5">
-                            <span className="font-mono text-[10px] tracking-wide text-muted-foreground uppercase">
-                                Mode
-                            </span>
-                            <Select
-                                value={ramp.mode}
-                                onValueChange={(value) =>
-                                    actions.patchRamp(unit.id, field, {
-                                        mode: value as RampMode,
-                                    })
-                                }
-                            >
-                                <SelectTrigger
-                                    size="sm"
-                                    className="h-8 text-xs"
-                                >
-                                    <SelectValue />
-                                </SelectTrigger>
-                                <SelectContent position="popper">
-                                    {MODE_OPTIONS.map((option) => (
-                                        <SelectItem
-                                            key={option.value}
-                                            value={option.value}
-                                        >
-                                            {option.label} — {option.hint}
-                                        </SelectItem>
-                                    ))}
-                                </SelectContent>
-                            </Select>
-                        </div>
+            <div className="flex shrink-0 items-center gap-2">
+                <span className="font-mono text-[9px] text-muted-foreground/60">
+                    {rampCount === 0
+                        ? "no lanes moving yet"
+                        : `${rampCount} of 4 lanes moving`}
+                </span>
+                {liveRampCount > 0 && (
+                    <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        className="h-7 text-[10px]"
+                        onClick={onCopyLive}
+                    >
+                        <ClipboardCopy className="h-3 w-3" />
+                        Copy {liveRampCount} live
+                    </Button>
+                )}
+            </div>
+        </div>
+    );
+}
 
-                        <div className="flex flex-col gap-1.5">
-                            <span className="font-mono text-[10px] tracking-wide text-muted-foreground uppercase">
-                                Duration
-                            </span>
-                            <div className="flex items-center gap-1.5">
-                                {DURATION_PRESETS.map((preset) => (
-                                    <ToggleChip
-                                        key={preset.value}
-                                        active={ramp.duration === preset.value}
-                                        onClick={() =>
-                                            actions.patchRamp(unit.id, field, {
-                                                duration: preset.value,
-                                            })
-                                        }
-                                    >
-                                        {preset.label}
-                                    </ToggleChip>
-                                ))}
-                                <Input
-                                    type="number"
-                                    value={ramp.duration}
-                                    aria-label="Duration in seconds"
-                                    onChange={(event) =>
-                                        actions.patchRamp(unit.id, field, {
-                                            duration: Number(
-                                                event.target.value,
-                                            ),
-                                        })
-                                    }
-                                    className="h-7 w-20 text-center font-mono text-xs"
-                                />
-                            </div>
-                        </div>
+function LaneRow({
+    lane,
+    selected,
+    windowSeconds,
+    hoverRatio,
+    onSelect,
+    onHover,
+    onAdd,
+}: {
+    lane: LaneModel;
+    selected: boolean;
+    windowSeconds: number;
+    hoverRatio: number | null;
+    onSelect: () => void;
+    onHover: (ratio: number | null) => void;
+    onAdd: () => void;
+}) {
+    const style = RAMP_LANE_STYLES[lane.field];
+    const ramp = lane.ramp;
+    const stopRatio =
+        ramp && ramp.duration > 0 && ramp.duration < windowSeconds
+            ? ramp.duration / windowSeconds
+            : null;
 
-                        <div className="grid grid-cols-2 gap-2">
-                            <label className="flex flex-col gap-1.5">
-                                <span className="font-mono text-[10px] tracking-wide text-muted-foreground uppercase">
-                                    Timer (s)
-                                </span>
-                                <Input
-                                    type="number"
-                                    step="0.1"
-                                    min="0.1"
-                                    value={ramp.timer}
-                                    onChange={(event) =>
-                                        actions.patchRamp(unit.id, field, {
-                                            timer: Number(event.target.value),
-                                        })
-                                    }
-                                    className="h-8 font-mono text-xs"
-                                />
-                            </label>
-                            <label className="flex flex-col gap-1.5">
-                                <span className="font-mono text-[10px] tracking-wide text-muted-foreground uppercase">
-                                    Step
-                                </span>
-                                <div className="flex items-center gap-1.5">
-                                    <Input
-                                        type="number"
-                                        step="0.1"
-                                        min="0.1"
-                                        value={ramp.step}
-                                        onChange={(event) =>
-                                            actions.patchRamp(unit.id, field, {
-                                                step: Number(
-                                                    event.target.value,
-                                                ),
-                                            })
-                                        }
-                                        className="h-8 font-mono text-xs"
-                                    />
-                                    <Select
-                                        value={ramp.stepUnit}
-                                        onValueChange={(value) =>
-                                            actions.patchRamp(unit.id, field, {
-                                                stepUnit:
-                                                    value === "absolute"
-                                                        ? "absolute"
-                                                        : "percent",
-                                            })
-                                        }
-                                    >
-                                        <SelectTrigger
-                                            size="sm"
-                                            className="h-8 w-24 text-xs"
-                                        >
-                                            <SelectValue />
-                                        </SelectTrigger>
-                                        <SelectContent position="popper">
-                                            <SelectItem value="percent">
-                                                % of max
-                                            </SelectItem>
-                                            <SelectItem value="absolute">
-                                                value
-                                            </SelectItem>
-                                        </SelectContent>
-                                    </Select>
-                                </div>
-                            </label>
-                        </div>
-
-                        {ramp.mode === RampMode.DWELL && (
-                            <label className="flex flex-col gap-1.5">
-                                <span className="font-mono text-[10px] tracking-wide text-muted-foreground uppercase">
-                                    Dwell (s)
-                                </span>
-                                <Input
-                                    type="number"
-                                    step="0.1"
-                                    min="0"
-                                    value={ramp.dwell}
-                                    onChange={(event) =>
-                                        actions.patchRamp(unit.id, field, {
-                                            dwell: Number(event.target.value),
-                                        })
-                                    }
-                                    className="h-8 font-mono text-xs"
-                                />
-                                <span className="text-[10px] leading-snug text-muted-foreground/70">
-                                    Held at 100% and back at the start level.
-                                </span>
-                            </label>
+    return (
+        <div
+            className={cn(
+                "grid grid-cols-[96px_minmax(0,1fr)] items-center gap-2 rounded-lg border px-2 py-1.5 transition-colors",
+                selected
+                    ? "border-purple-500/40 bg-purple-500/[0.04]"
+                    : "border-border/60 bg-card hover:border-border",
+            )}
+        >
+            <button
+                type="button"
+                aria-pressed={selected}
+                onClick={onSelect}
+                className="flex min-w-0 cursor-pointer flex-col items-start gap-0.5 text-left"
+            >
+                <span className="flex items-baseline gap-1.5">
+                    <span
+                        className={cn(
+                            "font-mono text-[11px] font-semibold uppercase",
+                            style.text,
                         )}
+                    >
+                        {style.short}
+                    </span>
+                    <span className="font-mono text-[20px] leading-none tabular-nums">
+                        {ramp ? lane.fieldLevel : "—"}
+                    </span>
+                </span>
+                <span className="font-mono text-[8px] tracking-[0.06em] text-muted-foreground/65 uppercase">
+                    {ramp ? modeLabelOf(ramp.mode) : "empty lane"}
+                </span>
+                {ramp ? (
+                    <span className="max-w-full truncate font-mono text-[8px] text-muted-foreground/55 tabular-nums">
+                        start {lane.startLevel} · peak {lane.maxLevel}
+                    </span>
+                ) : (
+                    <span className="font-mono text-[8px] text-muted-foreground/45">
+                        level {lane.fieldLevel}
+                    </span>
+                )}
+            </button>
 
-                        {ramp.mode === RampMode.SURGE && (
-                            <label className="flex flex-col gap-1.5">
-                                <span className="font-mono text-[10px] tracking-wide text-muted-foreground uppercase">
-                                    Release ×
-                                </span>
-                                <Input
-                                    type="number"
-                                    step="0.1"
-                                    min="0.1"
-                                    value={ramp.release}
-                                    onChange={(event) =>
-                                        actions.patchRamp(unit.id, field, {
-                                            release: Number(
-                                                event.target.value,
-                                            ),
-                                        })
-                                    }
-                                    className="h-8 font-mono text-xs"
-                                />
-                                <span className="text-[10px] leading-snug text-muted-foreground/70">
-                                    Descent speed multiplier (1 = wave).
-                                </span>
-                            </label>
-                        )}
-
-                        {ramp.mode === RampMode.SQUARE && (
-                            <p className="self-end text-[10px] leading-snug text-amber-500/80 sm:col-span-2">
-                                Square ignores Step and jumps straight to Max
-                                every timer — keep Max conservative.
-                            </p>
-                        )}
-
-                        <div className="flex items-end">
-                            <RampSparkline
-                                className="h-12 w-full"
-                                curveInput={{
-                                    mode: ramp.mode,
-                                    timer: ramp.timer,
-                                    step: ramp.step,
-                                    stepUnit: ramp.stepUnit,
-                                    dwell: ramp.dwell,
-                                    release: ramp.release,
-                                    max: resolvedMax,
-                                    start: resolvedStart,
-                                }}
-                            />
-                        </div>
-
-                        <TargetField
-                            label="Start"
-                            target={ramp.start}
-                            hint={
-                                ramp.start.mode === "live"
-                                    ? "Starts where the channel is when applied."
-                                    : "Ramp cycle rests at this level."
-                            }
-                            onChange={(start) =>
-                                actions.patchRamp(unit.id, field, { start })
-                            }
+            {ramp && lane.curve ? (
+                <RampCurveChart
+                    samples={lane.samples}
+                    maxLevel={lane.maxLevel}
+                    tone={style.text}
+                    className={
+                        selected ? "border-purple-500/25" : "border-border/50"
+                    }
+                    stopRatio={stopRatio}
+                    hoverRatio={hoverRatio}
+                    onHover={onHover}
+                    onSelect={onSelect}
+                    ariaLabel={`${style.label} ramp shape`}
+                />
+            ) : (
+                <div
+                    className={cn(
+                        "relative h-[68px] cursor-pointer overflow-hidden rounded-md border bg-muted/15",
+                        selected ? "border-purple-500/25" : "border-border/50",
+                    )}
+                    onClick={onSelect}
+                >
+                    <svg
+                        viewBox={`0 0 ${PLOT_WIDTH} ${PLOT_HEIGHT}`}
+                        preserveAspectRatio="none"
+                        className="h-full w-full text-muted-foreground/30"
+                        aria-hidden="true"
+                    >
+                        <line
+                            x1={0}
+                            y1={gridY(lane.fieldLevel)}
+                            x2={PLOT_WIDTH}
+                            y2={gridY(lane.fieldLevel)}
+                            stroke="currentColor"
+                            strokeWidth={1.25}
+                            strokeDasharray="2 3"
+                            vectorEffect="non-scaling-stroke"
                         />
-                        <TargetField
-                            label="Max"
-                            target={ramp.max}
-                            hint={
-                                ramp.max.mode === "live"
-                                    ? "Follows the channel level, so it scales with the apply intensity."
-                                    : "Ramp climbs to this level (100% of the cycle)."
-                            }
-                            onChange={(max) =>
-                                actions.patchRamp(unit.id, field, { max })
-                            }
-                        />
+                    </svg>
+                    <div className="absolute inset-0 flex items-center justify-center">
+                        <button
+                            type="button"
+                            onClick={(event) => {
+                                event.stopPropagation();
+                                onAdd();
+                            }}
+                            className="inline-flex cursor-pointer items-center gap-1 rounded-full border border-border/70 bg-background/80 px-2.5 py-1 font-mono text-[9px] text-muted-foreground transition-colors hover:border-purple-500/40 hover:text-foreground"
+                        >
+                            <Plus className="h-3 w-3" />
+                            Add {style.label} ramp
+                        </button>
                     </div>
                 </div>
-            </CollapsibleContent>
-        </Collapsible>
+            )}
+        </div>
+    );
+}
+
+function EnvelopeRow({
+    samples,
+    hoverRatio,
+}: {
+    samples: number[];
+    hoverRatio: number | null;
+}) {
+    const peak = samples.length > 0 ? Math.max(...samples) : 0;
+
+    return (
+        <div className="grid grid-cols-[96px_minmax(0,1fr)] items-center gap-2 rounded-lg border border-purple-500/20 bg-purple-500/[0.04] px-2 py-1.5">
+            <div className="flex min-w-0 flex-col gap-0.5">
+                <span className="font-mono text-[10px] font-semibold tracking-[0.06em] text-purple-700 uppercase dark:text-purple-300">
+                    A+B
+                </span>
+                <span className="font-mono text-[18px] leading-none tabular-nums">
+                    {samples.length > 0 ? peak : "—"}
+                </span>
+                <span className="font-mono text-[8px] text-muted-foreground/55">
+                    highest
+                </span>
+            </div>
+
+            <div className="relative h-[44px] overflow-hidden rounded-md border border-purple-500/15 bg-background/40">
+                {samples.length > 0 ? (
+                    <>
+                        <svg
+                            viewBox={`0 0 ${PLOT_WIDTH} ${PLOT_HEIGHT}`}
+                            preserveAspectRatio="none"
+                            className="h-full w-full text-purple-600 dark:text-purple-400"
+                            aria-hidden="true"
+                        >
+                            <line
+                                x1={0}
+                                y1={gridY(0)}
+                                x2={PLOT_WIDTH}
+                                y2={gridY(0)}
+                                stroke="currentColor"
+                                strokeOpacity={0.16}
+                                strokeWidth={1}
+                                vectorEffect="non-scaling-stroke"
+                            />
+                            <path
+                                d={shapeAreaPath(
+                                    samples,
+                                    PLOT_WIDTH,
+                                    PLOT_HEIGHT,
+                                    PLOT_PADDING,
+                                )}
+                                fill="currentColor"
+                                fillOpacity={0.16}
+                            />
+                            <path
+                                d={shapeLinePath(
+                                    samples,
+                                    PLOT_WIDTH,
+                                    PLOT_HEIGHT,
+                                    PLOT_PADDING,
+                                )}
+                                fill="none"
+                                stroke="currentColor"
+                                strokeWidth={1.75}
+                                strokeLinecap="round"
+                                strokeLinejoin="round"
+                                vectorEffect="non-scaling-stroke"
+                            />
+                        </svg>
+                        <Playhead ratio={hoverRatio} />
+                    </>
+                ) : (
+                    <div className="flex h-full items-center justify-center px-2 text-center font-mono text-[8px] text-muted-foreground/50">
+                        Add a channel ramp to see the intensity envelope
+                    </div>
+                )}
+            </div>
+        </div>
     );
 }
 
@@ -599,75 +302,193 @@ export function EditorRampsTab({
     liveRamps,
     actions,
 }: EditorRampsTabProps) {
-    const [justAdded, setJustAdded] = useState<RampField | null>(null);
+    const [selectedField, setSelectedField] = useState<RampField | null>(null);
+    const [scale, setScale] = useState<number | "fit">(180);
+    const [hoverRatio, setHoverRatio] = useState<number | null>(null);
+
     const unitLiveRamps = liveRamps.filter((ramp) => ramp.unit === unit.id);
-    const rampCount = RAMPABLE_FIELDS.filter(
-        (field) => unit.ramps[field],
-    ).length;
+
+    // Selecting a lane in another unit should not carry over.
+    useEffect(() => {
+        setSelectedField(null);
+        setHoverRatio(null);
+    }, [unit.id]);
+
+    const laneModels = useMemo<LaneModel[]>(() => {
+        return RAMPABLE_FIELDS.map((field) => {
+            const ramp = unit.ramps[field];
+            const fieldLevel = unit[field];
+
+            if (!ramp) {
+                return {
+                    field,
+                    ramp: null,
+                    fieldLevel,
+                    startLevel: fieldLevel,
+                    maxLevel: fieldLevel,
+                    curve: null,
+                    samples: [],
+                };
+            }
+
+            const startLevel = resolveRampTarget(ramp.start, fieldLevel);
+            const maxLevel = resolveRampTarget(ramp.max, fieldLevel);
+            return {
+                field,
+                ramp,
+                fieldLevel,
+                startLevel,
+                maxLevel,
+                curve: buildRampCurve(
+                    rampCurveInput(ramp, startLevel, maxLevel),
+                ),
+                samples: [],
+            };
+        });
+    }, [unit]);
+
+    const programWindow = useMemo(() => {
+        let longest = 0;
+        for (const lane of laneModels) {
+            if (!lane.ramp || !lane.curve) continue;
+            const span =
+                lane.ramp.duration > 0
+                    ? lane.ramp.duration
+                    : lane.curve.periodSeconds;
+            longest = Math.max(longest, span);
+        }
+        return longest > 0 ? longest : 60;
+    }, [laneModels]);
+
+    const windowSeconds = scale === "fit" ? programWindow : scale;
+
+    const lanes = useMemo<LaneModel[]>(() => {
+        return laneModels.map((lane) => {
+            if (!lane.ramp || !lane.curve) return lane;
+            return {
+                ...lane,
+                samples: sampleCurve(
+                    lane.curve,
+                    windowSeconds,
+                    lane.ramp.duration,
+                    lane.maxLevel,
+                ),
+            };
+        });
+    }, [laneModels, windowSeconds]);
+
+    const activeFields = RAMPABLE_FIELDS.filter((field) =>
+        Boolean(unit.ramps[field]),
+    );
+    const activeField = selectedField ?? activeFields[0] ?? "ch_A";
+    const selectedLane =
+        lanes.find((lane) => lane.field === activeField) ?? lanes[0] ?? null;
+
+    const envelope = useMemo(() => {
+        const a = lanes.find((lane) => lane.field === "ch_A")?.samples ?? [];
+        const b = lanes.find((lane) => lane.field === "ch_B")?.samples ?? [];
+        if (a.length === 0) return b;
+        if (b.length === 0) return a;
+        return a.map((value, index) => Math.max(value, b[index] ?? 0));
+    }, [lanes]);
+
+    const hoverSeconds =
+        hoverRatio === null ? null : hoverRatio * windowSeconds;
+    const hoverLevel =
+        hoverSeconds !== null && selectedLane
+            ? laneLevelAt(selectedLane, hoverSeconds)
+            : null;
+
+    const highestPeak = lanes.reduce(
+        (peak, lane) => (lane.ramp ? Math.max(peak, lane.maxLevel) : peak),
+        0,
+    );
+
+    const readout =
+        hoverSeconds !== null && selectedLane?.ramp && hoverLevel !== null
+            ? `at ${formatClock(hoverSeconds)} · ${RAMP_LANE_STYLES[selectedLane.field].short} ${hoverLevel}%`
+            : `showing ${formatClock(windowSeconds)}`;
+
+    const addRamp = (field: RampField) => {
+        actions.addRamp(unit.id, field);
+        setSelectedField(field);
+    };
 
     return (
-        <div className="flex flex-col gap-4">
-            <div className="flex flex-wrap items-center justify-between gap-2">
-                <p className="font-mono text-[10px] tracking-widest uppercase text-primary/40">
-                    {unit.id} · {rampCount} ramp{rampCount === 1 ? "" : "s"}
-                </p>
-                {unitLiveRamps.length > 0 && (
-                    <Button
-                        type="button"
-                        variant="outline"
-                        size="sm"
-                        className="h-7 text-[11px]"
-                        onClick={() =>
-                            actions.copyLiveRamps(unit.id, unitLiveRamps)
-                        }
+        <div className="@container flex flex-col gap-3">
+            <StudioHeader
+                unit={unit}
+                rampCount={activeFields.length}
+                liveRampCount={unitLiveRamps.length}
+                onCopyLive={() => actions.copyLiveRamps(unit.id, unitLiveRamps)}
+            />
+
+            <div className="grid items-start gap-3 @min-[820px]:grid-cols-[minmax(0,1fr)_292px]">
+                <div className="flex min-w-0 flex-col gap-3">
+                    <TimelineToolbar
+                        scale={scale}
+                        onScaleChange={setScale}
+                        readout={readout}
+                    />
+
+                    <div
+                        className="flex flex-col gap-2 rounded-xl border bg-card/60 p-2.5"
+                        onPointerLeave={() => setHoverRatio(null)}
                     >
-                        <ClipboardCopy className="h-3.5 w-3.5" /> Copy{" "}
-                        {unitLiveRamps.length} live ramp
-                        {unitLiveRamps.length === 1 ? "" : "s"}
-                    </Button>
+                        <TimelineRuler windowSeconds={windowSeconds} />
+
+                        {lanes.map((lane) => (
+                            <LaneRow
+                                key={lane.field}
+                                lane={lane}
+                                selected={activeField === lane.field}
+                                windowSeconds={windowSeconds}
+                                hoverRatio={hoverRatio}
+                                onSelect={() => setSelectedField(lane.field)}
+                                onHover={setHoverRatio}
+                                onAdd={() => addRamp(lane.field)}
+                            />
+                        ))}
+
+                        <div className="border-t border-border/50 pt-2">
+                            <EnvelopeRow
+                                samples={envelope}
+                                hoverRatio={hoverRatio}
+                            />
+                        </div>
+                    </div>
+
+                    <div className="flex flex-wrap items-center justify-between gap-2 border-t border-border/60 pt-2 text-[10px] text-muted-foreground/65">
+                        <span>
+                            Live preview runs while you edit — nothing reaches
+                            the unit until the profile is applied.
+                        </span>
+                        <span className="font-mono text-[9px] tabular-nums">
+                            {activeFields.length === 0
+                                ? "no ramps yet"
+                                : `${activeFields.length} ramp${activeFields.length === 1 ? "" : "s"} · peak ${highestPeak}%`}
+                        </span>
+                    </div>
+                </div>
+
+                {selectedLane && (
+                    <RampInspector
+                        lane={selectedLane}
+                        context="profile"
+                        onPatch={(patch) =>
+                            actions.patchRamp(
+                                unit.id,
+                                selectedLane.field,
+                                patch,
+                            )
+                        }
+                        onRemove={() =>
+                            actions.removeRamp(unit.id, selectedLane.field)
+                        }
+                        onAdd={() => addRamp(selectedLane.field)}
+                    />
                 )}
             </div>
-
-            <div className="flex flex-col gap-2.5">
-                {RAMPABLE_FIELDS.map((field) => {
-                    const ramp = unit.ramps[field];
-                    if (!ramp) {
-                        return (
-                            <button
-                                key={field}
-                                type="button"
-                                onClick={() => {
-                                    actions.addRamp(unit.id, field);
-                                    setJustAdded(field);
-                                }}
-                                className="flex cursor-pointer items-center justify-center gap-1.5 rounded-xl border border-dashed py-3 font-mono text-[11px] text-muted-foreground transition hover:border-muted-foreground/40 hover:text-foreground"
-                            >
-                                <Plus className="h-3.5 w-3.5" />
-                                Add {RAMP_FIELD_LABELS[field]} ramp
-                                <span className="text-muted-foreground/50">
-                                    · level {fieldLevelOf(unit, field)}
-                                </span>
-                            </button>
-                        );
-                    }
-                    return (
-                        <RampCard
-                            key={field}
-                            unit={unit}
-                            field={field}
-                            ramp={ramp}
-                            startExpanded={justAdded === field}
-                            actions={actions}
-                        />
-                    );
-                })}
-            </div>
-
-            <p className="text-[11px] leading-relaxed text-muted-foreground/70">
-                Ramps stored in a profile start when the profile is applied and
-                stop when it is replaced or stopped. “Live at apply” and “follow
-                channel level” keep them relative to the intensity you choose.
-            </p>
         </div>
     );
 }

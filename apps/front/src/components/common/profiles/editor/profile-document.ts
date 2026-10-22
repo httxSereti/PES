@@ -30,7 +30,7 @@ export const RAMP_FIELD_LABELS: Record<RampField, string> = {
 };
 
 /** `[25-35]` — a MagicNumber range resolved randomly at apply time. */
-export const RAMP_RANGE_RE = /^\[\d{1,3}-\d{1,3}\]$/;
+export const RAMP_RANGE_RE = /^\[(\d{1,3})-(\d{1,3})\]$/;
 export const PROFILE_NAME_RE = /^[A-Za-z0-9_-]{1,32}$/;
 
 export type RampTargetMode = "live" | "fixed" | "range";

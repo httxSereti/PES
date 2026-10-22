@@ -1,88 +1,132 @@
-import * as React from "react"
-import { useForm, type Resolver } from "react-hook-form"
-import { zodResolver } from "@hookform/resolvers/zod"
-import * as z from "zod"
-import { toast } from "sonner"
-import { BookmarkPlus } from "lucide-react"
+import { useEffect, useMemo, useState } from "react";
+import { BookmarkPlus, Loader2, Play } from "lucide-react";
+import { toast } from "sonner";
 
-import { Button } from "@pes/ui/components/button"
-import { Input } from "@pes/ui/components/input"
-import {
-    Select,
-    SelectContent,
-    SelectItem,
-    SelectTrigger,
-    SelectValue,
-} from "@pes/ui/components/select"
-import { Field, FieldError, FieldGroup, FieldLabel } from "@pes/ui/components/field"
+import { Button } from "@pes/ui/components/button";
 import {
     Dialog,
     DialogContent,
     DialogDescription,
-    DialogHeader,
     DialogTitle,
-} from "@pes/ui/components/dialog"
+} from "@pes/ui/components/dialog";
+import { Input } from "@pes/ui/components/input";
 
-import { useWebSocket } from "@/hooks/useWebSocket"
-import { useRampDefaults, type RampDefaults } from "@/hooks/useRampDefaults"
-import { useRampPresets } from "@/hooks/useRampPresets"
-import { RampMode, type RampStartPayload } from "@/types"
-import { FIELD_LABELS } from "./ramp.constants"
-import { describeDefaults } from "./ramp-format"
+import { useWebSocket } from "@/hooks/useWebSocket";
+import { useRampDefaults, type RampDefaults } from "@/hooks/useRampDefaults";
+import { useRampPresets } from "@/hooks/useRampPresets";
+import { RampMode, type RampStartPayload } from "@/types";
 
-const rampSchema = z.object({
-    timer: z.coerce.number().positive("Timer must be greater than 0"),
-    step: z.coerce.number().positive("Step must be greater than 0"),
-    step_unit: z.enum(["percent", "absolute"]),
-    mode: z.nativeEnum(RampMode),
-    dwell: z.coerce.number().min(0, "Dwell must be 0 or greater"),
-    release: z.coerce.number().positive("Release must be greater than 0"),
-    duration: z.coerce.number().refine(
-        (v) => v === -1 || v > 0,
-        "Use -1 for permanent, or a positive duration"
-    ),
-    // empty input = use the field's current level as max; also accepts
-    // MagicNumber-style ranges like "[25-35]" (random target at start)
-    max_value: z.union([
-        z.literal(""),
-        z.coerce.number().int().min(0).max(100),
-        z.string().regex(/^\[\d{1,3}-\d{1,3}\]$/, "Use a number or a range like [25-35]"),
-    ]),
-    // empty input = start from the field's current level
-    start_value: z.union([
-        z.literal(""),
-        z.coerce.number().int().min(0).max(100),
-        z.string().regex(/^\[\d{1,3}-\d{1,3}\]$/, "Use a number or a range like [25-35]"),
-    ]),
-});
+import { buildRampCurve, formatClock } from "../profiles/profile-shape";
+import {
+    clampLevel,
+    rampTargetIsValid,
+    type RampDraft,
+    type RampTargetDraft,
+} from "../profiles/editor/profile-document";
+import { FIELD_LABELS } from "./ramp.constants";
+import { describeDefaults } from "./ramp-format";
+import {
+    RAMP_LANE_STYLES,
+    RampCurveChart,
+    RampInspector,
+    TimelineRuler,
+    TimelineToolbar,
+    climbSecondsOf,
+    laneLevelAt,
+    modeLabelOf,
+    rampCurveInput,
+    resolveRampTarget,
+    sampleCurve,
+    type RampStudioLane,
+} from "./ramp-studio-parts";
 
-type FormValues = z.infer<typeof rampSchema>;
-
-const DEFAULT_FORM_VALUES: FormValues = {
+const DEFAULT_DRAFT: RampDraft = {
     timer: 1,
     step: 1,
-    step_unit: "percent",
+    stepUnit: "percent",
     mode: RampMode.RESET,
     dwell: 0,
     release: 4,
     duration: -1,
-    max_value: "",
-    start_value: "",
+    start: { mode: "live", value: 50, range: "" },
+    max: { mode: "live", value: 50, range: "" },
+    raw: {},
 };
 
-/** Normalize validated form values into the persisted ramp settings shape. */
-function formValuesToDefaults(values: FormValues): RampDefaults {
+function targetFromValue(
+    value: number | string | null | undefined,
+): RampTargetDraft {
+    if (typeof value === "number") {
+        return { mode: "fixed", value: clampLevel(value), range: "" };
+    }
+    if (typeof value === "string") {
+        return { mode: "range", value: 50, range: value };
+    }
+    return { mode: "live", value: 50, range: "" };
+}
+
+function draftFromDefaults(defaults: RampDefaults): RampDraft {
     return {
-        timer: values.timer,
-        step: values.step,
-        step_unit: values.step_unit,
-        mode: values.mode,
-        dwell: values.dwell,
-        release: values.release,
-        duration: values.duration,
-        max_value: values.max_value === "" ? null : values.max_value,
-        start_value: values.start_value === "" ? null : values.start_value,
+        timer: defaults.timer,
+        step: defaults.step,
+        stepUnit: defaults.step_unit === "absolute" ? "absolute" : "percent",
+        mode: defaults.mode,
+        dwell: defaults.dwell ?? 0,
+        release: defaults.release ?? 4,
+        duration: defaults.duration,
+        start: targetFromValue(defaults.start_value),
+        max: targetFromValue(defaults.max_value),
+        raw: {},
     };
+}
+
+function defaultsFromDraft(draft: RampDraft): RampDefaults {
+    const serialize = (target: RampTargetDraft): number | string | null => {
+        if (target.mode === "fixed") return clampLevel(target.value);
+        if (target.mode === "range") return target.range.trim();
+        return null;
+    };
+
+    return {
+        timer: draft.timer,
+        step: draft.step,
+        step_unit: draft.stepUnit,
+        mode: draft.mode,
+        dwell: draft.dwell,
+        release: draft.release,
+        duration: draft.duration,
+        start_value: serialize(draft.start),
+        max_value: serialize(draft.max),
+    };
+}
+
+/** First blocking issue, or null when the ramp can start. */
+function validateDraft(draft: RampDraft): string | null {
+    if (!Number.isFinite(draft.timer) || draft.timer <= 0) {
+        return "Timer must be greater than 0.";
+    }
+    if (!Number.isFinite(draft.step) || draft.step <= 0) {
+        return "Step must be greater than 0.";
+    }
+    if (!Number.isFinite(draft.dwell) || draft.dwell < 0) {
+        return "Hold must be 0 or greater.";
+    }
+    if (!Number.isFinite(draft.release) || draft.release <= 0) {
+        return "Release must be greater than 0.";
+    }
+    if (
+        draft.duration !== -1 &&
+        (!Number.isFinite(draft.duration) || draft.duration <= 0)
+    ) {
+        return "Pick a duration, or ∞ to run until stopped.";
+    }
+    if (!rampTargetIsValid(draft.start)) {
+        return "Fix the start value: use 0–100 or a range like [25-35].";
+    }
+    if (!rampTargetIsValid(draft.max)) {
+        return "Fix the peak value: use 0–100 or a range like [25-35].";
+    }
+    return null;
 }
 
 type RampStartDialogProps = {
@@ -104,37 +148,79 @@ export function RampStartDialog({
     const { getDefaults, saveDefaults } = useRampDefaults();
     const { savePreset } = useRampPresets();
 
-    const [presetOpen, setPresetOpen] = React.useState(false);
-    const [presetName, setPresetName] = React.useState("");
+    const [draft, setDraft] = useState<RampDraft>(DEFAULT_DRAFT);
+    const [scale, setScale] = useState<number | "fit">(180);
+    const [hoverRatio, setHoverRatio] = useState<number | null>(null);
+    const [starting, setStarting] = useState(false);
+    const [presetOpen, setPresetOpen] = useState(false);
+    const [presetName, setPresetName] = useState("");
 
-    const form = useForm<FormValues>({
-        resolver: zodResolver(rampSchema) as unknown as Resolver<FormValues>,
-        defaultValues: DEFAULT_FORM_VALUES,
-    });
-    const mode = form.watch("mode");
+    const style = RAMP_LANE_STYLES[field];
 
     // Prefill with the user's remembered settings for this channel.
-    React.useEffect(() => {
+    useEffect(() => {
         if (!open) return;
         setPresetOpen(false);
         setPresetName("");
+        setScale(180);
+        setHoverRatio(null);
         const stored = getDefaults(unitId, field);
-        form.reset(
-            stored
-                ? {
-                      timer: stored.timer,
-                      step: stored.step,
-                      step_unit: stored.step_unit,
-                      mode: stored.mode,
-                      dwell: stored.dwell ?? 0,
-                      release: stored.release ?? 4,
-                      duration: stored.duration,
-                      max_value: stored.max_value ?? "",
-                      start_value: stored.start_value ?? "",
-                  }
-                : DEFAULT_FORM_VALUES,
-        );
-    }, [open, unitId, field, getDefaults, form]);
+        setDraft(stored ? draftFromDefaults(stored) : DEFAULT_DRAFT);
+    }, [open, unitId, field, getDefaults]);
+
+    const fieldLevel = currentValue ?? 0;
+    const startLevel = resolveRampTarget(draft.start, fieldLevel);
+    const maxLevel = resolveRampTarget(draft.max, fieldLevel);
+
+    const curve = useMemo(
+        () => buildRampCurve(rampCurveInput(draft, startLevel, maxLevel)),
+        [draft, startLevel, maxLevel],
+    );
+
+    const programWindow =
+        draft.duration > 0
+            ? draft.duration
+            : curve.periodSeconds > 0
+              ? curve.periodSeconds
+              : 60;
+    const windowSeconds = scale === "fit" ? programWindow : scale;
+    const stopRatio =
+        draft.duration > 0 && draft.duration < windowSeconds
+            ? draft.duration / windowSeconds
+            : null;
+
+    const samples = useMemo(
+        () => sampleCurve(curve, windowSeconds, draft.duration, maxLevel),
+        [curve, windowSeconds, draft.duration, maxLevel],
+    );
+
+    const lane = useMemo<RampStudioLane>(
+        () => ({
+            field,
+            ramp: draft,
+            fieldLevel,
+            startLevel,
+            maxLevel,
+            curve,
+        }),
+        [field, draft, fieldLevel, startLevel, maxLevel, curve],
+    );
+
+    const hoverSeconds =
+        hoverRatio === null ? null : hoverRatio * windowSeconds;
+    const hoverLevel =
+        hoverSeconds === null ? null : laneLevelAt(lane, hoverSeconds);
+    const readout =
+        hoverSeconds !== null && hoverLevel !== null
+            ? `at ${formatClock(hoverSeconds)} · ${style.short} ${hoverLevel}%`
+            : `showing ${formatClock(windowSeconds)}`;
+
+    const climbSeconds = climbSecondsOf(draft, startLevel, maxLevel);
+    const issue = validateDraft(draft);
+    const usesRange =
+        draft.start.mode === "range" || draft.max.mode === "range";
+    const flat = startLevel >= maxLevel && currentValue !== undefined;
+    const canStart = issue === null && !starting;
 
     const stopRamp = async () => {
         try {
@@ -152,23 +238,26 @@ export function RampStartDialog({
         }
     };
 
-    const handleSavePreset = async () => {
-        const valid = await form.trigger();
-        if (!valid) {
-            toast.error("Fix the highlighted fields before saving a preset");
+    const handleSavePreset = () => {
+        if (issue) {
+            toast.error(issue);
             return;
         }
-        const parsed = rampSchema.safeParse(form.getValues());
-        if (!parsed.success) return;
-        const saved = savePreset(presetName, formValuesToDefaults(parsed.data));
+        const saved = savePreset(presetName, defaultsFromDraft(draft));
         if (!saved) return;
         toast.success(`Preset "${saved.name}" saved`);
         setPresetName("");
         setPresetOpen(false);
     };
 
-    const onSubmit = async (values: FormValues) => {
-        const defaults = formValuesToDefaults(values);
+    const handleStart = async () => {
+        if (issue) {
+            toast.error(issue);
+            return;
+        }
+
+        const defaults = defaultsFromDraft(draft);
+        setStarting(true);
         try {
             const result = await sendCommand("ramps:start", {
                 unit: unitId,
@@ -189,196 +278,270 @@ export function RampStartDialog({
         } catch (error) {
             console.error("Failed to start ramp:", error);
             toast.error("Failed to start ramp");
+        } finally {
+            setStarting(false);
         }
     };
 
+    const climbLabel =
+        draft.mode === RampMode.DRIFT
+            ? "wander"
+            : climbSeconds > 0
+              ? formatClock(climbSeconds)
+              : "—";
+    const cycleLabel =
+        draft.mode === RampMode.ASCEND
+            ? "hold"
+            : curve.periodSeconds > 0
+              ? formatClock(curve.periodSeconds)
+              : "static";
+
+    const stats = [
+        { label: "Climb", value: climbLabel },
+        { label: "Cycle", value: cycleLabel },
+        { label: "Peak", value: `${maxLevel}%` },
+        {
+            label: "Run",
+            value: draft.duration === -1 ? "∞" : formatClock(draft.duration),
+        },
+    ];
+
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
-            <DialogContent className="sm:max-w-[425px]">
-                <DialogHeader>
-                    <DialogTitle>Start ramp on {unitId}.{field}</DialogTitle>
-                    <DialogDescription>
-                        The ramp drives the field from its current value toward the max value, according to the selected mode.
-                    </DialogDescription>
-                </DialogHeader>
+            <DialogContent
+                showCloseButton
+                className="flex h-dvh max-h-none w-screen max-w-none flex-col gap-0 overflow-hidden rounded-none p-0 sm:h-[min(92dvh,860px)] sm:w-[min(1040px,calc(100vw-2rem))] sm:max-w-[1040px] sm:rounded-xl"
+            >
+                <header className="flex flex-wrap items-start justify-between gap-3 border-b px-5 py-4 pr-14">
+                    <div className="flex min-w-0 flex-col gap-1">
+                        <p className="font-mono text-[9px] tracking-[0.16em] text-primary/50 uppercase">
+                            Ramp studio · {unitId}
+                        </p>
+                        <DialogTitle className="text-[20px] leading-tight font-semibold tracking-tight">
+                            Shape the {FIELD_LABELS[field]} ramp.
+                        </DialogTitle>
+                        <DialogDescription className="max-w-[560px] text-[11px] leading-snug">
+                            Preview the motion and tune the feel. Nothing
+                            reaches the unit until you press Start.
+                        </DialogDescription>
+                    </div>
 
-                <form onSubmit={form.handleSubmit(onSubmit)} className="flex flex-col gap-3.5">
-                    <FieldGroup>
-                        <Field>
-                            <FieldLabel>Timer (s)</FieldLabel>
-                            <Input type="number" step="0.1" placeholder="1" {...form.register("timer")} />
-                            {form.formState.errors.timer && (
-                                <FieldError errors={[form.formState.errors.timer]} />
-                            )}
-                        </Field>
+                    <div className="flex shrink-0 flex-col items-end gap-0.5">
+                        <span className="font-mono text-[8px] tracking-[0.12em] text-muted-foreground/55 uppercase">
+                            Current level
+                        </span>
+                        <span className="font-mono text-[26px] leading-none tabular-nums">
+                            {currentValue ?? "—"}
+                            <span className="ml-0.5 text-[13px] text-muted-foreground/60">
+                                %
+                            </span>
+                        </span>
+                        <span className="flex items-center gap-1 font-mono text-[8px] text-muted-foreground/55">
+                            <span
+                                className={
+                                    currentValue !== undefined
+                                        ? "size-1.5 rounded-full bg-emerald-500"
+                                        : "size-1.5 rounded-full bg-muted-foreground/40"
+                                }
+                            />
+                            {currentValue !== undefined
+                                ? "live from unit"
+                                : "level unknown"}
+                        </span>
+                    </div>
+                </header>
 
-                        {mode !== RampMode.SQUARE && (
-                            <Field>
-                                <FieldLabel>Step</FieldLabel>
-                                <div className="flex gap-2">
-                                    <Input type="number" step="0.1" placeholder="1" className="flex-1" {...form.register("step")} />
-                                    <Select
-                                        name="step_unit"
-                                        value={form.watch("step_unit")}
-                                        onValueChange={(v) => form.setValue("step_unit", v as FormValues["step_unit"])}
-                                    >
-                                        <SelectTrigger className="w-28 shrink-0">
-                                            <SelectValue />
-                                        </SelectTrigger>
-                                        <SelectContent position="item-aligned">
-                                            <SelectItem value="percent">% of max</SelectItem>
-                                            <SelectItem value="absolute">value</SelectItem>
-                                        </SelectContent>
-                                    </Select>
+                <div className="@container min-h-0 flex-1 overflow-y-auto">
+                    <div className="grid gap-3 p-4 @min-[760px]:grid-cols-[minmax(0,1fr)_300px]">
+                        <div className="flex min-w-0 flex-col gap-3">
+                            <TimelineToolbar
+                                scale={scale}
+                                onScaleChange={setScale}
+                                readout={readout}
+                            />
+
+                            <div
+                                className="flex flex-col gap-2 rounded-xl border bg-card/60 p-2.5"
+                                onPointerLeave={() => setHoverRatio(null)}
+                            >
+                                <TimelineRuler windowSeconds={windowSeconds} />
+
+                                <div className="grid grid-cols-[96px_minmax(0,1fr)] items-center gap-2 rounded-lg border border-purple-500/40 bg-purple-500/[0.04] px-2 py-1.5">
+                                    <div className="flex min-w-0 flex-col gap-0.5">
+                                        <span className="flex items-baseline gap-1.5">
+                                            <span
+                                                className={`font-mono text-[11px] font-semibold uppercase ${style.text}`}
+                                            >
+                                                {style.short}
+                                            </span>
+                                            <span className="font-mono text-[24px] leading-none tabular-nums">
+                                                {fieldLevel}
+                                            </span>
+                                        </span>
+                                        <span className="font-mono text-[8px] tracking-[0.06em] text-muted-foreground/65 uppercase">
+                                            {modeLabelOf(draft.mode)}
+                                        </span>
+                                        <span className="max-w-full truncate font-mono text-[8px] text-muted-foreground/55 tabular-nums">
+                                            start {startLevel} · peak {maxLevel}
+                                        </span>
+                                    </div>
+
+                                    <RampCurveChart
+                                        samples={samples}
+                                        maxLevel={maxLevel}
+                                        tone={style.text}
+                                        heightClassName="h-[188px]"
+                                        stopRatio={stopRatio}
+                                        hoverRatio={hoverRatio}
+                                        onHover={setHoverRatio}
+                                        ariaLabel={`${style.label} ramp preview`}
+                                    />
                                 </div>
-                                {form.formState.errors.step && (
-                                    <FieldError errors={[form.formState.errors.step]} />
-                                )}
-                            </Field>
-                        )}
+                            </div>
 
-                        <Field>
-                            <FieldLabel>Mode</FieldLabel>
-                            <Select
-                                name="mode"
-                                value={form.watch("mode")}
-                                onValueChange={(v) => form.setValue("mode", v as RampMode)}
-                            >
-                                <SelectTrigger aria-invalid={!!form.formState.errors.mode} className="min-w-[200px]">
-                                    <SelectValue placeholder="Select" />
-                                </SelectTrigger>
-                                <SelectContent position="item-aligned">
-                                    <SelectItem value={RampMode.RESET}>Reset (current → max, repeat)</SelectItem>
-                                    <SelectItem value={RampMode.WAVE}>Wave (current → max → current)</SelectItem>
-                                    <SelectItem value={RampMode.ASCEND}>Ascend (current → max, hold)</SelectItem>
-                                    <SelectItem value={RampMode.SQUARE}>Square (current ↔ max, on/off)</SelectItem>
-                                    <SelectItem value={RampMode.DRIFT}>Drift (random inside start–max)</SelectItem>
-                                    <SelectItem value={RampMode.SURGE}>Surge (slow up, fast down)</SelectItem>
-                                    <SelectItem value={RampMode.DWELL}>Dwell (wave with holds)</SelectItem>
-                                </SelectContent>
-                            </Select>
-                            {form.formState.errors.mode && (
-                                <FieldError errors={[form.formState.errors.mode]} />
-                            )}
-                        </Field>
+                            <div className="grid grid-cols-4 gap-1">
+                                {stats.map((stat) => (
+                                    <div
+                                        key={stat.label}
+                                        className="flex flex-col gap-0.5 rounded-md bg-muted/30 px-1.5 py-1.5"
+                                    >
+                                        <span className="font-mono text-[7px] tracking-[0.08em] text-muted-foreground/55 uppercase">
+                                            {stat.label}
+                                        </span>
+                                        <span className="font-mono text-[11px] leading-none tabular-nums">
+                                            {stat.value}
+                                        </span>
+                                    </div>
+                                ))}
+                            </div>
 
-                        {mode === RampMode.DWELL && (
-                            <Field>
-                                <FieldLabel>Dwell (s)</FieldLabel>
-                                <Input type="number" step="0.1" placeholder="0 = no hold" {...form.register("dwell")} />
-                                {form.formState.errors.dwell && (
-                                    <FieldError errors={[form.formState.errors.dwell]} />
-                                )}
-                            </Field>
-                        )}
-
-                        {mode === RampMode.SURGE && (
-                            <Field>
-                                <FieldLabel>Release ×</FieldLabel>
-                                <Input type="number" step="0.1" placeholder="4" {...form.register("release")} />
-                                {form.formState.errors.release && (
-                                    <FieldError errors={[form.formState.errors.release]} />
-                                )}
-                            </Field>
-                        )}
-
-                        {mode === RampMode.SQUARE && (
-                            <p className="text-[10px] leading-snug text-amber-500/80">
-                                Square jumps straight to Max each cycle — keep Max conservative.
+                            <p className="text-[9px] leading-snug text-muted-foreground/60">
+                                {draft.duration === -1
+                                    ? "Runs until you stop it. The chart shows one cycle."
+                                    : `Stops after ${formatClock(draft.duration)} and rests at the peak.`}
+                                {usesRange
+                                    ? " Preview uses range midpoints; values are rolled when the ramp starts."
+                                    : ""}
+                                {currentValue === undefined
+                                    ? " The unit level is unknown, so the preview assumes 0%; current-level targets resolve when the ramp starts."
+                                    : ""}
+                                {flat
+                                    ? " Both ends resolve to the same level, so the lane will hold still."
+                                    : ""}
                             </p>
-                        )}
+                        </div>
 
-                        <Field>
-                            <FieldLabel>Duration (s)</FieldLabel>
-                            <Input type="number" placeholder="-1 = permanent" {...form.register("duration")} />
-                            {form.formState.errors.duration && (
-                                <FieldError errors={[form.formState.errors.duration]} />
-                            )}
-                        </Field>
+                        <RampInspector
+                            lane={lane}
+                            context="live"
+                            onPatch={(patch) =>
+                                setDraft((current) => ({
+                                    ...current,
+                                    ...patch,
+                                }))
+                            }
+                        />
+                    </div>
+                </div>
 
-                        <Field>
-                            <FieldLabel>Start value</FieldLabel>
-                            <Input
-                                type="text"
-                                placeholder={currentValue !== undefined ? `Default: ${currentValue}` : "Default: current level"}
-                                {...form.register("start_value")}
-                            />
-                            {form.formState.errors.start_value && (
-                                <FieldError errors={[form.formState.errors.start_value]} />
-                            )}
-                        </Field>
-
-                        <Field>
-                            <FieldLabel>Max value</FieldLabel>
-                            <Input
-                                type="text"
-                                placeholder={currentValue !== undefined ? `Default: ${currentValue}` : "Default: current level"}
-                                {...form.register("max_value")}
-                            />
-                            {form.formState.errors.max_value && (
-                                <FieldError errors={[form.formState.errors.max_value]} />
-                            )}
-                        </Field>
-                    </FieldGroup>
-
-                    <p className="text-[10px] text-muted-foreground/60">
-                        These values are saved as your defaults for this channel
-                        — the next Start uses them directly.
-                    </p>
-
-                    {presetOpen ? (
-                        <div className="flex gap-2">
-                            <Input
-                                type="text"
-                                placeholder="Preset name"
-                                className="h-8 flex-1"
-                                value={presetName}
-                                onChange={(event) => setPresetName(event.target.value)}
-                                onKeyDown={(event) => {
-                                    if (event.key === "Enter") {
-                                        event.preventDefault();
-                                        void handleSavePreset();
+                <footer className="flex flex-wrap items-center justify-between gap-3 border-t px-4 py-3">
+                    <div className="flex min-w-0 flex-col gap-1.5">
+                        {presetOpen ? (
+                            <div className="flex flex-wrap items-center gap-1.5">
+                                <Input
+                                    type="text"
+                                    placeholder="Preset name"
+                                    className="h-8 w-44"
+                                    value={presetName}
+                                    autoFocus
+                                    onChange={(event) =>
+                                        setPresetName(event.target.value)
                                     }
-                                }}
-                            />
-                            <Button
-                                type="button"
-                                variant="outline"
-                                size="sm"
-                                disabled={!presetName.trim()}
-                                onClick={() => void handleSavePreset()}
-                            >
-                                Save
-                            </Button>
+                                    onKeyDown={(event) => {
+                                        if (event.key === "Enter") {
+                                            event.preventDefault();
+                                            handleSavePreset();
+                                        }
+                                        if (event.key === "Escape") {
+                                            event.preventDefault();
+                                            event.stopPropagation();
+                                            setPresetOpen(false);
+                                            setPresetName("");
+                                        }
+                                    }}
+                                />
+                                <Button
+                                    type="button"
+                                    variant="outline"
+                                    size="sm"
+                                    className="h-8"
+                                    disabled={!presetName.trim()}
+                                    onClick={handleSavePreset}
+                                >
+                                    Save
+                                </Button>
+                                <Button
+                                    type="button"
+                                    variant="ghost"
+                                    size="sm"
+                                    className="h-8"
+                                    onClick={() => {
+                                        setPresetOpen(false);
+                                        setPresetName("");
+                                    }}
+                                >
+                                    Cancel
+                                </Button>
+                            </div>
+                        ) : (
                             <Button
                                 type="button"
                                 variant="ghost"
                                 size="sm"
-                                onClick={() => {
-                                    setPresetOpen(false);
-                                    setPresetName("");
-                                }}
+                                className="-ml-2 h-7 self-start text-[10px] text-muted-foreground"
+                                onClick={() => setPresetOpen(true)}
+                            >
+                                <BookmarkPlus className="h-3.5 w-3.5" />
+                                Save as preset
+                            </Button>
+                        )}
+                        <p className="max-w-[420px] text-[10px] leading-snug text-muted-foreground/60">
+                            Starting remembers these settings for {unitId} ·{" "}
+                            {FIELD_LABELS[field]}.
+                        </p>
+                    </div>
+
+                    <div className="flex flex-col items-end gap-1">
+                        {issue && (
+                            <p className="max-w-[320px] text-right text-[9px] leading-snug text-amber-600 dark:text-amber-300">
+                                {issue}
+                            </p>
+                        )}
+                        <div className="flex items-center gap-2">
+                            <Button
+                                type="button"
+                                variant="outline"
+                                size="sm"
+                                onClick={() => onOpenChange(false)}
                             >
                                 Cancel
                             </Button>
+                            <Button
+                                type="button"
+                                size="sm"
+                                disabled={!canStart}
+                                onClick={() => void handleStart()}
+                            >
+                                {starting ? (
+                                    <Loader2 className="h-4 w-4 animate-spin" />
+                                ) : (
+                                    <Play className="h-4 w-4" />
+                                )}
+                                Start ramp
+                            </Button>
                         </div>
-                    ) : (
-                        <Button
-                            type="button"
-                            variant="ghost"
-                            size="sm"
-                            className="-ml-3 self-start text-muted-foreground"
-                            onClick={() => setPresetOpen(true)}
-                        >
-                            <BookmarkPlus />
-                            Save as preset…
-                        </Button>
-                    )}
-
-                    <Button type="submit" className="w-full">
-                        Start ramp
-                    </Button>
-                </form>
+                    </div>
+                </footer>
             </DialogContent>
         </Dialog>
     );
