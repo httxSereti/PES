@@ -13,7 +13,7 @@ from typing import Any, Literal
 from pydantic import Field
 
 from events.enums import ActionType
-from typings import RampMode
+from typings import RampEndAction, RampMode
 
 from .base import ClientMessage, WireModel
 from .models import (
@@ -122,6 +122,10 @@ class RampStartPayload(RampTarget):
     # ramp start level (and RESET/WAVE reset point); defaults to the
     # field's current level; int or "[low-high]" range string
     start_value: int | str | None = None
+    # what the field does when the ramp finishes or is stopped
+    end_action: RampEndAction = RampEndAction.HOLD_PEAK
+    # SET_LEVEL target (0-100); capped at the resolved max_value
+    end_value: int | None = None
 
 
 class RampsStartCommand(ClientMessage):
@@ -140,7 +144,9 @@ class RampsResumeCommand(ClientMessage):
 
 
 class RampStopPayload(RampTarget):
-    restore: bool = True
+    # None = apply the ramp's configured end action (normal UI stop).
+    # True/False = legacy override: hold peak / keep the current level.
+    restore: bool | None = None
 
 
 class RampsStopCommand(ClientMessage):

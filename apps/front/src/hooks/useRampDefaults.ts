@@ -1,6 +1,10 @@
 import { useCallback } from "react";
 import { useAppSelector } from "@/store/hooks";
 import type { RampStartPayload, RampTarget } from "@/types";
+import {
+    normalizeRampEndAction,
+    normalizeRampEndValue,
+} from "@/lib/ramp-end";
 
 /** A ramp start payload without its target: the settings worth remembering. */
 export type RampDefaults = Omit<RampStartPayload, "unit" | "field">;
@@ -8,6 +12,16 @@ export type RampDefaults = Omit<RampStartPayload, "unit" | "field">;
 const STORAGE_KEY = "pes.ramp.defaults.v1";
 
 type DefaultsMap = Record<string, RampDefaults>;
+
+/** Fill the post-ramp fields for entries saved before they existed. */
+function normalizeDefaults(defaults: RampDefaults): RampDefaults {
+    const endAction = normalizeRampEndAction(defaults.end_action);
+    return {
+        ...defaults,
+        end_action: endAction,
+        end_value: normalizeRampEndValue(defaults.end_value, endAction),
+    };
+}
 
 const targetKey = (
     userId: string,
@@ -43,8 +57,10 @@ export function useRampDefaults() {
     const userId = useAppSelector((state) => state.auth.user?.id ?? "anonymous");
 
     const getDefaults = useCallback(
-        (unit: RampTarget["unit"], field: RampTarget["field"]): RampDefaults | null =>
-            readMap()[targetKey(userId, unit, field)] ?? null,
+        (unit: RampTarget["unit"], field: RampTarget["field"]): RampDefaults | null => {
+            const stored = readMap()[targetKey(userId, unit, field)];
+            return stored ? normalizeDefaults(stored) : null;
+        },
         [userId],
     );
 
@@ -55,7 +71,7 @@ export function useRampDefaults() {
             defaults: RampDefaults,
         ): void => {
             const map = readMap();
-            map[targetKey(userId, unit, field)] = defaults;
+            map[targetKey(userId, unit, field)] = normalizeDefaults(defaults);
             writeMap(map);
         },
         [userId],

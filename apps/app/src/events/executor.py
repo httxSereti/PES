@@ -12,6 +12,7 @@ from hardware.ramp import RampMode, ramp_manager
 from hardware.units import resolve_usage_limit
 from services.profiles import ProfileError, load_profile
 from store import Store
+from typings import RampEndAction
 from utils import to_utc_iso
 
 from .enums import ActionType
@@ -390,6 +391,10 @@ class ActionExecutor:
                         duration=ramp_cfg.get("duration", -1),
                         max_value=ramp_cfg.get("max"),
                         start_value=ramp_cfg.get("start"),
+                        end_action=RampEndAction(
+                            ramp_cfg.get("end_action", "hold_peak")
+                        ),
+                        end_value=ramp_cfg.get("end_value"),
                         owner=owner,
                     )
                 except (KeyError, TypeError, ValueError) as err:

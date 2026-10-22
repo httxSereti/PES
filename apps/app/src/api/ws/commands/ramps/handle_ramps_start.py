@@ -31,6 +31,8 @@ async def handle_ramps_start(
             duration=p.duration,
             max_value=p.max_value,
             start_value=p.start_value,
+            end_action=p.end_action,
+            end_value=p.end_value,
         )
     except ValueError as err:
         logger.warning(f"[WS|ramps:start] Rejected: {err}")

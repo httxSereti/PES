@@ -14,7 +14,11 @@ import { Input } from "@pes/ui/components/input";
 import { useWebSocket } from "@/hooks/useWebSocket";
 import { useRampDefaults, type RampDefaults } from "@/hooks/useRampDefaults";
 import { useRampPresets } from "@/hooks/useRampPresets";
-import { RampMode, type RampStartPayload } from "@/types";
+import { RampEndAction, RampMode, type RampStartPayload } from "@/types";
+import {
+    normalizeRampEndAction,
+    normalizeRampEndValue,
+} from "@/lib/ramp-end";
 
 import { buildRampCurve, formatClock } from "../profiles/profile-shape";
 import {
@@ -24,7 +28,7 @@ import {
     type RampTargetDraft,
 } from "../profiles/editor/profile-document";
 import { FIELD_LABELS } from "./ramp.constants";
-import { describeDefaults } from "./ramp-format";
+import { describeDefaults, describeRampEnd } from "./ramp-format";
 import {
     RAMP_LANE_STYLES,
     RampCurveChart,
@@ -50,6 +54,8 @@ const DEFAULT_DRAFT: RampDraft = {
     duration: -1,
     start: { mode: "live", value: 50, range: "" },
     max: { mode: "live", value: 50, range: "" },
+    endAction: RampEndAction.HOLD_PEAK,
+    endValue: 0,
     raw: {},
 };
 
@@ -66,6 +72,7 @@ function targetFromValue(
 }
 
 function draftFromDefaults(defaults: RampDefaults): RampDraft {
+    const endAction = normalizeRampEndAction(defaults.end_action);
     return {
         timer: defaults.timer,
         step: defaults.step,
@@ -76,6 +83,8 @@ function draftFromDefaults(defaults: RampDefaults): RampDraft {
         duration: defaults.duration,
         start: targetFromValue(defaults.start_value),
         max: targetFromValue(defaults.max_value),
+        endAction,
+        endValue: normalizeRampEndValue(defaults.end_value, endAction),
         raw: {},
     };
 }
@@ -97,6 +106,11 @@ function defaultsFromDraft(draft: RampDraft): RampDefaults {
         duration: draft.duration,
         start_value: serialize(draft.start),
         max_value: serialize(draft.max),
+        end_action: draft.endAction,
+        end_value:
+            draft.endAction === RampEndAction.SET_LEVEL
+                ? clampLevel(draft.endValue)
+                : null,
     };
 }
 
@@ -125,6 +139,14 @@ function validateDraft(draft: RampDraft): string | null {
     }
     if (!rampTargetIsValid(draft.max)) {
         return "Fix the peak value: use 0–100 or a range like [25-35].";
+    }
+    if (
+        draft.endAction === RampEndAction.SET_LEVEL &&
+        (!Number.isFinite(draft.endValue) ||
+            draft.endValue < 0 ||
+            draft.endValue > 100)
+    ) {
+        return "Fix the end level: use a value between 0 and 100.";
     }
     return null;
 }
@@ -177,9 +199,15 @@ export function RampStartDialog({
         [draft, startLevel, maxLevel],
     );
 
+    // Leave a short visible tail after a finite ramp so the configured end
+    // behavior (hold/keep/start/set level) is visible in the fit view.
+    const endTailSeconds =
+        draft.duration > 0
+            ? Math.min(30, Math.max(3, draft.duration * 0.15))
+            : 0;
     const programWindow =
         draft.duration > 0
-            ? draft.duration
+            ? draft.duration + endTailSeconds
             : curve.periodSeconds > 0
               ? curve.periodSeconds
               : 60;
@@ -190,8 +218,8 @@ export function RampStartDialog({
             : null;
 
     const samples = useMemo(
-        () => sampleCurve(curve, windowSeconds, draft.duration, maxLevel),
-        [curve, windowSeconds, draft.duration, maxLevel],
+        () => sampleCurve(draft, curve, windowSeconds, startLevel, maxLevel),
+        [draft, curve, windowSeconds, startLevel, maxLevel],
     );
 
     const lane = useMemo<RampStudioLane>(
@@ -227,7 +255,6 @@ export function RampStartDialog({
             const result = await sendCommand("ramps:stop", {
                 unit: unitId,
                 field,
-                restore: true,
             });
             if (result.status === "error") {
                 toast.error(result.message ?? "Failed to stop ramp");
@@ -310,7 +337,7 @@ export function RampStartDialog({
         <Dialog open={open} onOpenChange={onOpenChange}>
             <DialogContent
                 showCloseButton
-                className="flex h-dvh max-h-none w-screen max-w-none flex-col gap-0 overflow-hidden rounded-none p-0 sm:h-[min(92dvh,860px)] sm:w-[min(1040px,calc(100vw-2rem))] sm:max-w-[1040px] sm:rounded-xl"
+                className="flex h-dvh max-h-none w-screen max-w-none flex-col gap-0 overflow-hidden rounded-none p-0 sm:h-[min(82dvh,780px)] sm:w-[min(900px,calc(100vw-3rem))] sm:max-w-[900px] sm:rounded-xl"
             >
                 <header className="flex flex-wrap items-start justify-between gap-3 border-b px-5 py-4 pr-14">
                     <div className="flex min-w-0 flex-col gap-1">
@@ -417,8 +444,8 @@ export function RampStartDialog({
 
                             <p className="text-[9px] leading-snug text-muted-foreground/60">
                                 {draft.duration === -1
-                                    ? "Runs until you stop it. The chart shows one cycle."
-                                    : `Stops after ${formatClock(draft.duration)} and rests at the peak.`}
+                                    ? `Runs until you stop it, then ${describeRampEnd(draft.endAction, draft.endValue, startLevel, maxLevel)}. The chart shows one cycle.`
+                                    : `Stops after ${formatClock(draft.duration)} and ${describeRampEnd(draft.endAction, draft.endValue, startLevel, maxLevel)}.`}
                                 {usesRange
                                     ? " Preview uses range midpoints; values are rolled when the ramp starts."
                                     : ""}

@@ -368,9 +368,10 @@ export function EditorRampsTab({
             return {
                 ...lane,
                 samples: sampleCurve(
+                    lane.ramp,
                     lane.curve,
                     windowSeconds,
-                    lane.ramp.duration,
+                    lane.startLevel,
                     lane.maxLevel,
                 ),
             };

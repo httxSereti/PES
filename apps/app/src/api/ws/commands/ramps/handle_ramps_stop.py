@@ -14,7 +14,9 @@ async def handle_ramps_stop(
     msg: RampsStopCommand, ctx: CommandContext
 ) -> CommandResult:
     """
-    Stop a software ramp on one unit field
+    Stop a software ramp on one unit field.
+
+    Without a ``restore`` override the ramp's configured end action is used.
     """
     p = msg.payload
 

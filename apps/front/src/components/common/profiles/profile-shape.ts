@@ -9,6 +9,7 @@
  */
 import { RampMode } from "@/types";
 import type { ProfileRampPreview, ProfileSummary } from "@/types";
+import { resolveRampEndLevel } from "@/lib/ramp-end";
 
 /** Samples drawn per lane by the inspector chart. */
 export const CHART_SAMPLES = 24;
@@ -51,6 +52,11 @@ type RampCurve = {
     periodSeconds: number;
     /** Absolute field level (0-100) at `seconds` into the loop. */
     levelAt: (seconds: number) => number;
+};
+
+type CurveEntry = {
+    ramp: ProfileRampPreview;
+    curve: RampCurve;
 };
 
 /** Resolved ramp used to draw a curve (editor + saved-profile previews). */
@@ -283,34 +289,46 @@ function buildCurve(ramp: ProfileRampPreview): RampCurve {
  * Visible span of the program: the longest finite ramp duration, or one loop
  * for permanent ramps (`duration = -1`).
  */
-function sampleWindow(
-    ramps: ProfileRampPreview[],
-    curves: RampCurve[],
-): number {
+function sampleWindow(entries: CurveEntry[]): number {
     let window = 0;
-    for (let index = 0; index < ramps.length; index += 1) {
-        const ramp = ramps[index];
-        const curve = curves[index];
-        if (!ramp || !curve) continue;
-        const span = ramp.duration > 0 ? ramp.duration : curve.periodSeconds;
+    for (const entry of entries) {
+        const span =
+            entry.ramp.duration > 0
+                ? entry.ramp.duration
+                : entry.curve.periodSeconds;
         window = Math.max(window, span);
     }
     return window;
 }
 
+/** Level of one ramp at `at`, including its configured post-duration end. */
+function curveLevelAt(entry: CurveEntry, at: number): number {
+    const { ramp, curve } = entry;
+    if (ramp.duration > 0 && at >= ramp.duration) {
+        return resolveRampEndLevel({
+            action: ramp.end_action,
+            endValue: ramp.end_value,
+            startLevel: ramp.start,
+            maxLevel: ramp.max,
+            currentLevel: curve.levelAt(ramp.duration),
+        });
+    }
+    return curve.levelAt(at);
+}
+
 /** Intensity envelope (max over the curves) sampled evenly across the window. */
 function sampleCurves(
-    curves: RampCurve[],
+    entries: CurveEntry[],
     windowSeconds: number,
     samples: number,
 ): number[] {
-    if (curves.length === 0) return [];
+    if (entries.length === 0) return [];
     // A static ramp (period 0) still has a level to show: sample it flat.
     const span = windowSeconds > 0 ? windowSeconds : 1;
     return Array.from({ length: samples }, (_, index) => {
         const at = (span * index) / Math.max(samples - 1, 1);
-        return curves.reduce(
-            (top, curve) => Math.max(top, curve.levelAt(at)),
+        return entries.reduce(
+            (top, entry) => Math.max(top, curveLevelAt(entry, at)),
             0,
         );
     });
@@ -321,23 +339,23 @@ export function buildProfilePreview(
     profile: ProfileSummary,
     samples = CHART_SAMPLES,
 ): ProfilePreview {
-    const ramps = profile.ramps ?? [];
-    const curves: RampCurve[] = [];
-    const curvesByField = new Map<string, RampCurve[]>();
+    const entries: CurveEntry[] = (profile.ramps ?? []).map((ramp) => ({
+        ramp,
+        curve: buildCurve(ramp),
+    }));
+    const entriesByField = new Map<string, CurveEntry[]>();
 
-    for (const ramp of ramps) {
-        const curve = buildCurve(ramp);
-        curves.push(curve);
-        const laneCurves = curvesByField.get(ramp.field);
-        if (laneCurves) laneCurves.push(curve);
-        else curvesByField.set(ramp.field, [curve]);
+    for (const entry of entries) {
+        const fieldEntries = entriesByField.get(entry.ramp.field);
+        if (fieldEntries) fieldEntries.push(entry);
+        else entriesByField.set(entry.ramp.field, [entry]);
     }
 
-    const durationSeconds = sampleWindow(ramps, curves);
+    const durationSeconds = sampleWindow(entries);
     const lanes = SHAPE_LANES.map((lane) => ({
         label: lane.label,
         samples: sampleCurves(
-            lane.fields.flatMap((field) => curvesByField.get(field) ?? []),
+            lane.fields.flatMap((field) => entriesByField.get(field) ?? []),
             durationSeconds,
             samples,
         ),
@@ -358,28 +376,25 @@ export function buildSparkline(
     profile: ProfileSummary,
     samples = SPARKLINE_SAMPLES,
 ): ProfileSparkline {
-    const ramps = (profile.ramps ?? []).filter(
-        (ramp) => ramp.field === "ch_A" || ramp.field === "ch_B",
-    );
-    const curves: RampCurve[] = [];
-    const curvesByField = new Map<string, RampCurve[]>();
+    const entries: CurveEntry[] = (profile.ramps ?? [])
+        .filter((ramp) => ramp.field === "ch_A" || ramp.field === "ch_B")
+        .map((ramp) => ({ ramp, curve: buildCurve(ramp) }));
+    const entriesByField = new Map<string, CurveEntry[]>();
 
-    for (const ramp of ramps) {
-        const curve = buildCurve(ramp);
-        curves.push(curve);
-        const fieldCurves = curvesByField.get(ramp.field);
-        if (fieldCurves) fieldCurves.push(curve);
-        else curvesByField.set(ramp.field, [curve]);
+    for (const entry of entries) {
+        const fieldEntries = entriesByField.get(entry.ramp.field);
+        if (fieldEntries) fieldEntries.push(entry);
+        else entriesByField.set(entry.ramp.field, [entry]);
     }
 
-    const durationSeconds = sampleWindow(ramps, curves);
+    const durationSeconds = sampleWindow(entries);
     const a = sampleCurves(
-        curvesByField.get("ch_A") ?? [],
+        entriesByField.get("ch_A") ?? [],
         durationSeconds,
         samples,
     );
     const b = sampleCurves(
-        curvesByField.get("ch_B") ?? [],
+        entriesByField.get("ch_B") ?? [],
         durationSeconds,
         samples,
     );

@@ -30,12 +30,11 @@ export function useRampControl() {
                         result = await sendCommand("ramps:resume", { unit, field });
                         break;
                     case "ramps:stop":
-                        // restore: true keeps the backend default (the field
-                        // ends at the ramp's max value).
+                        // No restore override: the backend applies the
+                        // ramp's configured end action (hold peak by default).
                         result = await sendCommand("ramps:stop", {
                             unit,
                             field,
-                            restore: true,
                         });
                         break;
                 }

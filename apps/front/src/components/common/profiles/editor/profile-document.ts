@@ -9,12 +9,17 @@
  */
 import { MODE_2B } from "@/types/units.types";
 import {
+    RampEndAction,
     RampMode,
     type ProfileDefaults,
     type ProfileDetail,
     type ProfileUpdatePayload,
 } from "@/types";
 import type { UnitSettings } from "@/types/units.types";
+import {
+    normalizeRampEndAction,
+    normalizeRampEndValue,
+} from "@/lib/ramp-end";
 
 export const UNIT_IDS = ["UNIT1", "UNIT2", "UNIT3"] as const;
 export type UnitId = (typeof UNIT_IDS)[number];
@@ -57,6 +62,10 @@ export type RampDraft = {
     duration: number;
     start: RampTargetDraft;
     max: RampTargetDraft;
+    /** What the field does when the ramp finishes or is stopped. */
+    endAction: RampEndAction;
+    /** SET_LEVEL target (0-100); capped at the ramp's peak at runtime. */
+    endValue: number;
     /** Unknown ramp keys, preserved on save. */
     raw: Record<string, unknown>;
 };
@@ -226,6 +235,9 @@ function parseRamp(cfg: unknown): RampDraft | null {
     const rawMode = typeof cfg.mode === "string" ? cfg.mode : "reset";
     const dwell = cfg.dwell === undefined ? 0 : cfg.dwell;
     const release = cfg.release === undefined ? 4 : cfg.release;
+    const rawEndAction = cfg.end_action;
+    const endAction = normalizeRampEndAction(rawEndAction);
+    const endValue = normalizeRampEndValue(cfg.end_value, endAction);
 
     if (!Number.isFinite(timer) || timer <= 0) return null;
     if (
@@ -236,6 +248,21 @@ function parseRamp(cfg: unknown): RampDraft | null {
         return null;
     }
     if (!Object.values(RampMode).includes(rawMode as RampMode)) return null;
+    if (
+        rawEndAction !== undefined &&
+        rawEndAction !== endAction
+    ) {
+        return null;
+    }
+    if (
+        endAction === RampEndAction.SET_LEVEL &&
+        (typeof cfg.end_value !== "number" ||
+            !Number.isFinite(cfg.end_value) ||
+            cfg.end_value < 0 ||
+            cfg.end_value > 100)
+    ) {
+        return null;
+    }
     if (!Number.isFinite(duration) || (duration !== -1 && duration <= 0))
         return null;
     if (typeof dwell !== "number" || !Number.isFinite(dwell) || dwell < 0)
@@ -253,6 +280,8 @@ function parseRamp(cfg: unknown): RampDraft | null {
         duration,
         start: parseRampTarget(cfg.start),
         max: parseRampTarget(cfg.max),
+        endAction,
+        endValue,
         raw: { ...cfg },
     };
 }
@@ -491,7 +520,13 @@ function serializeRamp(ramp: RampDraft): Record<string, unknown> {
         dwell: ramp.dwell,
         release: ramp.release,
         duration: ramp.duration,
+        end_action: ramp.endAction,
     };
+    if (ramp.endAction === RampEndAction.SET_LEVEL) {
+        block.end_value = clampLevel(ramp.endValue);
+    } else {
+        delete block.end_value;
+    }
     const start = serializeRampTarget(ramp.start);
     const max = serializeRampTarget(ramp.max);
     if (start === undefined) delete block.start;
@@ -617,6 +652,14 @@ export function validateDraft(draft: ProfileDraft): string | null {
             }
             if (!rampTargetIsValid(ramp.max)) {
                 return `${path}: max must be a value 0-100 or a range like [25-35]`;
+            }
+            if (
+                ramp.endAction === RampEndAction.SET_LEVEL &&
+                (!Number.isFinite(ramp.endValue) ||
+                    ramp.endValue < 0 ||
+                    ramp.endValue > 100)
+            ) {
+                return `${path}: end level must be a value 0-100`;
             }
         }
     }

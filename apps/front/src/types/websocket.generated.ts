@@ -27,6 +27,13 @@ export enum RampMode {
     DWELL = "dwell",
 }
 
+export enum RampEndAction {
+    HOLD_PEAK = "hold_peak",
+    HOLD_CURRENT = "hold_current",
+    RESTORE_START = "restore_start",
+    SET_LEVEL = "set_level",
+}
+
 export interface UnitLevelChanges {
     ch_A?: string | null;
     ch_B?: string | null;
@@ -373,6 +380,8 @@ export interface Ramp {
     dwell: number;
     release: number;
     owner?: string | null;
+    end_action: RampEndAction;
+    end_value?: number | null;
 }
 
 export interface RampRemovePayload {
@@ -489,6 +498,8 @@ export interface ProfileRampPreview {
     duration: number;
     start: number;
     max: number;
+    end_action: RampEndAction;
+    end_value?: number | null;
 }
 
 export interface ProfileSavedPayload {
@@ -643,10 +654,12 @@ export interface RampStartPayload extends RampTarget {
     duration: number;
     max_value: number | string | null;
     start_value: number | string | null;
+    end_action: RampEndAction;
+    end_value?: number | null;
 }
 
 export interface RampStopPayload extends RampTarget {
-    restore: boolean;
+    restore?: boolean | null;
 }
 
 export interface TriggerRuleEditDraft extends TriggerRuleDraft {

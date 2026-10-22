@@ -30,7 +30,7 @@ from events.enums import ActionType, QueueItemStatus
 from events.queue import ActionQueue
 from hardware.ramp import RAMP_FIELDS, ramp_manager
 from store import Store
-from typings import RampMode, UnitDict
+from typings import RampEndAction, RampMode, UnitDict
 from utils import to_utc_iso
 
 logger = structlog.get_logger("pes")
@@ -179,6 +179,9 @@ def _preview_ramps(units: dict) -> list[dict]:
                 step = float(cfg.get("step", 1))
                 duration = cfg.get("duration", -1)
                 mode = RampMode(cfg.get("mode", "reset"))
+                end_action = RampEndAction(
+                    cfg.get("end_action", "hold_peak")
+                )
             except (KeyError, TypeError, ValueError):
                 continue
 
@@ -214,6 +217,14 @@ def _preview_ramps(units: dict) -> list[dict]:
             if max_level is None or start_level is None:
                 continue
 
+            end_value: int | None = None
+            if end_action is RampEndAction.SET_LEVEL:
+                end_value = _coerce_int(cfg.get("end_value"))
+                if end_value is None or not 0 <= end_value <= 100:
+                    continue
+                # Mirror RampManager.start: never preview an end above the peak.
+                end_value = min(end_value, max_level)
+
             if step_unit == "absolute" and max_level > 0:
                 step = step * 100 / max_level
 
@@ -229,6 +240,8 @@ def _preview_ramps(units: dict) -> list[dict]:
                     "duration": float(duration),
                     "start": start_level,
                     "max": max_level,
+                    "end_action": end_action.value,
+                    "end_value": end_value,
                 }
             )
 
@@ -402,6 +415,24 @@ def _validate_ramps(unit_name: str, ramps: dict) -> dict:
         ):
             raise ProfileError(f"{path}.duration must be -1 or greater than 0")
         config["duration"] = float(duration)
+
+        try:
+            end_action = RampEndAction(cfg.get("end_action", "hold_peak"))
+        except ValueError:
+            allowed = ", ".join(entry.value for entry in RampEndAction)
+            raise ProfileError(
+                f"{path}.end_action must be one of {allowed}"
+            )
+        config["end_action"] = end_action.value
+        if end_action is RampEndAction.SET_LEVEL:
+            end_value = _coerce_int(cfg.get("end_value"))
+            if end_value is None or not 0 <= end_value <= 100:
+                raise ProfileError(f"{path}.end_value must be a number 0-100")
+            # The runtime caps this at the resolved max; keep the explicit
+            # value so lowering the ceiling later does not rewrite the file.
+            config["end_value"] = end_value
+        else:
+            config.pop("end_value", None)
 
         # Optional: omitted = live field value at apply time
         for key in ("start", "max"):
@@ -689,6 +720,8 @@ def capture_threads_settings(include_ramps: bool) -> dict:
                     "duration": ramp["duration"],
                     "max": ramp["max_value"],
                     "start": ramp["start_value"],
+                    "end_action": ramp.get("end_action", "hold_peak"),
+                    "end_value": ramp.get("end_value"),
                 }
                 for ramp in ramps
                 if ramp["unit"] == unit_name

@@ -11,7 +11,7 @@ from typing import Annotated, Any, Literal
 from pydantic import Field
 
 from events.enums import ActionType
-from typings import RampMode
+from typings import RampEndAction, RampMode
 
 from .base import TsType, WireModel
 
@@ -197,6 +197,8 @@ class Ramp(WireModel):
     dwell: float = 0
     release: float = 4
     owner: str | None = None
+    end_action: RampEndAction = RampEndAction.HOLD_PEAK
+    end_value: int | None = None
 
 
 class ProfileRampPreview(WireModel):
@@ -217,6 +219,9 @@ class ProfileRampPreview(WireModel):
     duration: float = -1
     start: int = 0
     max: int = 0
+    end_action: RampEndAction = RampEndAction.HOLD_PEAK
+    # SET_LEVEL target, already capped at ``max`` when that is known
+    end_value: int | None = None
 
 
 class ProfileDefaults(WireModel):

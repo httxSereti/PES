@@ -10,8 +10,8 @@ never at 0 unless that's where the field actually is. Each ramp has its own:
   value, or an absolute field level when ``step_unit`` is "absolute"
 - ``timer``     — delay in seconds between two steps
 - ``duration`` — total run time in seconds, ``DURATION_PERMANENT`` (-1) to
-  run forever; when the active time reaches ``duration`` the ramp stops
-  (field restored to the max value). Paused time doesn't count.
+  run forever; when the active time reaches ``duration`` the ramp stops and
+  applies its ``end_action``. Paused time doesn't count.
 
 Seven modes (``RampMode``):
 
@@ -34,9 +34,18 @@ The max value is the field's current level captured when the ramp starts (or
 an explicit ``max_value``, which may also be a MagicNumber-style range
 string like ``[25-35]`` resolved randomly once at start). While a ramp is
 active it owns the field: external writes to it are overwritten on the next
-step. Pause freezes the ramp at its current value; stop removes it and
-restores the field to the max value (pass ``restore=False`` to keep the
-current ramped value instead).
+step. Pause freezes the ramp at its current value. When the ramp ends
+(naturally or via ``stop``) it applies its configured end action:
+
+- ``HOLD_PEAK`` (default) — restore the max value, matching the historical
+  behaviour;
+- ``HOLD_CURRENT`` — keep the level the ramp last wrote;
+- ``RESTORE_START`` — return to the ramp's start level;
+- ``SET_LEVEL`` — go to an explicit ``end_value``, capped at ``max_value``.
+
+The explicit ``restore`` / ``end_action`` arguments of ``stop`` override the
+ramp's configured action for internal clean-up paths (unit stop, profile
+reverse, hardware reset).
 
 Lifecycle changes are broadcast over WebSocket (``ramps:update`` on
 start/pause/resume, ``ramps:remove`` on stop). Ramped field values are
@@ -60,7 +69,7 @@ import structlog
 
 from api.ws.websocket_notifier import ws_notifier
 from store import Store
-from typings import RampMode, UnitDict
+from typings import RampEndAction, RampMode, UnitDict
 
 logger = structlog.get_logger("pes")
 
@@ -104,12 +113,20 @@ class Ramp:
     last_seen: float = 0.0  # monotonic time of the last tick
     last_output: int = -1  # last value written to the store
     owner: Optional[str] = None  # e.g. "profile:<queue item id>", None = user
+    end_action: RampEndAction = RampEndAction.HOLD_PEAK
+    end_value: int | None = None  # SET_LEVEL: target level, capped at max
 
     def increment(self) -> float:
         """Progress increment of one step, in percent of max_value."""
         if self.step_unit == "absolute" and self.max_value > 0:
             return self.step * 100 / self.max_value
         return self.step
+
+    def start_level(self) -> int:
+        """Field value of the start/reset point, clamped to 0-100."""
+        return max(
+            0, min(100, round(self.max_value * self.start_progress / 100))
+        )
 
     def advance(self) -> None:
         """Move the progress one step forward (mode dependent)."""
@@ -211,11 +228,11 @@ class Ramp:
             "elapsed": round(self.elapsed, 1),
             "paused": self.paused,
             "progress": round(self.progress, 2),
-            "start_value": max(
-                0, min(100, round(self.max_value * self.start_progress / 100))
-            ),
+            "start_value": self.start_level(),
             "value": self.output_value(),
             "owner": self.owner,
+            "end_action": self.end_action.value,
+            "end_value": self.end_value,
         }
 
 
@@ -240,6 +257,8 @@ class RampManager:
         duration: float = DURATION_PERMANENT,
         max_value: Optional[Union[int, str]] = None,
         start_value: Optional[Union[int, str]] = None,
+        end_action: RampEndAction = RampEndAction.HOLD_PEAK,
+        end_value: int | None = None,
         owner: Optional[str] = None,
     ) -> Ramp:
         """
@@ -273,6 +292,10 @@ class RampManager:
                 point of RESET/WAVE cycles), defaults to the field's current
                 level; int or "[low-high]" range string resolved once at
                 start
+            end_action: what to do when the ramp ends or is stopped
+                (default HOLD_PEAK)
+            end_value: required for SET_LEVEL; target level 0-100, capped at
+                the resolved max_value when the ramp starts
             owner: optional owner tag (e.g. "profile:<queue item id>") so
                 owners can stop only their own ramps (see stop_owned); None
                 for user-started ramps
@@ -317,6 +340,28 @@ class RampManager:
         raw_progress = start_value * 100 / max_value if max_value > 0 else 0.0
 
         mode = RampMode(mode)
+        try:
+            end_action = RampEndAction(end_action)
+        except ValueError as err:
+            allowed = ", ".join(entry.value for entry in RampEndAction)
+            raise ValueError(
+                f"Ramp end action must be one of {allowed}, got {end_action!r}"
+            ) from err
+        if end_action is RampEndAction.SET_LEVEL:
+            if (
+                end_value is None
+                or isinstance(end_value, bool)
+                or not isinstance(end_value, (int, float))
+                or not math.isfinite(end_value)
+            ):
+                raise ValueError(
+                    "SET_LEVEL requires an end_value between 0 and the max value"
+                )
+            # Never let the post-ramp level exceed the configured ceiling.
+            end_value = max(0, min(max_value, round(end_value)))
+        else:
+            end_value = None
+
         # Extra steps after the step that reaches an end: the total hold is
         # (dwell_steps + 1) * timer, i.e. `dwell` rounded up to the step grid
         # (and at least one step, like WAVE).
@@ -362,6 +407,8 @@ class RampManager:
             last_step_at=now,
             last_seen=now,
             owner=owner,
+            end_action=end_action,
+            end_value=end_value,
         )
         with self._lock:
             self._ramps[(unit, field)] = ramp
@@ -408,28 +455,66 @@ class RampManager:
         logger.info(f"[Ramp] Resumed on {unit.value}.{field}")
         ws_notifier.notify("ramps:update", state)
 
-    def stop(self, unit: UnitDict, field: str, restore: bool = True) -> None:
+    def stop(
+        self,
+        unit: UnitDict,
+        field: str,
+        restore: bool | None = None,
+        end_action: RampEndAction | None = None,
+    ) -> None:
         """
-        Remove a ramp.
+        Remove a ramp and apply an end action to its field.
 
         Args:
-            restore: True (default) puts the field back to the ramp's max
-                value, False keeps the current ramped value.
+            restore: legacy override — True holds the ramp's max value, False
+                keeps the current level. ``None`` (default) uses the ramp's
+                configured ``end_action``.
+            end_action: explicit action override; wins over ``restore``.
+                Used by callers that need a specific clean-up behaviour.
         """
         with self._lock:
             ramp = self._ramps.pop((unit, field), None)
         if ramp is None:
             raise KeyError(f"No ramp on {unit.value}.{field}")
-        if restore:
-            ramp.progress = PROGRESS_MAX
-            self._write(ramp)
-        logger.info(f"[Ramp] Stopped on {unit.value}.{field}", restore=restore)
+
+        action = end_action
+        if action is None:
+            if restore is True:
+                action = RampEndAction.HOLD_PEAK
+            elif restore is False:
+                action = RampEndAction.HOLD_CURRENT
+            else:
+                action = ramp.end_action
+        action = RampEndAction(action)
+
+        level: int | None = None
+        if action is RampEndAction.HOLD_PEAK:
+            level = ramp.max_value
+        elif action is RampEndAction.RESTORE_START:
+            level = ramp.start_level()
+        elif action is RampEndAction.SET_LEVEL:
+            # end_value is validated/capped at start; clamp again so a
+            # manually constructed Ramp can never exceed its ceiling.
+            level = (
+                min(ramp.max_value, max(0, ramp.end_value))
+                if ramp.end_value is not None
+                else 0
+            )
+        # HOLD_CURRENT: leave the store at the last ramped level.
+
+        if level is not None:
+            self._write_level(ramp, level)
+        logger.info(
+            f"[Ramp] Stopped on {unit.value}.{field}",
+            end_action=action.value,
+            level=level,
+        )
         ws_notifier.notify(
             "ramps:remove", {"unit": unit.value, "field": field}
         )
 
     def stop_unit(self, unit: UnitDict, restore: bool = True) -> None:
-        """Stop every ramp of a unit."""
+        """Stop every ramp of a unit (peak by default, as a clean-up path)."""
         with self._lock:
             fields = [field for ramp_unit, field in self._ramps if ramp_unit is unit]
         for field in fields:
@@ -511,7 +596,11 @@ class RampManager:
         reached the 2B; broadcasting here as well keeps clients live when no
         unit is connected (or its hardware is disabled).
         """
-        value = ramp.output_value()
+        self._write_level(ramp, ramp.output_value())
+
+    def _write_level(self, ramp: Ramp, level: int) -> None:
+        """Write an explicit field level (used by ramp end actions)."""
+        value = max(0, min(100, int(level)))
         ramp.last_output = value
         self._store.update_unit_dict(ramp.unit, {ramp.field: value, "updated": True})
         ws_notifier.notify(

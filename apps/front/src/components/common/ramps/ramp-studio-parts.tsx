@@ -20,7 +20,12 @@ import {
 import { cn } from "@pes/ui/lib/utils";
 
 import { useRampPresets, type RampPreset } from "@/hooks/useRampPresets";
-import { RampMode } from "@/types";
+import { RampEndAction, RampMode } from "@/types";
+import {
+    normalizeRampEndAction,
+    normalizeRampEndValue,
+    resolveRampEndLevel,
+} from "@/lib/ramp-end";
 
 import {
     buildRampCurve,
@@ -40,7 +45,7 @@ import {
     type RampField,
     type RampTargetDraft,
 } from "../profiles/editor/profile-document";
-import { describeDefaults } from "./ramp-format";
+import { describeDefaults, describeRampEnd } from "./ramp-format";
 
 export const PREVIEW_SAMPLES = 96;
 export const PLOT_WIDTH = 100;
@@ -100,6 +105,33 @@ const GLYPH_PATHS: Record<RampMode, string> = {
     [RampMode.DWELL]: "M0 9 L4 2 L7 2 L11 9 L15 9 L19 2 L22 2 L26 9",
 };
 
+export const RAMP_END_OPTIONS: Array<{
+    value: RampEndAction;
+    label: string;
+    hint: string;
+}> = [
+    {
+        value: RampEndAction.HOLD_PEAK,
+        label: "Hold peak",
+        hint: "Keeps the ramp's peak when it finishes.",
+    },
+    {
+        value: RampEndAction.HOLD_CURRENT,
+        label: "Keep current",
+        hint: "Holds the level the ramp reached when it finishes.",
+    },
+    {
+        value: RampEndAction.RESTORE_START,
+        label: "Back to start",
+        hint: "Returns the field to the ramp's start level.",
+    },
+    {
+        value: RampEndAction.SET_LEVEL,
+        label: "Go to level",
+        hint: "Goes to the chosen level when the ramp finishes.",
+    },
+];
+
 export const RAMP_SCALE_OPTIONS: Array<{
     label: string;
     value: number | "fit";
@@ -116,27 +148,33 @@ export const RAMP_LANE_STYLES: Record<
         short: string;
         label: string;
         text: string;
+        /** Solid fill used for the live level / progress accents. */
+        bar: string;
     }
 > = {
     ch_A: {
         short: "A",
         label: "Channel A",
         text: "text-violet-600 dark:text-violet-400",
+        bar: "bg-violet-500",
     },
     ch_B: {
         short: "B",
         label: "Channel B",
         text: "text-blue-600 dark:text-blue-400",
+        bar: "bg-blue-500",
     },
     adj_1: {
         short: "Adj 1",
         label: "Adj 1",
         text: "text-amber-600 dark:text-amber-400",
+        bar: "bg-amber-500",
     },
     adj_2: {
         short: "Adj 2",
         label: "Adj 2",
         text: "text-emerald-600 dark:text-emerald-400",
+        bar: "bg-emerald-500",
     },
 };
 
@@ -200,29 +238,60 @@ export function climbSecondsOf(
     return ((100 - startPct) / stepPct) * ramp.timer;
 }
 
+/** Field level after a finite ramp stops, mirroring the backend end action. */
+export function postRampLevel(
+    ramp: Pick<RampDraft, "endAction" | "endValue">,
+    curve: ReturnType<typeof buildRampCurve> | null,
+    stopAt: number,
+    startLevel: number,
+    maxLevel: number,
+): number {
+    return resolveRampEndLevel({
+        action: ramp.endAction,
+        endValue: ramp.endValue,
+        startLevel,
+        maxLevel,
+        currentLevel: curve ? curve.levelAt(stopAt) : 0,
+    });
+}
+
 /**
  * Sample one lane across the visible window. After a finite duration the
- * backend stops the ramp and restores the peak, so the tail is flat at `max`.
+ * backend applies the ramp's end action, so the tail is the resolved end
+ * level (peak by default, or the configured keep/start/set level).
  */
 export function sampleCurve(
+    ramp: RampDraft,
     curve: ReturnType<typeof buildRampCurve>,
     windowSeconds: number,
-    duration: number,
+    startLevel: number,
     maxLevel: number,
 ): number[] {
-    const stopAt = duration > 0 ? duration : null;
+    const stopAt = ramp.duration > 0 ? ramp.duration : null;
+    const endLevel =
+        stopAt !== null
+            ? postRampLevel(ramp, curve, stopAt, startLevel, maxLevel)
+            : null;
     return Array.from({ length: PREVIEW_SAMPLES }, (_, index) => {
         const seconds = (windowSeconds * index) / (PREVIEW_SAMPLES - 1);
-        if (stopAt !== null && seconds >= stopAt) return maxLevel;
+        if (stopAt !== null && endLevel !== null && seconds >= stopAt) {
+            return endLevel;
+        }
         return curve.levelAt(seconds);
     });
 }
 
-/** Level shown at the playhead, including the post-duration restore. */
+/** Level shown at the playhead, including the post-duration end action. */
 export function laneLevelAt(lane: RampStudioLane, seconds: number): number {
     if (!lane.curve) return 0;
     if (lane.ramp && lane.ramp.duration > 0 && seconds >= lane.ramp.duration) {
-        return lane.maxLevel;
+        return postRampLevel(
+            lane.ramp,
+            lane.curve,
+            lane.ramp.duration,
+            lane.startLevel,
+            lane.maxLevel,
+        );
     }
     return lane.curve.levelAt(seconds);
 }
@@ -831,6 +900,20 @@ export function RampInspector({
     const flat = lane.startLevel >= lane.maxLevel;
     const usesRange = ramp.start.mode === "range" || ramp.max.mode === "range";
     const live = context === "live";
+    const endOption = RAMP_END_OPTIONS.find(
+        (option) => option.value === ramp.endAction,
+    ) ?? {
+        value: RampEndAction.HOLD_PEAK,
+        label: "Hold peak",
+        hint: "Keeps the ramp's peak when it finishes.",
+    };
+    const endText = describeRampEnd(
+        ramp.endAction,
+        ramp.endValue,
+        lane.startLevel,
+        lane.maxLevel,
+    );
+
 
     const applyPreset = (preset: RampPreset) => {
         const { defaults } = preset;
@@ -850,6 +933,7 @@ export function RampInspector({
             return { mode: "live", value: 50, range: "" };
         };
 
+        const endAction = normalizeRampEndAction(defaults.end_action);
         onPatch({
             timer: defaults.timer,
             step: defaults.step,
@@ -861,6 +945,8 @@ export function RampInspector({
             duration: defaults.duration,
             start: targetFrom(defaults.start_value),
             max: targetFrom(defaults.max_value),
+            endAction,
+            endValue: normalizeRampEndValue(defaults.end_value, endAction),
         });
     };
 
@@ -1067,7 +1153,7 @@ export function RampInspector({
                                         duration: value <= 0 ? -1 : value,
                                     })
                                 }
-                                className="h-6 w-14 text-center font-mono text-[10px]"
+                                className="h-6 w-20 px-1.5 text-center font-mono text-[10px] tabular-nums"
                             />
                             <span className="text-[9px] text-muted-foreground/55">
                                 s
@@ -1076,9 +1162,9 @@ export function RampInspector({
                         <p className="text-[9px] leading-snug text-muted-foreground/60">
                             {ramp.duration === -1
                                 ? live
-                                    ? "Runs until you stop it."
-                                    : "Runs until the profile is stopped."
-                                : `Stops after ${formatClock(ramp.duration)} and rests at the peak.`}
+                                    ? `Runs until you stop it; then ${endText}.`
+                                    : "Runs until the profile is stopped; that restores its snapshot."
+                                : `Stops after ${formatClock(ramp.duration)} and ${endText}.`}
                         </p>
                     </div>
 
@@ -1186,7 +1272,22 @@ export function RampInspector({
                                     ? "A MagicNumber range, rolled when the ramp starts."
                                     : "A MagicNumber range, rolled when applied."
                         }
-                        onChange={(max) => onPatch({ max })}
+                        onChange={(max) => {
+                            const nextMax = resolveRampTarget(
+                                max,
+                                lane.fieldLevel,
+                            );
+                            onPatch({
+                                max,
+                                ...(ramp.endAction ===
+                                    RampEndAction.SET_LEVEL &&
+                                ramp.endValue > nextMax
+                                    ? {
+                                          endValue: clampLevel(nextMax),
+                                      }
+                                    : {}),
+                            });
+                        }}
                     />
 
                     <RangeBar start={lane.startLevel} max={lane.maxLevel} />
@@ -1235,6 +1336,67 @@ export function RampInspector({
                                 ceiling.
                             </p>
                         )}
+                </section>
+
+                <section className="flex flex-col gap-2 p-3">
+                    <div className="flex items-center justify-between gap-2">
+                        <SectionLabel>When it ends</SectionLabel>
+                        <span className="font-mono text-[8px] text-muted-foreground/45">
+                            {endOption.label}
+                        </span>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-1">
+                        {RAMP_END_OPTIONS.map((option) => (
+                            <ToggleChip
+                                key={option.value}
+                                active={ramp.endAction === option.value}
+                                title={option.hint}
+                                className="h-7 justify-center px-1.5 text-[10px]"
+                                onClick={() =>
+                                    onPatch({ endAction: option.value })
+                                }
+                            >
+                                {option.label}
+                            </ToggleChip>
+                        ))}
+                    </div>
+
+                    {ramp.endAction === RampEndAction.SET_LEVEL && (
+                        <div className="flex flex-wrap items-center gap-1.5">
+                            <RampNumberField
+                                value={ramp.endValue}
+                                min={0}
+                                max={100}
+                                ariaLabel="End level"
+                                onChange={(value) =>
+                                    onPatch({
+                                        endValue: clampLevel(value),
+                                    })
+                                }
+                                className="h-7 w-20 text-center font-mono text-[11px] tabular-nums"
+                            />
+                            <span className="text-[9px] text-muted-foreground/60">
+                                capped at peak level {lane.maxLevel}
+                            </span>
+                        </div>
+                    )}
+
+                    {ramp.endAction === RampEndAction.SET_LEVEL &&
+                        ramp.endValue > lane.maxLevel && (
+                            <p className="text-[9px] leading-snug text-amber-700 dark:text-amber-200">
+                                {clampLevel(ramp.endValue)} is above the peak
+                                level; this lane will cap the end level at{" "}
+                                {lane.maxLevel}.
+                            </p>
+                        )}
+
+                    <p className="text-[9px] leading-snug text-muted-foreground/65">
+                        {endOption.hint}{" "}
+                        {live
+                            ? "Applies on natural end and when you press Stop."
+                            : "Applies when this ramp ends; stopping the profile restores its snapshot instead."}
+                    </p>
                 </section>
 
                 <section className="flex flex-col gap-2 p-3">

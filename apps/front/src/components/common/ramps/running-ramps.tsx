@@ -52,12 +52,11 @@ export function RunningRamps() {
                     case "ramps:resume":
                         return sendCommand("ramps:resume", { unit, field });
                     case "ramps:stop":
-                        // restore: true keeps the backend default (the field
-                        // ends at the ramp's max value).
+                        // No restore override: each ramp applies its
+                        // configured end action (hold peak by default).
                         return sendCommand("ramps:stop", {
                             unit,
                             field,
-                            restore: true,
                         });
                 }
             };

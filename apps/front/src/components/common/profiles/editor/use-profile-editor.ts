@@ -7,9 +7,13 @@
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
-import { RampMode } from "@/types";
+import { RampEndAction, RampMode } from "@/types";
 import type { ProfileDetail } from "@/types";
 import type { UnitSettings } from "@/types/units.types";
+import {
+    normalizeRampEndAction,
+    normalizeRampEndValue,
+} from "@/lib/ramp-end";
 
 import {
     draftUnitFrom,
@@ -38,6 +42,8 @@ function newRamp(): RampDraft {
         duration: -1,
         start: { mode: "live", value: 0, range: "" },
         max: { mode: "live", value: 100, range: "" },
+        endAction: RampEndAction.HOLD_PEAK,
+        endValue: 0,
         raw: {},
     };
 }
@@ -54,6 +60,8 @@ export type LiveRampLike = {
     duration: number;
     start_value: number;
     max_value: number;
+    end_action?: RampEndAction;
+    end_value?: number | null;
 };
 
 export type ProfileEditorActions = {
@@ -227,6 +235,7 @@ export function useProfileEditorDraft(
                 ) {
                     continue;
                 }
+                const endAction = normalizeRampEndAction(live.end_action);
                 next[live.field as RampField] = {
                     timer: live.timer,
                     step: live.step,
@@ -242,6 +251,11 @@ export function useProfileEditorDraft(
                         range: "",
                     },
                     max: { mode: "fixed", value: live.max_value, range: "" },
+                    endAction,
+                    endValue: normalizeRampEndValue(
+                        live.end_value,
+                        endAction,
+                    ),
                     raw: {},
                 };
             }
