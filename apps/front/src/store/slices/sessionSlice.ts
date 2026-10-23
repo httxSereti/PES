@@ -8,15 +8,12 @@ export interface SessionState {
     initialized: boolean;
     /** Whether the session settings modal is currently open. */
     settingsModalOpen: boolean;
-    /** True when the auto-open on HOST login has already been consumed this login. */
-    autoOpenHandled: boolean;
 }
 
 const initialState: SessionState = {
     activeSession: null,
     initialized: false,
     settingsModalOpen: false,
-    autoOpenHandled: false,
 };
 
 const sessionSlice = createSlice({
@@ -33,23 +30,13 @@ const sessionSlice = createSlice({
             const session = action.payload;
             state.activeSession = session.status === 'running' ? session : null;
         },
-        /** Auto-open the settings modal for the HOST right after login. */
-        autoOpenSessionSettings: (state) => {
-            state.settingsModalOpen = true;
-            state.autoOpenHandled = true;
-        },
-        /** Manual reopen from the user dropdown. */
+        /** Manual open from the user dropdown or session activity card. */
         openSessionSettings: (state) => {
             state.settingsModalOpen = true;
         },
-        /** Closing the modal also consumes the auto-open for this login. */
+        /** Close the settings modal. */
         closeSessionSettings: (state) => {
             state.settingsModalOpen = false;
-            state.autoOpenHandled = true;
-        },
-        /** New login: allow the auto-open to fire again. */
-        resetSessionSettings: (state) => {
-            state.autoOpenHandled = false;
         },
     },
 });
@@ -57,9 +44,7 @@ const sessionSlice = createSlice({
 export const {
     sessionInit,
     sessionUpdated,
-    autoOpenSessionSettings,
     openSessionSettings,
     closeSessionSettings,
-    resetSessionSettings,
 } = sessionSlice.actions;
 export default sessionSlice.reducer;
