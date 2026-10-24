@@ -403,7 +403,7 @@ export default function TriggerRuleActionFields({
                         )}
 
                         {actionType === ActionType.PURYFI_SET_LOCK && (
-                            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                            <div className="space-y-3">
                                 <Controller
                                     name={`actions.${index}.timer_minutes`}
                                     control={control}
@@ -422,26 +422,10 @@ export default function TriggerRuleActionFields({
                                         </Field>
                                     )}
                                 />
-                                <Controller
-                                    name={`actions.${index}.password`}
-                                    control={control}
-                                    render={({ field, fieldState }) => (
-                                        <Field data-invalid={fieldState.invalid}>
-                                            <FieldLabel>Password</FieldLabel>
-                                            <FieldDescription>
-                                                Leave empty to clear an existing password
-                                            </FieldDescription>
-                                            <Input
-                                                {...field}
-                                                type="password"
-                                                aria-invalid={fieldState.invalid}
-                                                placeholder="optional"
-                                                autoComplete="off"
-                                            />
-                                            {fieldState.invalid && <FieldError errors={[fieldState.error]} />}
-                                        </Field>
-                                    )}
-                                />
+                                <p className="text-[11px] text-muted-foreground/60">
+                                    Uses the lock password configured in the PuryFi integration
+                                    settings. Leave it empty to create locks without a password.
+                                </p>
                             </div>
                         )}
 

@@ -180,7 +180,7 @@ class IntegrationRegistry:
         self._settings.update(integration_id, {section: {**values, item_id: bool(enabled)}})
 
     def settings_values(self, integration_id: str) -> dict[str, Any]:
-        """Current value of every declared setting (secrets masked)."""
+        """Current value of every declared setting (env-backed secrets masked)."""
         integration = self._require(integration_id)
         stored = self._settings.get(integration_id)
         values: dict[str, Any] = {}

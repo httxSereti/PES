@@ -45,7 +45,6 @@ export const actionSchema = z.discriminatedUnion("action_type", [
     baseAction.extend({
         action_type: z.literal(ActionType.PURYFI_SET_LOCK),
         timer_minutes: z.coerce.number().int().min(0, "Use 0 for no timer"),
-        password: z.string(),
     }),
     baseAction.extend({
         action_type: z.literal(ActionType.PURYFI_SET_LOCK_TIMER),
@@ -95,7 +94,7 @@ export function defaultAction(action_type: ActionType): ActionValues {
         case ActionType.PURYFI_SET_ENABLED:
             return { ...base, action_type, enabled: true };
         case ActionType.PURYFI_SET_LOCK:
-            return { ...base, action_type, timer_minutes: 30, password: "" };
+            return { ...base, action_type, timer_minutes: 30 };
         case ActionType.PURYFI_SET_LOCK_TIMER:
             return { ...base, action_type, value: "+10" };
         case ActionType.PURYFI_ENTER_LOCK_PASSWORD:
@@ -149,7 +148,6 @@ export function actionToFormValues(action: TriggerAction): ActionValues {
                 ...base,
                 action_type: ActionType.PURYFI_SET_LOCK,
                 timer_minutes: Number(p["timer_minutes"] ?? 0),
-                password: String(p["password"] ?? ""),
             };
         case ActionType.PURYFI_SET_LOCK_TIMER:
             return { ...base, action_type: ActionType.PURYFI_SET_LOCK_TIMER, value: String(p["value"] ?? "+10") };
@@ -193,7 +191,7 @@ export function actionSummary(action: ActionValues): string {
         case ActionType.PURYFI_SET_ENABLED:
             return action.enabled ? "Enable blocker" : "Disable blocker";
         case ActionType.PURYFI_SET_LOCK:
-            return `${action.timer_minutes} min${action.password ? " · password set" : ""}`;
+            return `${action.timer_minutes} min`;
         case ActionType.PURYFI_SET_LOCK_TIMER:
             return action.value || "No time set";
         case ActionType.PURYFI_ENTER_LOCK_PASSWORD:
@@ -247,7 +245,7 @@ export function toActionBody(action: ActionValues, sort_order: number) {
             payload = { enabled: action.enabled };
             break;
         case ActionType.PURYFI_SET_LOCK:
-            payload = { timer_minutes: action.timer_minutes, password: action.password };
+            payload = { timer_minutes: action.timer_minutes };
             break;
         case ActionType.PURYFI_SET_LOCK_TIMER:
             payload = { value: action.value };

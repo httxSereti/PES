@@ -139,11 +139,10 @@ export function describeAction(action: ActionLike): DescribedAction {
 
         case ActionType.PURYFI_SET_LOCK: {
             const timer = num(payload.timer_minutes);
-            const hasPassword = Boolean(text(payload.password, ""));
             return {
                 ...base,
                 title: timer > 0 ? `Lock PuryFi for ${timer} min` : "Lock PuryFi · no timer",
-                detail: `Create a new PuryFi lock${hasPassword ? " with a password" : " without a password"}`,
+                detail: "Create a new PuryFi lock using the configured lock password",
             };
         }
 

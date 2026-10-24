@@ -93,7 +93,7 @@ const FALLBACK_ACTIONS: Record<string, Omit<ActionCatalogEntry, "id">> = {
     },
     [ActionType.PURYFI_SET_LOCK]: {
         label: "Set PuryFi lock",
-        description: "Create or replace the PuryFi lock.",
+        description: "Create or replace the PuryFi lock using the saved lock password.",
         integrationId: "puryfi",
         integrationName: "PuryFi",
         group: "Lock",
@@ -101,7 +101,6 @@ const FALLBACK_ACTIONS: Record<string, Omit<ActionCatalogEntry, "id">> = {
         reversible: false,
         payloadSchema: {
             timer_minutes: "Timer in minutes (0 = none)",
-            password: "Optional password",
         },
     },
     [ActionType.PURYFI_SET_LOCK_TIMER]: {

@@ -232,7 +232,7 @@ _SETTINGS = [
         type=SettingType.SECRET,
         secret=True,
         default="",
-        description="Used by the 'Unlock with password' action",
+        description="Used when setting a lock and by the 'Unlock with password' action",
     ),
     SettingDef(
         key="emergency_token",
@@ -270,14 +270,11 @@ class PuryFiIntegration(Integration):
                 id=ActionType.PURYFI_SET_LOCK.value,
                 label="Set PuryFi lock",
                 description=(
-                    "Set or replace the PuryFi lock. Clears an existing lock "
-                    "password unless a new one is provided."
+                    "Set or replace the PuryFi lock. Uses the lock password "
+                    "from the integration settings (empty = no password)."
                 ),
                 group="Lock",
-                payload_schema={
-                    "timer_minutes": "integer (0 = no timer)",
-                    "password": "string (optional)",
-                },
+                payload_schema={"timer_minutes": "integer (0 = no timer)"},
                 handler=SetLockHandler(self),
             ),
             ActionDef(

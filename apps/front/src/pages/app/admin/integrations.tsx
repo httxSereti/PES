@@ -379,8 +379,10 @@ function IntegrationPanel({
         }
     };
 
+    // JSON-backed settings are editable, including secrets (rendered as
+    // password fields above); env-backed settings stay read-only.
     const editable = useMemo(
-        () => entry.settings.filter(setting => setting.source !== "env" && !setting.secret),
+        () => entry.settings.filter(setting => setting.source !== "env"),
         [entry.settings]
     );
     const dirty = editable.some(

@@ -29,6 +29,11 @@ lock paths). Detection events are per category (`puryfi_genitals_detected`,
 `puryfi_breasts_detected`, …) with `min_score_pct`, `min_objects`,
 `cooldown_seconds` and `include_covered` settings.
 
+Lock actions share one source of truth: `PURYFI_SET_LOCK` applies the
+`lock_password` setting, and `PURYFI_ENTER_LOCK_PASSWORD` reuses the same
+setting, so the password used to create a lock always matches the unlock
+password. `PURYFI_EMERGENCY_UNLOCK` likewise reads `emergency_token`.
+
 Censor hooks (`mediaCensorHookRequest`) are answered with `pass` — PES never
 intercepts images.
 
@@ -58,17 +63,20 @@ actions keep their implementation in `events/executor.py`.
 
 - WS `integrations:load` (on connect) / `integrations:update` (broadcast),
   client command `integrations:update` — see `api/ws/schema/`.
-- REST `GET /integrations` (admin) — catalog + settings values, secrets masked.
+- REST `GET /integrations` (admin) — catalog + settings values (env-backed
+  secrets masked; JSON-backed secrets are editable).
 - REST `GET /api/events/types`, `GET /api/events/action-types` — SAME data the
   frontend uses to render event groups, the events handbook and the action
   dropdowns.
 
 ## Settings
 
-- Non-secret values: `configurations/integrations.json`
+- JSON-backed values (`source="json"`): `configurations/integrations.json`
   (`{"chaster": {"enabled": true, ...}}`), edited from Admin → Integrations.
-- Secrets: `config.env`, declared with `SettingDef(source="env")` and shown
-  read-only (masked) in the UI.
+  JSON-backed secrets (`secret=True`) are edited there too and rendered as
+  password fields.
+- Env-backed values (`source="env"`): `config.env`, shown read-only (masked)
+  in the UI.
 
 ## Adding an integration
 

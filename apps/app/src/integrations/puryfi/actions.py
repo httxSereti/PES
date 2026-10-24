@@ -97,7 +97,17 @@ class SetLockHandler(PuryFiActionHandler):
     async def run(self, payload: dict) -> None:
         connection = self._integration.connection
         minutes = max(0, int(payload.get("timer_minutes") or 0))
-        password = str(payload.get("password") or "")
+
+        # The integration setting is the single source of truth: the same
+        # secret is used to create the lock and to unlock it later. Rules
+        # persisted before this change may still carry a password payload.
+        password = str(self._integration.settings_values().get("lock_password") or "")
+        legacy_password = str(payload.get("password") or "")
+        if legacy_password and legacy_password != password:
+            logger.warning(
+                "[PuryFi] Ignoring per-rule lock password; using the "
+                "'lock_password' integration setting"
+            )
 
         # The password secret is write-only, so an existing password cannot be
         # preserved: replacing the lock clears it unless a new one is given.
@@ -156,20 +166,25 @@ class SetLockTimerHandler(PuryFiActionHandler):
                 {"path": "lockConfiguration.timer.endTime", "value": now_ms + minutes * 60_000},
             )
         else:
-            # No timer yet: the whole lock configuration must be replaced;
-            # the (write-only) password cannot be preserved.
+            # No timer yet: the whole lock configuration must be replaced.
+            # PuryFi never exposes the existing password, so fall back to the
+            # configured one to keep the lock unlockable from PES.
+            password = str(self._integration.settings_values().get("lock_password") or "")
             await connection.request(
                 "setState",
                 {
                     "path": "lockConfiguration",
                     "value": {
-                        "password": None,
+                        "password": {"secret": password} if password else None,
                         "timer": {"endTime": now_ms + minutes * 60_000},
                         "timerPlus": current.get("timerPlus"),
                     },
                 },
             )
-            logger.info("[PuryFi] Timer created (existing password cleared)")
+            logger.info(
+                "[PuryFi] Timer created "
+                f"({'password from settings applied' if password else 'no password set'})"
+            )
 
         logger.info(f"[PuryFi] Lock timer set to {minutes} min (from {current_minutes} min)")
 
@@ -178,7 +193,7 @@ class EnterLockPasswordHandler(PuryFiActionHandler):
     name = "Unlock with password"
 
     async def run(self, payload: dict) -> None:
-        password = str(self._integration.settings().get("lock_password") or "")
+        password = str(self._integration.settings_values().get("lock_password") or "")
         if not password:
             logger.warning("[PuryFi] Unlock skipped: no lock password configured")
             return
@@ -190,7 +205,7 @@ class EmergencyUnlockHandler(PuryFiActionHandler):
     name = "Emergency unlock"
 
     async def run(self, payload: dict) -> None:
-        token = str(self._integration.settings().get("emergency_token") or "")
+        token = str(self._integration.settings_values().get("emergency_token") or "")
         if not token:
             logger.warning("[PuryFi] Emergency unlock skipped: no server token configured")
             return
