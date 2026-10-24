@@ -86,13 +86,13 @@ class Store:
             "sensor_online": False,  # true if the sensors is online
             "position_ref": -1.0,  # position reference
             "position_alarm_level": 45,  # threshold for position alarm action
-            "position_delay_on": 1,  # nb consecutive value for starting an action
-            "position_delay_off": 5,  # nb consecutive value before starting an action again
+            "position_delay_on": 1,  # seconds from first crossing until alarm can fire
+            "position_delay_off": 5,  # seconds before firing again after an alarm
             "move_alarm_level": 12,  # threshold for moving alarm action
-            "move_delay_on": 1,  # nb consecutive value for starting an action
-            "move_delay_off": 5,  # nb consecutive value before starting an action again
-            "position_alarm_counter": 0,  # Num of consecutive position alarm
-            "move_alarm_counter": 0,  # Num of consecutive move alarm
+            "move_delay_on": 1,  # seconds from first crossing until alarm can fire
+            "move_delay_off": 5,  # seconds before firing again after an alarm
+            "position_alarm_counter": 0,  # elapsed hold seconds (+) / cooldown seconds (-)
+            "move_alarm_counter": 0,  # elapsed hold seconds (+) / cooldown seconds (-)
             "position_alarm_number": 0,  # Number of the last alarm
             "move_alarm_number": 0,  # Number of the last alarm
             "position_alarm_number_action": 0,  # Number of the last alarm who had generated an action
@@ -112,10 +112,10 @@ class Store:
             "id": "sound",
             "sensor_type": "sound",
             "sensor_online": False,  # true if the sensors is online
-            "sound_alarm_level": 30,  # threshold for position alarm action
-            "sound_delay_on": 5,  # nb consecutive value for starting an action
-            "sound_delay_off": 10,  # nb consecutive value before starting an action again
-            "sound_alarm_counter": 0,  # Num of consecutive sound alarm
+            "sound_alarm_level": 30,  # threshold for sound alarm action
+            "sound_delay_on": 5,  # seconds from first crossing until alarm can fire
+            "sound_delay_off": 10,  # seconds before firing again after an alarm
+            "sound_alarm_counter": 0,  # elapsed hold seconds (+) / cooldown seconds (-)
             "sound_alarm_number": 0,  # Number of the last alarm
             "sound_alarm_number_action": 0,  # Number of the last alarm who had generated an action
             "current_sound": 0,  # Current sound value

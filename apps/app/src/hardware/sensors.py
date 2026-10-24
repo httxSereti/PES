@@ -4,7 +4,9 @@ parsing, and alarm threshold checks.
 """
 
 import asyncio
+import math
 import re
+import threading
 import time
 from functools import partial
 
@@ -20,17 +22,40 @@ logger = structlog.get_logger("pes")
 
 store = Store()
 
+# Wall-clock timing state for hold/cooldown, keyed by (sensor, measure).
+# This is intentionally independent of the BLE notification rate.
+_timing_lock = threading.Lock()
+_alarm_since: dict[tuple[str, str], float] = {}
+_cooldown_until: dict[tuple[str, str], float] = {}
 
-def sensor_check_val(sensor_name: str, measure: str, val: int) -> None:
+
+def _reset_hold(sensor_name: str, measure: str) -> None:
+    with _timing_lock:
+        _alarm_since.pop((sensor_name, measure), None)
+
+
+def _reset_sensor_holds(sensor_name: str) -> None:
+    with _timing_lock:
+        for key in [key for key in _alarm_since if key[0] == sensor_name]:
+            _alarm_since.pop(key, None)
+
+
+def sensor_check_val(sensor_name: str, measure: str, val: float) -> None:
     """
-    Check if the sensor can fire an alarm
-    Args:
-        sensor: Name of the sensor
-        measure: What the sensor check
-        val: sensor value
+    Check whether a sensor value should fire an alarm.
 
-    Returns:
+    ``*_delay_on`` and ``*_delay_off`` are seconds, not notification counts:
+    - the first reading above the threshold starts the hold timer;
+    - once ``delay_on`` seconds have elapsed, the next above-threshold reading
+      fires an alarm;
+    - below-threshold readings do **not** reset the hold timer; it is reset
+      only when the sensor disconnects/reconnects or is disabled;
+    - after firing, ``delay_off`` seconds must pass before another alarm
+      (cooldown). The hold timer keeps running during cooldown.
 
+    The positive/negative alarm counter is kept in seconds for compatibility
+    with existing clients: positive = elapsed hold seconds, negative =
+    remaining cooldown seconds.
     """
     # fetch current settings
     current_sensor_settings = store.get_sensor_setting(sensor_name)
@@ -43,36 +68,60 @@ def sensor_check_val(sensor_name: str, measure: str, val: int) -> None:
 
     # no check if offline
     if not current_sensor_settings["sensor_online"]:
+        _reset_hold(sensor_name, measure)
         return
 
     fields_to_update = {"current_" + measure: new_current_value}
 
-    new_counter = current_sensor_settings[measure + "_alarm_counter"]
+    delay_on = max(0, int(current_sensor_settings[measure + "_delay_on"]))
+    delay_off = max(0, int(current_sensor_settings[measure + "_delay_off"]))
+    counter_key = measure + "_alarm_counter"
+    alarm_key = measure + "_alarm_number"
+    key = (sensor_name, measure)
 
-    # value is superior to alarm level
-    if (
-        val > current_sensor_settings[measure + "_alarm_level"]
-        or current_sensor_settings[measure + "_alarm_counter"] < 0
-    ):
-        current_sensor_settings[measure + "_alarm_counter"] = (
-            current_sensor_settings[measure + "_alarm_counter"] + 1
-        )
+    with _timing_lock:
+        now = time.monotonic()
+        cooldown_until = _cooldown_until.get(key, 0.0)
 
-        new_counter = new_counter + 1
-        fields_to_update[measure + "_alarm_counter"] = new_counter
+        # Still cooling down: update the reading, but never fire. The cooldown
+        # may start the hold timer, but it must not reset it.
+        if now < cooldown_until:
+            if val > current_sensor_settings[measure + "_alarm_level"]:
+                _alarm_since.setdefault(key, now)
+            fields_to_update[counter_key] = -math.ceil(cooldown_until - now)
+            store.update_sensor_fields(sensor_name, fields_to_update)
+            return
 
-    # consecutive detect and activate delay_off
-    if new_counter >= current_sensor_settings[measure + "_delay_on"]:
-        # alarm
-        fields_to_update[measure + "_alarm_number"] = (
-            current_sensor_settings[measure + "_alarm_number"] + 1
-        )
-        # add delay before the next alarm
-        fields_to_update[measure + "_alarm_counter"] = -current_sensor_settings[
-            measure + "_delay_off"
-        ]
+        if cooldown_until:
+            _cooldown_until.pop(key, None)
 
-    store.update_sensor_fields(sensor_name, fields_to_update)
+        if val > current_sensor_settings[measure + "_alarm_level"]:
+            # The timer starts on the first above-threshold reading. Below
+            # threshold readings do not reset it.
+            since = _alarm_since.setdefault(key, now)
+            elapsed = now - since
+            fields_to_update[counter_key] = int(elapsed)
+
+            if elapsed >= delay_on:
+                fields_to_update[alarm_key] = (
+                    current_sensor_settings[alarm_key] + 1
+                )
+                fields_to_update[counter_key] = -delay_off
+                # Keep the hold timer: if the value stays above threshold,
+                # the next alarm is eligible as soon as cooldown expires.
+
+                if delay_off > 0:
+                    _cooldown_until[key] = now + delay_off
+        else:
+            # Do not clear the hold timer here; only a disconnect/reconnect
+            # or sensor disable resets it. Keep the elapsed time visible in
+            # the compatibility counter.
+            hold_since = _alarm_since.get(key)
+            fields_to_update[counter_key] = (
+                int(now - hold_since) if hold_since is not None else 0
+            )
+
+        store.update_sensor_fields(sensor_name, fields_to_update)
 
 
 def sensor_notification(sensor_name, _, data: bytearray) -> None:
@@ -109,7 +158,7 @@ def sensor_notification(sensor_name, _, data: bytearray) -> None:
         pos = (abs(x_angle) + abs(y_angle) + abs(z_angle)) / 100
 
         # new position
-        new_position_ref: int = pos
+        new_position_ref: float = pos
 
         if current_sensor_settings["position_ref"] == -1:
             new_position_ref = pos
@@ -168,6 +217,7 @@ async def sensor_bt(sensor_name: str, address: str, char_uuid: str) -> None:
     ) as client:
         logger.info("[Sensors] Sensor online", sensor_name=sensor_name)
         current_sensor_settings["sensor_online"] = True
+        _reset_sensor_holds(sensor_name)
 
         # queue ws update
         ws_notifier.notify(
@@ -209,6 +259,7 @@ def thread_sensors_bt(sensor: str, addr: str, service: str) -> None:
         if not store.is_hardware_enabled(sensor):
             if store.get_sensor_setting(sensor)["sensor_online"]:
                 store.update_sensor_field(sensor, "sensor_online", False)
+                _reset_sensor_holds(sensor)
             time.sleep(1)
             continue
         try:
