@@ -163,8 +163,9 @@ export const Sensors: FC = () => {
                         Every control, already open
                     </div>
                     <p className="mt-1 max-w-[640px] text-[11px] text-muted-foreground/50">
-                        No drawers, no collapsed cards. Thresholds, holds,
-                        cooldowns and sensor actions are all editable here.
+                        No drawers, no collapsed cards. Thresholds, trigger
+                        delays, cooldowns and sensor actions are all editable
+                        here.
                     </p>
                 </div>
 

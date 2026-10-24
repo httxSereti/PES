@@ -198,12 +198,14 @@ export const Sensor: FC<SensorProps> = ({ sensorId }) => {
                         sensorId={sensorId}
                         sensor={sensor as MotionSensor}
                         theme={theme}
+                        enabled={enabled}
                     />
                 ) : (
                     <SensorSound
                         sensorId={sensorId}
                         sensor={sensor as SoundSensor}
                         theme={theme}
+                        enabled={enabled}
                     />
                 )}
             </div>

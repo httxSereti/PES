@@ -1,5 +1,6 @@
 import { CfgSensorSlider } from "@/components/common/sensors/common/cfg-sensor-slider";
 import { SectionHeading } from "@/components/common/sensors/common/section-heading";
+import { CooldownIndicator } from "@/components/common/sensors/cooldown-indicator";
 import { SensorRecent } from "@/components/common/sensors/sensor-recent";
 import { SensorTrace } from "@/components/common/sensors/sensor-trace";
 import { useSensorEvents } from "@/hooks/useSensorEvents";
@@ -12,6 +13,7 @@ type SoundSensorProps = {
     sensorId: HardwareSensorId;
     sensor: SoundSensor;
     theme: SensorTheme;
+    enabled: boolean;
 };
 
 type ConnectionRowProps = {
@@ -48,6 +50,7 @@ export const SensorSound: FC<SoundSensorProps> = ({
     sensorId,
     sensor,
     theme,
+    enabled,
 }) => {
     const { events, latestAt } = useSensorEvents(sensorId, 4);
     const isAlarming =
@@ -70,6 +73,20 @@ export const SensorSound: FC<SoundSensorProps> = ({
                 online={sensor.sensor_online}
             />
 
+            <CooldownIndicator
+                label="Sound"
+                counter={sensor.sound_alarm_counter}
+                totalSeconds={sensor.sound_delay_off}
+                triggerSeconds={sensor.sound_delay_on}
+                alarmCount={sensor.sound_alarm_number}
+                aboveThreshold={
+                    sensor.current_sound >= sensor.sound_alarm_level
+                }
+                enabled={enabled}
+                online={sensor.sensor_online}
+                alarmEnabled={sensor.alarm_enable}
+            />
+
             <div className="flex flex-col gap-2">
                 <SectionHeading label="Controls" meta="3 settings" />
                 <CfgSensorSlider
@@ -87,7 +104,7 @@ export const SensorSound: FC<SoundSensorProps> = ({
                 <CfgSensorSlider
                     sensorId={sensorId}
                     propertyKey="sound_delay_on"
-                    label="Hold before trigger"
+                    label="Time before triggering action"
                     minValue={1}
                     maxValue={120}
                     step={1}

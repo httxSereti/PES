@@ -1,5 +1,6 @@
 import { CfgSensorSlider } from "@/components/common/sensors/common/cfg-sensor-slider";
 import { SectionHeading } from "@/components/common/sensors/common/section-heading";
+import { CooldownIndicator } from "@/components/common/sensors/cooldown-indicator";
 import { SensorRecent } from "@/components/common/sensors/sensor-recent";
 import { SensorTrace } from "@/components/common/sensors/sensor-trace";
 import { useSensorEvents } from "@/hooks/useSensorEvents";
@@ -11,18 +12,24 @@ type SensorMotionProps = {
     sensorId: HardwareSensorId;
     sensor: MotionSensor;
     theme: SensorTheme;
+    enabled: boolean;
 };
 
 export const SensorMotion: FC<SensorMotionProps> = ({
     sensorId,
     sensor,
     theme,
+    enabled,
 }) => {
     const { events, latestByType } = useSensorEvents(sensorId, 2);
     const hasPositionRef = sensor.position_ref >= 0;
     const positionDelta = hasPositionRef
         ? Math.abs(sensor.current_position - sensor.position_ref)
         : 0;
+    const positionAbove =
+        hasPositionRef &&
+        sensor.position_alarm_level > 0 &&
+        positionDelta >= sensor.position_alarm_level;
     const positionAlert =
         sensor.sensor_online &&
         sensor.alarm_enable &&
@@ -89,6 +96,35 @@ export const SensorMotion: FC<SensorMotionProps> = ({
                 </div>
             </div>
 
+            <div className="grid grid-cols-2 gap-2">
+                <CooldownIndicator
+                    compact
+                    label="Position"
+                    counter={sensor.position_alarm_counter}
+                    totalSeconds={sensor.position_delay_off}
+                    triggerSeconds={sensor.position_delay_on}
+                    alarmCount={sensor.position_alarm_number}
+                    aboveThreshold={positionAbove}
+                    enabled={enabled}
+                    online={sensor.sensor_online}
+                    alarmEnabled={sensor.alarm_enable}
+                />
+                <CooldownIndicator
+                    compact
+                    label="Movement"
+                    counter={sensor.move_alarm_counter}
+                    totalSeconds={sensor.move_delay_off}
+                    triggerSeconds={sensor.move_delay_on}
+                    alarmCount={sensor.move_alarm_number}
+                    aboveThreshold={
+                        sensor.current_move >= sensor.move_alarm_level
+                    }
+                    enabled={enabled}
+                    online={sensor.sensor_online}
+                    alarmEnabled={sensor.alarm_enable}
+                />
+            </div>
+
             <div className="flex flex-col gap-2">
                 <SectionHeading label="Position" meta="3 settings" />
                 <CfgSensorSlider
@@ -106,7 +142,7 @@ export const SensorMotion: FC<SensorMotionProps> = ({
                 <CfgSensorSlider
                     sensorId={sensorId}
                     propertyKey="position_delay_on"
-                    label="Hold before trigger"
+                    label="Time before triggering action"
                     minValue={1}
                     maxValue={120}
                     step={1}
@@ -146,7 +182,7 @@ export const SensorMotion: FC<SensorMotionProps> = ({
                 <CfgSensorSlider
                     sensorId={sensorId}
                     propertyKey="move_delay_on"
-                    label="Hold before trigger"
+                    label="Time before triggering action"
                     minValue={1}
                     maxValue={120}
                     step={1}
