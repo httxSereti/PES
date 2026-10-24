@@ -236,7 +236,7 @@ function RuleDetail({
                     </div>
                 )}
                 <span className="ml-auto font-mono text-[9px] text-muted-foreground/35">
-                    Stats from the last 250 events
+                    Stats from the last 1000 events
                 </span>
             </div>
         </div>

@@ -49,7 +49,7 @@ class WebSocketNotifier:
         self._loop.call_soon_threadsafe(self._queue.put_nowait, message)
 
     async def send_history(
-        self, client_id: str, ws_manager: WebSocketManager, limit: int = 250
+        self, client_id: str, ws_manager: WebSocketManager, limit: int = 1000
     ):
         """
         Send the last `limit` triggered events to a single newly connected client.

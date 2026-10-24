@@ -9,7 +9,7 @@ export interface RuleFiringStats {
 
 /**
  * Derives per-rule firing stats from the event buffer already held in Redux.
- * The buffer is capped (250 events), so these are recent stats — not lifetime.
+ * The buffer is capped (1000 events), so these are recent stats — not lifetime.
  */
 export function buildRuleStats(events: TriggeredEvent[]): Map<string, RuleFiringStats> {
     const stats = new Map<string, RuleFiringStats>();

@@ -14,7 +14,7 @@ export interface EventsState {
 
 const initialState: EventsState = {
     events: [],
-    maxEvents: 250,
+    maxEvents: 1000,
     triggerRules: []
 };
 

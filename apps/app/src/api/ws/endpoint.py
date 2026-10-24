@@ -91,7 +91,7 @@ async def _send_init_sequence(websocket: WebSocket, user) -> None:
             }
         )
 
-    # Replay the last 250 triggered events (members only)
+    # Replay the last 1000 triggered events (members only)
     if allowed("events:history"):
         await ws_notifier.send_history(user.id, store.websocket)
 

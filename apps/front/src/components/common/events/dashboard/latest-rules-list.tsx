@@ -63,7 +63,7 @@ export default function LatestRulesList({ performance, now }: { performance: Rul
                     <Zap size={13} className="accent-tile-icon" />
                     Rule performance
                     <span className="rounded-full border border-border/60 bg-muted/40 px-2 py-px font-mono text-[9px] font-normal uppercase tracking-widest text-muted-foreground/50">
-                        last 250 events
+                        last 1000 events
                     </span>
                 </CardTitle>
                 <Link

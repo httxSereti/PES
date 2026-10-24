@@ -391,7 +391,7 @@ export default function TriggerRulesConsole() {
                             {counts.disabled} paused
                         </span>
                         <span className="hidden sm:inline">
-                            Firing counts cover the last 250 events · Row click expands
+                            Firing counts cover the last 1000 events · Row click expands
                         </span>
                     </div>
                 </>

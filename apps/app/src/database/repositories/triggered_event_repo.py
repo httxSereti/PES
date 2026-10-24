@@ -23,7 +23,7 @@ class TriggeredEventRepo:
             session.add(event)
             await session.commit()
 
-    async def get_recent(self, limit: int = 250) -> List[TriggeredEvent]:
+    async def get_recent(self, limit: int = 1000) -> List[TriggeredEvent]:
         """
         Return the most recent `limit` events, ordered oldest-first
         so the client can replay them in chronological order.

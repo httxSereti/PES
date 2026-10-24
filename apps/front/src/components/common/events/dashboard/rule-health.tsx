@@ -20,7 +20,7 @@ function insight(health: RuleHealthSummary): string {
         return "No trigger rules yet. Create one to react to Chaster, PuryFi or sensor events automatically.";
     }
     if (health.neverFiredEnabled > 0) {
-        return `${health.neverFiredEnabled} enabled rule${health.neverFiredEnabled === 1 ? "" : "s"} haven't fired in the last 250 events. Check the trigger conditions.`;
+        return `${health.neverFiredEnabled} enabled rule${health.neverFiredEnabled === 1 ? "" : "s"} haven't fired in the last 1000 events. Check the trigger conditions.`;
     }
     if (health.paused > 0) {
         return `${health.paused} rule${health.paused === 1 ? " is" : "s are"} paused and won't react until re-enabled.`;

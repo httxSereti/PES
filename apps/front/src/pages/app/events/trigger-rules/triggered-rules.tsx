@@ -657,7 +657,7 @@ export default function TriggeredRulesPage() {
         <div className="space-y-3 px-4 md:px-5">
             <div className="flex flex-wrap items-center justify-between gap-2">
                 <p className="max-w-2xl text-[11px] leading-relaxed text-muted-foreground/60">
-                    Firing history is derived from the last 250 triggered events kept in
+                    Firing history is derived from the last 1000 triggered events kept in
                     memory. Open a rule to inspect its recent firings and the actions it
                     actually ran.
                 </p>
