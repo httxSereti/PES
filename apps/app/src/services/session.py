@@ -20,10 +20,10 @@ from database.models import AppSession, EdgingSession, TriggeredEvent
 from database.repositories.edging_repo import EdgingRepo
 from database.repositories.session_repo import SessionRepo
 from database.repositories.triggered_event_repo import TriggeredEventRepo
-from events.queue import ActionQueue
+from services.neutralize import neutralize_all
 from services.training import serialize_session as serialize_edging_session
 from store import Store
-from typings import Permission, SessionStatus, SessionType, UnitDict
+from typings import Permission, SessionStatus, SessionType
 from utils import to_utc_iso
 
 logger = structlog.get_logger("pes")
@@ -165,18 +165,8 @@ async def end_session(repo: Optional[SessionRepo] = None) -> Optional[dict]:
     if session is None:
         return None
 
-    # Full stop: cancel the action queue and zero every channel
-    await ActionQueue.get_instance().cancel_all()
-    for unit_str in BT_UNITS:
-        unit = UnitDict(unit_str)
-        store.update_unit_dict(
-            unit,
-            {
-                "updated": True,
-                "ch_A": 0,
-                "ch_B": 0,
-            },
-        )
+    # Full stop: same neutralize path as the panic stop and app shutdown
+    await neutralize_all(reason="session:end")
 
     # Restore hardware enable flags to their pre-session state
     store.restore_hardware_snapshot()

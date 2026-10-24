@@ -12,7 +12,7 @@ from hardware.ramp import RampMode, ramp_manager
 from hardware.units import resolve_usage_limit
 from services.profiles import ProfileError, load_profile
 from store import Store
-from typings import RampEndAction
+from typings import RampEndAction, UnitDict
 from utils import to_utc_iso
 
 from .enums import ActionType
@@ -81,6 +81,50 @@ class ActionExecutor:
             return None
         definition = self._registry.get_action(item.action_type.value)
         return definition.handler if definition else None
+
+    def targets_unit(self, item: QueueItem, unit: UnitDict) -> bool:
+        """
+        True when applying `item` may change `unit`'s hardware state.
+
+        Used by the action queue to cancel the items a unit stop would race
+        with. Integration actions never target a hardware unit.
+        """
+        if self._handler_for(item) is not None:
+            return False
+
+        payload = item.payload if isinstance(item.payload, dict) else {}
+
+        if item.action_type == ActionType.LEVEL:
+            units_arg = payload.get("units", "")
+            return isinstance(units_arg, str) and self._units_arg_includes(
+                units_arg, unit
+            )
+
+        if item.action_type == ActionType.PROFILE:
+            # No unit filter (or an empty one) means every unit in the profile.
+            units = payload.get("units")
+            if not isinstance(units, list) or not units:
+                return True
+            return unit.value in units
+
+        if item.action_type == ActionType.MULT:
+            target = str(payload.get("target", "all")).lower()
+            if target == "all":
+                return True
+            return target in (
+                str(self._store.get_unit_setting(unit, "ch_A_use", "")).lower(),
+                str(self._store.get_unit_setting(unit, "ch_B_use", "")).lower(),
+            )
+
+        return False
+
+    @staticmethod
+    def _units_arg_includes(units_arg: str, unit: UnitDict) -> bool:
+        """True when a LEVEL units argument may address `unit` ('12RM' etc.)."""
+        match = re.match(r"^([1-3]+)(?:RM|RO)?$", units_arg.upper())
+        if match is None:
+            return False
+        return unit.value.removeprefix("UNIT") in match.group(1)
 
     async def apply(self, item: QueueItem) -> dict | None:
         """

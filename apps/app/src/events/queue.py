@@ -6,6 +6,7 @@ from typing import TYPE_CHECKING
 
 from .enums import QueueItemStatus
 from .models import QueueItem
+from typings import UnitDict
 import structlog
 
 if TYPE_CHECKING:
@@ -17,9 +18,9 @@ logger = structlog.get_logger("pes")
 
 class ActionQueue:
     """
-    Concurrency model: tick()/cancel()/cancel_all() all run on the API
-    (uvicorn) event loop, while enqueue() may be called from other threads
-    (e.g. the BT sensor threads via the dispatcher). All state-machine
+    Concurrency model: tick()/cancel()/cancel_all()/cancel_for_unit() all run
+    on the API (uvicorn) event loop, while enqueue() may be called from other
+    threads (e.g. the BT sensor threads via the dispatcher). All state-machine
     transitions are therefore performed atomically under self._lock as a
     "claim": the status check, the transition, and the removal from the
     list happen in one locked section. Only the winning claimant performs
@@ -173,6 +174,46 @@ class ActionQueue:
         count = len(items_to_cancel)
         logger.info(f"[Queue] Cancelled all items ({count})")
         self._notify_update()
+        return count
+
+    async def cancel_for_unit(self, unit: UnitDict) -> int:
+        """
+        Cancel every item that targets `unit` (waiting or running).
+
+        Used by ``units:stop`` so a queued action cannot drive the stopped
+        unit again after its channels were zeroed. Running items are
+        reversed by the same claim/removal rules as ``cancel()``.
+        """
+        with self._lock:
+            targets = [
+                i for i in self._items if self._executor.targets_unit(i, unit)
+            ]
+            # Skip items whose apply() is still in flight (see cancel()).
+            running = [
+                i
+                for i in targets
+                if i.status == QueueItemStatus.RUNNING and i.id not in self._applying
+            ]
+            for item in targets:
+                item.status = QueueItemStatus.CANCELLED
+                item.completed_at = datetime.now()
+            self._total_cancelled += len(targets)
+            target_ids = {item.id for item in targets}
+            self._items = [i for i in self._items if i.id not in target_ids]
+
+        # Only the claimant reverses (see cancel()).
+        for item in running:
+            try:
+                await self._executor.reverse(item)
+            except Exception as e:
+                logger.error(f"[Queue] Error reversing action '{item.id}': {e}")
+
+        count = len(targets)
+        if count:
+            logger.info(
+                f"[Queue] Cancelled {count} items targeting {unit.value}"
+            )
+            self._notify_update()
         return count
 
     def pause(self) -> None:

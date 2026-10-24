@@ -517,8 +517,24 @@ class RampManager:
         """Stop every ramp of a unit (peak by default, as a clean-up path)."""
         with self._lock:
             fields = [field for ramp_unit, field in self._ramps if ramp_unit is unit]
-        for field in fields:
-            self.stop(unit, field, restore=restore)
+        self._stop_fields(unit, fields, restore)
+
+    def stop_all(self, restore: bool = False) -> int:
+        """
+        Stop every ramp of every unit; returns the number of ramps stopped.
+
+        The neutralize path calls this with ``restore=False`` so no ramp
+        writes its peak back after the channels have been zeroed.
+        """
+        with self._lock:
+            targets = list(self._ramps.keys())
+        for unit, field in targets:
+            try:
+                self.stop(unit, field, restore=restore)
+            except KeyError:
+                # The ramp expired between the snapshot and this stop.
+                continue
+        return len(targets)
 
     def stop_owned(
         self, unit: UnitDict, owner: str, restore: bool = False
@@ -530,8 +546,15 @@ class RampManager:
                 for (ramp_unit, field), ramp in self._ramps.items()
                 if ramp_unit is unit and ramp.owner == owner
             ]
+        self._stop_fields(unit, fields, restore)
+
+    def _stop_fields(self, unit: UnitDict, fields: List[str], restore: bool) -> None:
+        """Stop the given fields, skipping ramps that already expired."""
         for field in fields:
-            self.stop(unit, field, restore=restore)
+            try:
+                self.stop(unit, field, restore=restore)
+            except KeyError:
+                continue
 
     def get(self, unit: UnitDict, field: str) -> Optional[Dict]:
         """State of one ramp as a dict, None if no ramp on (unit, field)."""
@@ -596,7 +619,13 @@ class RampManager:
         reached the 2B; broadcasting here as well keeps clients live when no
         unit is connected (or its hardware is disabled).
         """
-        self._write_level(ramp, ramp.output_value())
+        # tick() collects changed ramps under the lock and writes them after
+        # releasing it; skip ramps stopped in between (unit stop,
+        # neutralize) so a stale write cannot undo the clean-up.
+        with self._lock:
+            if self._ramps.get((ramp.unit, ramp.field)) is not ramp:
+                return
+            self._write_level(ramp, ramp.output_value())
 
     def _write_level(self, ramp: Ramp, level: int) -> None:
         """Write an explicit field level (used by ramp end actions)."""

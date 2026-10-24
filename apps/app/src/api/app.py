@@ -20,6 +20,7 @@ from events.dispatcher import EventDispatcher
 from events.queue import ActionQueue
 from hardware.sensors import sensor_alarm_check
 from integrations import IntegrationContext, integration_registry
+from services.neutralize import neutralize_all
 from services.profiles import list_profiles
 from services.users import user_service
 from store import Store
@@ -113,6 +114,9 @@ async def lifespan(app: FastAPI):
     # shutdown
     queue_task.cancel()
     alarm_task.cancel()
+    # Same neutralize path as session end and the panic stop: no ramp or
+    # queued action may outlive the process and leave a unit driven.
+    await neutralize_all(reason="shutdown")
     await integration_registry.stop()
     await db.close()
 
