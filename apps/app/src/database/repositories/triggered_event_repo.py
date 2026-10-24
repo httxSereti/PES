@@ -32,7 +32,10 @@ class TriggeredEventRepo:
             # Inner sub-query: get the N most recent by triggered_at DESC
             subq = (
                 select(TriggeredEvent)
-                .order_by(TriggeredEvent.triggered_at.desc())
+                .order_by(
+                    TriggeredEvent.triggered_at.desc(),
+                    TriggeredEvent.id.desc(),
+                )
                 .limit(limit)
                 .subquery()
             )
@@ -40,7 +43,10 @@ class TriggeredEventRepo:
             stmt = (
                 select(TriggeredEvent)
                 .join(subq, TriggeredEvent.id == subq.c.id)
-                .order_by(TriggeredEvent.triggered_at.asc())
+                .order_by(
+                    TriggeredEvent.triggered_at.asc(),
+                    TriggeredEvent.id.asc(),
+                )
             )
             result = await session.execute(stmt)
             return list(result.scalars().all())
@@ -48,16 +54,26 @@ class TriggeredEventRepo:
     async def get_by_session(
         self, session_id: str, limit: int = 500
     ) -> List[TriggeredEvent]:
-        """Events recorded during one application session, chronological."""
+        """
+        Return the latest `limit` events for one session, chronological.
+
+        Selecting descending first keeps long sessions from hiding their most
+        recent events; the result is reversed for the client.
+        """
         async with self._db.session_maker() as db_session:
             stmt = (
                 select(TriggeredEvent)
                 .where(TriggeredEvent.session_id == session_id)
-                .order_by(TriggeredEvent.triggered_at.asc())
+                .order_by(
+                    TriggeredEvent.triggered_at.desc(),
+                    TriggeredEvent.id.desc(),
+                )
                 .limit(limit)
             )
             result = await db_session.execute(stmt)
-            return list(result.scalars().all())
+            events = list(result.scalars().all())
+            events.reverse()
+            return events
 
     async def count_by_sessions(self, session_ids: List[str]) -> Dict[str, int]:
         """Event counts per application session id (one grouped query)."""

@@ -158,19 +158,26 @@ No runtime testing was performed for the original review. Status reflects the cu
 - **Problem:** `_session_allows_event()` returns `True` when the event has no owning integration. `custom:wof_profile_*` has no owner, so it runs even when the active session excludes Chaster.
 - **Fix:** pass the owning integration ID for direct dispatches, or explicitly check Chaster membership before dispatching custom WOF events.
 
-#### 13. Action `sort_order` is effectively ignored — Open
+#### 13. Action `sort_order` is effectively ignored — Fixed
 
-- **Where:** `database/models/trigger_rule.py`, `events/dispatcher.py`, `api/ws/loaders/trigger_rules_loader.py`.
-- **Problem:** `TriggerRule.actions` has no `order_by`. Both the dispatcher and loader use `rule.actions` directly; the only sorted query, `TriggerRuleRepo.get_actions_for_rule`, is unused.
-- **Impact:** execution and display order is de facto row order, not the order configured in the UI.
-- **Fix:** add `order_by="TriggerAction.sort_order"` to the relationship and use a deterministic tie-breaker.
+- **Where:** `database/models/trigger_rule.py`, `database/repositories/trigger_rule_repo.py`.
+- **Problem:** `TriggerRule.actions` had no `order_by`. Both the dispatcher and loader used `rule.actions` directly; the only sorted query, `TriggerRuleRepo.get_actions_for_rule`, was unused.
+- **Impact:** execution and display order was de facto row order, not the order configured in the UI.
+- **Current implementation:**
+  - `TriggerRule.actions` now has a relationship-level `order_by` using `sort_order`, then `created_at`, then `id` as a deterministic tie-breaker.
+  - `TriggerRuleRepo.get_actions_for_rule` uses the same ordering.
+  - Dispatcher and loader consume `rule.actions`, so they now get the configured order automatically.
+- **Verification:** created actions with mixed and duplicate `sort_order` values and confirmed the relationship loads them in the expected deterministic order.
 
-#### 14. Session event history returns the oldest 500, not the latest — Open
+#### 14. Session event history returns the oldest 500, not the latest — Fixed
 
-- **Where:** `database/repositories/triggered_event_repo.py::get_by_session`.
-- **Problem:** it orders ascending with `limit=500`.
-- **Impact:** long sessions hide their most recent events.
-- **Fix:** select descending with the limit, then reverse for display.
+- **Where:** `database/repositories/triggered_event_repo.py`.
+- **Problem:** `get_by_session` ordered ascending with `limit=500`.
+- **Impact:** long sessions hid their most recent events.
+- **Current implementation:**
+  - `get_by_session` selects the latest `limit` events in descending order (with `triggered_at`/`id` tie-breakers), then reverses the result for chronological display.
+  - `get_recent` now uses the same deterministic tie-breakers for replay consistency.
+- **Verification:** inserted five session events and confirmed a limit of three returns the latest three in chronological order.
 
 #### 15. Queue timestamps are local time but serialized as UTC — Open
 
@@ -290,4 +297,4 @@ No runtime testing was performed for the original review. Status reflects the cu
 4. Level reversal correctness and MULT clamp/reversal semantics.
 5. Make the queue deadline-based and move slow integration I/O out of the tick.
 6. Fix WOF double dispatch and custom-WOF session scoping.
-7. Correct event history ordering, queue timestamps, and legacy seed mappings.
+7. Correct queue timestamps and legacy seed mappings.

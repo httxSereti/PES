@@ -1,7 +1,9 @@
 from __future__ import annotations
+
 from datetime import datetime
-from typing import Optional, List, TYPE_CHECKING
-from sqlalchemy import String, Integer, Boolean, DateTime
+from typing import TYPE_CHECKING, List, Optional
+
+from sqlalchemy import Boolean, DateTime, Integer, String
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from database.base import Base
@@ -10,6 +12,18 @@ if TYPE_CHECKING:
     from .trigger_action import TriggerAction
     from .trigger_rule_event import TriggerRuleEvent
     from .trigger_rule_label import TriggerRuleLabel
+
+
+def _action_order_by():
+    """Deterministic action order for relationship loading."""
+    # Imported lazily to avoid a module-level circular import.
+    from .trigger_action import TriggerAction
+
+    return (
+        TriggerAction.sort_order,
+        TriggerAction.created_at,
+        TriggerAction.id,
+    )
 
 
 class TriggerRule(Base):
@@ -33,6 +47,7 @@ class TriggerRule(Base):
         "TriggerAction",
         back_populates="rule",
         cascade="all, delete-orphan",
+        order_by=_action_order_by,
         lazy="selectin",
     )
 

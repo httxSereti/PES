@@ -374,7 +374,11 @@ class TriggerRuleRepo:
             stmt = (
                 select(TriggerAction)
                 .where(TriggerAction.trigger_rule_id == rule_id)
-                .order_by(TriggerAction.sort_order.asc())
+                .order_by(
+                    TriggerAction.sort_order.asc(),
+                    TriggerAction.created_at.asc(),
+                    TriggerAction.id.asc(),
+                )
             )
             result = await session.execute(stmt)
             return list(result.scalars().all())
