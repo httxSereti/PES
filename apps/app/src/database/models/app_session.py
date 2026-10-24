@@ -26,6 +26,8 @@ class AppSession(Base):
     description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     unit_ids: Mapped[List] = mapped_column(JSON, default=list)
     sensor_ids: Mapped[List] = mapped_column(JSON, default=list)
+    # External integration ids scoped to this session. NULL on legacy rows.
+    integration_ids: Mapped[Optional[List]] = mapped_column(JSON, nullable=True)
     status: Mapped[str] = mapped_column(String, default="running", index=True)
     created_by: Mapped[str] = mapped_column(String)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)

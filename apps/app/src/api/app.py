@@ -86,6 +86,8 @@ async def lifespan(app: FastAPI):
     async with db._engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
 
+    await db.ensure_schema()
+
     await seed_from_json(db)
 
     # Load persisted users into the Store cache, then bootstrap HOST if needed

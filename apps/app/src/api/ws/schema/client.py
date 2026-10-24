@@ -225,6 +225,9 @@ class SessionStartPayload(WireModel):
     description: str | None = None
     unit_ids: list[SessionUnitId] = []
     sensor_ids: list[SessionSensorId] = []
+    # External services allowed to feed events into this session.
+    # None (legacy clients) = all globally enabled integrations.
+    integration_ids: list[str] | None = None
 
 
 class SessionStartCommand(ClientMessage):

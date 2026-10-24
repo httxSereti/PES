@@ -100,6 +100,7 @@ export interface SessionStartPayload {
     description?: string | null;
     unit_ids: ('UNIT1' | 'UNIT2' | 'UNIT3')[];
     sensor_ids: ('sound' | 'motion1' | 'motion2')[];
+    integration_ids?: string[] | null;
 }
 
 export interface SessionHistoryDetailPayload {
@@ -627,6 +628,7 @@ export interface Session {
     description: string | null;
     unit_ids: ('UNIT1' | 'UNIT2' | 'UNIT3')[];
     sensor_ids: ('sound' | 'motion1' | 'motion2')[];
+    integration_ids?: string[] | null;
     status: 'running' | 'ended';
     created_by: string;
     created_at: string;

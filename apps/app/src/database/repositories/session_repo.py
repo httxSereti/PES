@@ -27,6 +27,7 @@ class SessionRepo:
         description: str | None,
         unit_ids: list[str],
         sensor_ids: list[str],
+        integration_ids: list[str] | None,
         created_by: str,
     ) -> AppSession:
         session = AppSession(
@@ -36,6 +37,7 @@ class SessionRepo:
             description=description,
             unit_ids=unit_ids,
             sensor_ids=sensor_ids,
+            integration_ids=integration_ids,
             status="running",
             created_by=created_by,
         )

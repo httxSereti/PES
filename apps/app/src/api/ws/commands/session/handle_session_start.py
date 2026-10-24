@@ -16,6 +16,7 @@ async def handle_session_start(
             description=msg.payload.description,
             unit_ids=msg.payload.unit_ids,
             sensor_ids=msg.payload.sensor_ids,
+            integration_ids=msg.payload.integration_ids,
             created_by=ctx.user.id,
         )
     except ValueError as e:

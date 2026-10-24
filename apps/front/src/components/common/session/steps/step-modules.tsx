@@ -69,8 +69,8 @@ export function StepModules({
                                     className={cn(
                                         "flex flex-col items-center gap-1.5 rounded-lg border p-3 transition-colors",
                                         selected
-                                            ? "border-primary bg-primary/5 ring-1 ring-primary"
-                                            : "border-border hover:border-primary/50"
+                                            ? "border-violet-500 bg-violet-500/5 ring-1 ring-violet-500/40"
+                                            : "border-border hover:border-violet-500/50"
                                     )}
                                 >
                                     <div className="flex items-center gap-2">
@@ -78,7 +78,7 @@ export function StepModules({
                                             className={cn(
                                                 "size-7",
                                                 selected
-                                                    ? "text-primary"
+                                                    ? "text-violet-500 dark:text-violet-400"
                                                     : "text-muted-foreground"
                                             )}
                                         />
@@ -108,8 +108,8 @@ export function StepModules({
                                     className={cn(
                                         "flex flex-col items-start gap-1.5 rounded-lg border p-3 text-left transition-colors",
                                         selected
-                                            ? "border-primary bg-primary/5 ring-1 ring-primary"
-                                            : "border-border hover:border-primary/50"
+                                            ? "border-violet-500 bg-violet-500/5 ring-1 ring-violet-500/40"
+                                            : "border-border hover:border-violet-500/50"
                                     )}
                                 >
                                     <div className="flex w-full items-center justify-between">

@@ -22,39 +22,47 @@ logger = structlog.get_logger("pes")
 
 store = Store()
 
-# Wall-clock timing state for hold/cooldown, keyed by (sensor, measure).
-# This is intentionally independent of the BLE notification rate.
+# Accumulated at/above-trigger timing state, keyed by (sensor, measure).
+# Trigger time is accumulated only while the value is at/above the trigger
+# level; below-threshold time pauses the counter and cooldown time never adds.
 _timing_lock = threading.Lock()
-_alarm_since: dict[tuple[str, str], float] = {}
+_hold_elapsed: dict[tuple[str, str], float] = {}
+_above_since: dict[tuple[str, str], float] = {}
 _cooldown_until: dict[tuple[str, str], float] = {}
 
 
 def _reset_hold(sensor_name: str, measure: str) -> None:
     with _timing_lock:
-        _alarm_since.pop((sensor_name, measure), None)
+        key = (sensor_name, measure)
+        _hold_elapsed.pop(key, None)
+        _above_since.pop(key, None)
 
 
 def _reset_sensor_holds(sensor_name: str) -> None:
     with _timing_lock:
-        for key in [key for key in _alarm_since if key[0] == sensor_name]:
-            _alarm_since.pop(key, None)
+        for key in [key for key in _hold_elapsed if key[0] == sensor_name]:
+            _hold_elapsed.pop(key, None)
+        for key in [key for key in _above_since if key[0] == sensor_name]:
+            _above_since.pop(key, None)
 
 
 def sensor_check_val(sensor_name: str, measure: str, val: float) -> None:
     """
     Check whether a sensor value should fire an alarm.
 
-    ``*_delay_on`` and ``*_delay_off`` are seconds, not notification counts:
-    - the first reading above the threshold starts the hold timer;
-    - once ``delay_on`` seconds have elapsed, the next above-threshold reading
-      fires an alarm;
-    - below-threshold readings do **not** reset the hold timer; it is reset
-      only when the sensor disconnects/reconnects or is disabled;
-    - after firing, ``delay_off`` seconds must pass before another alarm
-      (cooldown). The hold timer keeps running during cooldown.
+    ``*_delay_on`` is the amount of time the value must spend at or above the
+    trigger level before an alarm fires:
+    - only at/above-trigger time is accumulated;
+    - below-threshold readings pause the counter, but do not reset it;
+    - when the accumulated time reaches ``delay_on``, the alarm fires and the
+      counter resets to zero;
+    - ``*_delay_off`` is then a wall-clock cooldown in seconds. No trigger time
+      is accumulated during cooldown. After cooldown, accumulation starts from
+      zero again;
+    - disconnect/reconnect or sensor disable resets the trigger counter.
 
     The positive/negative alarm counter is kept in seconds for compatibility
-    with existing clients: positive = elapsed hold seconds, negative =
+    with existing clients: positive = accumulated trigger seconds, negative =
     remaining cooldown seconds.
     """
     # fetch current settings
@@ -83,43 +91,53 @@ def sensor_check_val(sensor_name: str, measure: str, val: float) -> None:
         now = time.monotonic()
         cooldown_until = _cooldown_until.get(key, 0.0)
 
-        # Still cooling down: update the reading, but never fire. The cooldown
-        # may start the hold timer, but it must not reset it.
+        # Still cooling down: update the reading, but never fire and never
+        # accumulate trigger time.
         if now < cooldown_until:
-            if val > current_sensor_settings[measure + "_alarm_level"]:
-                _alarm_since.setdefault(key, now)
+            _hold_elapsed.pop(key, None)
+            _above_since.pop(key, None)
             fields_to_update[counter_key] = -math.ceil(cooldown_until - now)
             store.update_sensor_fields(sensor_name, fields_to_update)
             return
 
         if cooldown_until:
             _cooldown_until.pop(key, None)
+            _hold_elapsed.pop(key, None)
+            _above_since.pop(key, None)
 
-        if val > current_sensor_settings[measure + "_alarm_level"]:
-            # The timer starts on the first above-threshold reading. Below
-            # threshold readings do not reset it.
-            since = _alarm_since.setdefault(key, now)
-            elapsed = now - since
-            fields_to_update[counter_key] = int(elapsed)
+        above = val >= current_sensor_settings[measure + "_alarm_level"]
 
-            if elapsed >= delay_on:
-                fields_to_update[alarm_key] = (
-                    current_sensor_settings[alarm_key] + 1
-                )
-                fields_to_update[counter_key] = -delay_off
-                # Keep the hold timer: if the value stays above threshold,
-                # the next alarm is eligible as soon as cooldown expires.
-
-                if delay_off > 0:
-                    _cooldown_until[key] = now + delay_off
+        if above:
+            above_since = _above_since.get(key)
+            if above_since is None:
+                above_since = now
+                _above_since[key] = above_since
+            elapsed = _hold_elapsed.get(key, 0.0) + (now - above_since)
         else:
-            # Do not clear the hold timer here; only a disconnect/reconnect
-            # or sensor disable resets it. Keep the elapsed time visible in
-            # the compatibility counter.
-            hold_since = _alarm_since.get(key)
-            fields_to_update[counter_key] = (
-                int(now - hold_since) if hold_since is not None else 0
+            above_since = _above_since.get(key)
+            if above_since is not None:
+                # Close the current above-threshold run. The time spent
+                # below threshold does not add to the counter.
+                _hold_elapsed[key] = (
+                    _hold_elapsed.get(key, 0.0) + now - above_since
+                )
+                _above_since.pop(key, None)
+            elapsed = _hold_elapsed.get(key, 0.0)
+
+        if elapsed >= delay_on:
+            # Fire on the reading that completes the accumulated trigger
+            # time, even if this particular reading is already below.
+            fields_to_update[alarm_key] = (
+                current_sensor_settings[alarm_key] + 1
             )
+            _hold_elapsed.pop(key, None)
+            _above_since.pop(key, None)
+            fields_to_update[counter_key] = -delay_off
+
+            if delay_off > 0:
+                _cooldown_until[key] = now + delay_off
+        else:
+            fields_to_update[counter_key] = int(elapsed)
 
         store.update_sensor_fields(sensor_name, fields_to_update)
 

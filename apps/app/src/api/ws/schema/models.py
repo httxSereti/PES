@@ -465,6 +465,8 @@ class Session(WireModel):
     description: str | None
     unit_ids: list[SessionUnitId]
     sensor_ids: list[SessionSensorId]
+    # None on sessions created before per-session integration scoping.
+    integration_ids: list[str] | None = None
     status: Literal["running", "ended"]
     created_by: str
     created_at: datetime

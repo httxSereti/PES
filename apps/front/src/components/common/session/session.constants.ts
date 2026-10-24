@@ -1,6 +1,10 @@
 import {
+    Blocks,
+    Cpu,
     FlaskConical,
     PersonStanding,
+    Rocket,
+    SlidersHorizontal,
     Users,
     type LucideIcon,
 } from "lucide-react"
@@ -10,9 +14,53 @@ import type { Session } from "@/types"
 import type { SessionSensorId, SessionUnitId } from "./session-form"
 
 export const STEPS = [
-    { id: "core", title: "Core", description: "Type & identity" },
-    { id: "modules", title: "Modules", description: "Units & sensors" },
-    { id: "resume", title: "Resume", description: "Start session" },
+    {
+        id: "core",
+        title: "Core",
+        description: "Type & identity",
+        icon: SlidersHorizontal,
+    },
+    {
+        id: "modules",
+        title: "Modules",
+        description: "Units & sensors",
+        icon: Cpu,
+    },
+    {
+        id: "integrations",
+        title: "Integrations",
+        description: "Event sources",
+        icon: Blocks,
+    },
+    {
+        id: "launch",
+        title: "Launch",
+        description: "Review & start",
+        icon: Rocket,
+    },
+] as const
+
+export const STEP_COPY = [
+    {
+        title: "Name the session",
+        description:
+            "Pick a type and an identity. This is what the history entry will show.",
+    },
+    {
+        title: "Attach hardware",
+        description:
+            "Choose the units and sensors this session is allowed to use.",
+    },
+    {
+        title: "Choose what can reach this session",
+        description:
+            "Only enabled services contribute events. Core hardware stays configured in Modules.",
+    },
+    {
+        title: "Review the manifest",
+        description:
+            "Confirm what will run, then start. Integration choices apply to this session only.",
+    },
 ] as const
 
 export const SESSION_TYPE_META: {

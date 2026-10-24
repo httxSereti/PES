@@ -4,6 +4,7 @@ import structlog
 import threading
 from typing import AsyncGenerator
 
+from sqlalchemy import text
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sessionmaker
 
 _DB_PATH = pathlib.Path(__file__).parents[2] / "plunes.db"
@@ -55,6 +56,22 @@ class Database:
         Note: Table creation is usually handled by Base.metadata.create_all in lifespan or via Migrations.
         """
         logger.info("[Database] SQLAlchemy engine initialized")
+
+    async def ensure_schema(self) -> None:
+        """
+        Apply additive SQLite migrations that create_all cannot express.
+
+        `create_all` only creates missing tables; new columns on an existing
+        table have to be added explicitly. Keep this list idempotent.
+        """
+        async with self._engine.begin() as conn:
+            result = await conn.execute(text("PRAGMA table_info(sessions)"))
+            columns = {row[1] for row in result.fetchall()}
+            if columns and "integration_ids" not in columns:
+                await conn.execute(
+                    text("ALTER TABLE sessions ADD COLUMN integration_ids JSON")
+                )
+                logger.info("[Database] Added sessions.integration_ids")
 
     @property
     def session_maker(self) -> async_sessionmaker:

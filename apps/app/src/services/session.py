@@ -45,6 +45,11 @@ def serialize_session(session: AppSession) -> dict:
         "description": session.description,
         "unit_ids": list(session.unit_ids),
         "sensor_ids": list(session.sensor_ids),
+        "integration_ids": (
+            list(session.integration_ids)
+            if session.integration_ids is not None
+            else None
+        ),
         "status": session.status,
         "created_by": session.created_by,
         "created_at": to_utc_iso(session.created_at),
@@ -79,6 +84,23 @@ def _apply_hardware_selection(unit_ids: list[str], sensor_ids: list[str]) -> Non
         store.set_hardware_enabled(sensor_name, sensor_name in sensor_ids)
 
 
+def _validate_integration_ids(integration_ids: list[str]) -> list[str]:
+    """Validate ids and de-duplicate while preserving the requested order."""
+    from integrations import integration_registry
+    from integrations.base import IntegrationKind
+
+    deduplicated = list(dict.fromkeys(integration_ids))
+    valid_ids = {
+        integration.id
+        for integration in integration_registry.all()
+        if integration.kind is IntegrationKind.EXTERNAL
+    }
+    invalid = set(deduplicated) - valid_ids
+    if invalid:
+        raise ValueError(f"Unknown integrations: {', '.join(sorted(invalid))}")
+    return deduplicated
+
+
 async def start_session(
     *,
     session_type: str,
@@ -86,6 +108,7 @@ async def start_session(
     description: Optional[str],
     unit_ids: list[str],
     sensor_ids: list[str],
+    integration_ids: Optional[list[str]] = None,
     created_by: str,
     repo: Optional[SessionRepo] = None,
 ) -> dict:
@@ -97,6 +120,8 @@ async def start_session(
     session_type = SessionType(session_type).value
     unit_ids = list(dict.fromkeys(unit_ids))
     sensor_ids = list(dict.fromkeys(sensor_ids))
+    if integration_ids is not None:
+        integration_ids = _validate_integration_ids(integration_ids)
 
     invalid_units = set(unit_ids) - VALID_UNIT_IDS
     if invalid_units:
@@ -115,6 +140,7 @@ async def start_session(
         description=description,
         unit_ids=unit_ids,
         sensor_ids=sensor_ids,
+        integration_ids=integration_ids,
         created_by=created_by,
     )
     started = await repo.update_session(session.id, started_at=datetime.utcnow())

@@ -85,6 +85,10 @@ class IntegrationRegistry:
                 return event
         return None
 
+    def event_integration_id(self, event_id: str) -> str | None:
+        """Owning integration of a declared event (None for dynamic events)."""
+        return self._event_owner.get(event_id)
+
     def actions(self) -> list[ActionDef]:
         return [
             action for integration in self._integrations.values() for action in integration.actions()

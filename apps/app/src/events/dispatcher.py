@@ -13,6 +13,7 @@ from events.models import QueueItem, TriggerRule
 from events.queue import ActionQueue
 from events.registry import EventRegistry
 from integrations import integration_registry
+from integrations.base import IntegrationKind
 from store import Store
 
 if TYPE_CHECKING:
@@ -83,6 +84,14 @@ class EventDispatcher:
             )
             return
 
+        if not self._session_allows_event(event_type):
+            logger.info(
+                f"[Dispatcher] Event '{event_type}' outside session scope, ignored",
+                event_id=event_id,
+                origin=origin,
+            )
+            return
+
         # Resolve trigger rules from DB
         rules = await self._registry.get_rules_for_event(event_type)
         if not rules:
@@ -145,6 +154,14 @@ class EventDispatcher:
         event_id = generate_id()
         triggered_at = datetime.now(UTC)
 
+        if not self._session_allows_event(event_type):
+            logger.info(
+                f"[Dispatcher] Direct event '{event_type}' outside session scope, ignored",
+                event_id=event_id,
+                origin=origin,
+            )
+            return
+
         # Manual/dynamic items follow the same action toggles as rule items
         # (option semantics: toggles only gate the automated pipeline).
         enabled_items = [
@@ -180,6 +197,32 @@ class EventDispatcher:
 
         if items:
             self._queue.enqueue(items)
+
+    def _session_allows_event(self, event_type: str) -> bool:
+        """
+        True when the running session accepts events from this integration.
+
+        Sessions created before per-session scoping (integration_ids = None)
+        keep the legacy behaviour and accept every globally enabled service.
+        Core hardware is always allowed; units/sensors are scoped by Modules.
+        """
+        active_session = store.get_active_session()
+        if active_session is None:
+            return True
+
+        integration_ids = active_session.get("integration_ids")
+        if integration_ids is None:
+            return True
+
+        owner_id = self._integrations.event_integration_id(event_type)
+        if owner_id is None:
+            return True
+
+        integration = self._integrations.get(owner_id)
+        if integration is None or integration.kind is IntegrationKind.CORE:
+            return True
+
+        return owner_id in integration_ids and self._integrations.is_enabled(owner_id)
 
     async def _save_and_notify(
         self,
