@@ -42,8 +42,10 @@ class ChasterTimeActionHandler:
             "Content-Type": "application/json",
         }
 
-        # Need lock ID — fetch from API
-        async with aiohttp.ClientSession() as session:
+        # Need lock ID — fetch from API. Keep a bounded timeout so a stalled
+        # Chaster request cannot hold the queue worker open indefinitely.
+        timeout = aiohttp.ClientTimeout(total=30)
+        async with aiohttp.ClientSession(timeout=timeout) as session:
             async with session.get(
                 f"{url}/locks?status=active", headers=headers
             ) as resp:

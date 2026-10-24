@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import asyncio
 import threading
+import time
 from datetime import datetime
 from typing import TYPE_CHECKING
 
@@ -17,6 +19,11 @@ if TYPE_CHECKING:
     from .executor import ActionExecutor
 
 logger = structlog.get_logger("pes")
+
+# Integration handlers may do network I/O. They run outside the scheduler tick,
+# so these bounds protect task cleanup without delaying unrelated actions.
+_APPLY_TIMEOUT_SECONDS = 60.0
+_REVERSE_TIMEOUT_SECONDS = 30.0
 
 
 class ActionQueue:
@@ -51,8 +58,11 @@ class ActionQueue:
         self._paused = False
         # Ids of items whose apply() is in flight. Such items have no
         # snapshot yet, so cancel/finalize must not reverse them;
-        # _start_item() undoes the hardware state once apply() completes.
+        # _apply_item() undoes the hardware state once apply() completes.
         self._applying: set[str] = set()
+        # Background apply/reverse tasks. Kept referenced until completion so
+        # the event loop cannot garbage-collect a running handler.
+        self._tasks: set[asyncio.Task] = set()
 
         # Stats
         self._total_done = 0
@@ -74,50 +84,62 @@ class ActionQueue:
     async def tick(self) -> None:
         """
         Process one tick of the queue (called every second).
-        1. Increment elapsed for RUNNING items
+
+        1. Refresh elapsed from monotonic deadlines
         2. Finalize expired items
         3. Start next waiting items
+
+        Handlers are never awaited here: apply/reverse run in tracked background
+        tasks so a slow integration call cannot stall unrelated expirations.
         """
         if self._paused:
             return
 
+        now = time.monotonic()
         with self._lock:
-            items = list(self._items)
+            running_items = [
+                item
+                for item in self._items
+                if item.status == QueueItemStatus.RUNNING
+            ]
+            for item in running_items:
+                if item.started_monotonic is not None:
+                    item.elapsed = max(0, int(now - item.started_monotonic))
+            expired = [
+                item
+                for item in running_items
+                if item.expires_monotonic is not None
+                and now >= item.expires_monotonic
+            ]
 
-        # Step 1: Increment elapsed for all RUNNING items
-        running_items = [i for i in items if i.status == QueueItemStatus.RUNNING]
-        for item in running_items:
-            item.elapsed += 1
-
-        # Step 2: Finalize expired items (duration != -1 and elapsed >= duration)
-        expired = [
-            i for i in running_items if i.duration != -1 and i.elapsed >= i.duration
-        ]
         for item in expired:
-            await self._finalize_item(item)
+            self._finalize_item(item)
 
-        # Step 3: Start waiting items
         if self._paused:
             return
 
         with self._lock:
-            items = list(self._items)
+            waiting = [
+                item
+                for item in self._items
+                if item.status == QueueItemStatus.WAITING
+            ]
+            has_non_cumulative_running = any(
+                item.status == QueueItemStatus.RUNNING and not item.cumulative
+                for item in self._items
+            )
 
-        waiting = [i for i in items if i.status == QueueItemStatus.WAITING]
-        running = [i for i in items if i.status == QueueItemStatus.RUNNING]
-        has_non_cumulative_running = any(not i.cumulative for i in running)
-
-        # Start non-cumulative: only if none currently running
+        # Start non-cumulative: only if none currently running.
         if not has_non_cumulative_running:
             for item in waiting:
                 if not item.cumulative:
-                    if await self._start_item(item):
+                    if self._start_item(item):
                         break  # Only one non-cumulative at a time
 
-        # Start all waiting cumulative items
+        # Start all waiting cumulative items.
         for item in waiting:
             if item.cumulative and item.status == QueueItemStatus.WAITING:
-                await self._start_item(item)
+                self._start_item(item)
 
     async def cancel(self, item_id: str) -> bool:
         """Cancel a specific item. Reverses it if RUNNING."""
@@ -128,7 +150,7 @@ class ActionQueue:
             if not item:
                 return False
             # Reverse only if apply() already completed (snapshot exists);
-            # otherwise _start_item() undoes the hardware state instead.
+            # otherwise _apply_item() undoes the hardware state instead.
             needs_reverse = (
                 item.status == QueueItemStatus.RUNNING and item.id not in self._applying
             )
@@ -139,10 +161,7 @@ class ActionQueue:
 
         # Only the claimant reverses.
         if needs_reverse:
-            try:
-                await self._executor.reverse(item)
-            except Exception as e:
-                logger.error(f"[Queue] Error reversing action '{item.id}': {e}")
+            await self._reverse_now(item)
 
         logger.info(f"[Queue] Cancelled item '{item_id}' ({item.origin})")
         self._notify_update()
@@ -169,10 +188,7 @@ class ActionQueue:
 
         # Only the claimant reverses (see cancel()).
         for item in running:
-            try:
-                await self._executor.reverse(item)
-            except Exception as e:
-                logger.error(f"[Queue] Error reversing action '{item.id}': {e}")
+            await self._reverse_now(item)
 
         count = len(items_to_cancel)
         logger.info(f"[Queue] Cancelled all items ({count})")
@@ -206,10 +222,7 @@ class ActionQueue:
 
         # Only the claimant reverses (see cancel()).
         for item in running:
-            try:
-                await self._executor.reverse(item)
-            except Exception as e:
-                logger.error(f"[Queue] Error reversing action '{item.id}': {e}")
+            await self._reverse_now(item)
 
         count = len(targets)
         if count:
@@ -219,8 +232,26 @@ class ActionQueue:
             self._notify_update()
         return count
 
+    async def cancel_inflight(self) -> int:
+        """
+        Cancel background apply/reverse tasks.
+
+        Used by ``neutralize_all``: callers zero outputs immediately after this,
+        so a late apply completion must not reverse the hardware back on.
+        """
+        with self._lock:
+            tasks = [task for task in self._tasks if not task.done()]
+        for task in tasks:
+            task.cancel()
+        if tasks:
+            await asyncio.gather(*tasks, return_exceptions=True)
+        with self._lock:
+            self._tasks.difference_update(tasks)
+            self._applying.clear()
+        return len(tasks)
+
     def pause(self) -> None:
-        """Pause queue processing. Running items continue their elapsed timer."""
+        """Pause new starts/finalization; running timers continue and may expire on resume."""
         self._paused = True
         logger.info("[Queue] Paused")
         self._notify_update()
@@ -259,8 +290,8 @@ class ActionQueue:
 
     # ───────── Internal ─────────
 
-    async def _start_item(self, item: QueueItem) -> bool:
-        """Start executing an item. Returns True if it was actually started."""
+    def _start_item(self, item: QueueItem) -> bool:
+        """Claim a waiting item and schedule its apply task."""
         # Atomic claim: only start if still WAITING and still queued (it may
         # have been cancelled by the other loop since the tick snapshot).
         skipped = False
@@ -280,6 +311,8 @@ class ActionQueue:
                 item.status = QueueItemStatus.RUNNING
                 item.started_at = datetime.now()
                 item.elapsed = 0
+                item.started_monotonic = None
+                item.expires_monotonic = None
                 self._applying.add(item.id)
 
         if skipped:
@@ -290,70 +323,127 @@ class ActionQueue:
             self._notify_update()
             return False
 
+        self._spawn(self._apply_item(item), name=f"queue-apply:{item.id}")
+        return True
+
+    async def _apply_item(self, item: QueueItem) -> None:
+        """Apply an item in the background, then establish its deadline."""
         try:
-            snapshot = await self._executor.apply(item)
+            snapshot = await asyncio.wait_for(
+                self._executor.apply(item),
+                timeout=_APPLY_TIMEOUT_SECONDS,
+            )
+        except asyncio.TimeoutError:
+            logger.error(
+                f"[Queue] Action '{item.id}' timed out after "
+                f"{_APPLY_TIMEOUT_SECONDS:g}s"
+            )
+            self._remove_failed_item(item)
+            return
         except Exception as e:
             logger.error(f"[Queue] Error applying action '{item.id}': {e}")
-            # Remove failed item
-            with self._lock:
-                self._applying.discard(item.id)
-                self._items = [i for i in self._items if i.id != item.id]
-            return False
+            self._remove_failed_item(item)
+            return
 
+        now = time.monotonic()
         with self._lock:
             self._applying.discard(item.id)
             still_queued = self._is_queued(item)
             if still_queued:
                 item.snapshot_data = snapshot
+                # Duration starts once the action has actually been applied;
+                # a slow handler must not consume the configured run time.
+                item.started_at = datetime.now()
+                item.started_monotonic = now
+                item.expires_monotonic = (
+                    now + item.duration if item.duration != -1 else None
+                )
 
         if not still_queued:
             # Cancelled/finalized while apply() was in flight: undo the
             # hardware state now, since the claimant could not reverse it.
             item.snapshot_data = snapshot
-            try:
-                await self._executor.reverse(item)
-            except Exception as e:
-                logger.error(f"[Queue] Error reversing action '{item.id}': {e}")
-            return False
+            await self._reverse_now(item)
+            return
 
         logger.info(
             f"[Queue] Started '{item.action_type.value}' (duration={item.duration}s, cumulative={item.cumulative})",
             origin=item.origin,
         )
         self._notify_update()
-        return True
+
+    def _remove_failed_item(self, item: QueueItem) -> None:
+        """Drop an item whose apply failed or timed out."""
+        with self._lock:
+            self._applying.discard(item.id)
+            self._items = [i for i in self._items if i.id != item.id]
+            item.completed_at = datetime.now()
+        self._notify_update()
 
     def _is_queued(self, item: QueueItem) -> bool:
         """Identity check for queue membership. Caller must hold the lock."""
         return any(i is item for i in self._items)
 
-    async def _finalize_item(self, item: QueueItem) -> None:
-        """Finalize an expired item: reverse and remove."""
+    def _finalize_item(self, item: QueueItem) -> None:
+        """Finalize an expired item and schedule its reverse task."""
         # Atomic claim: skip if the other loop already cancelled or
         # finalized this item since the tick snapshot.
         with self._lock:
             if item.status != QueueItemStatus.RUNNING or not self._is_queued(item):
                 return
             # If apply() is still in flight there is no snapshot yet;
-            # _start_item() undoes the hardware state once apply() completes.
+            # _apply_item() undoes the hardware state once apply() completes.
             needs_reverse = item.id not in self._applying
             item.status = QueueItemStatus.DONE
             item.completed_at = datetime.now()
             self._items = [i for i in self._items if i.id != item.id]
             self._total_done += 1
 
-        # Only the claimant reverses.
+        # Reverse outside the tick: a slow integration handler must not delay
+        # expiration of other items.
         if needs_reverse:
-            try:
-                await self._executor.reverse(item)
-            except Exception as e:
-                logger.error(f"[Queue] Error reversing action '{item.id}': {e}")
+            self._spawn(
+                self._reverse_item(item),
+                name=f"queue-reverse:{item.id}",
+            )
 
         logger.info(
             f"[Queue] Completed '{item.action_type.value}' after {item.elapsed}s",
             origin=item.origin,
         )
         self._notify_update()
+
+    async def _reverse_now(self, item: QueueItem) -> None:
+        """Reverse an item with a bounded timeout, logging failures."""
+        try:
+            await asyncio.wait_for(
+                self._executor.reverse(item),
+                timeout=_REVERSE_TIMEOUT_SECONDS,
+            )
+        except asyncio.TimeoutError:
+            logger.error(
+                f"[Queue] Reverse of '{item.id}' timed out after "
+                f"{_REVERSE_TIMEOUT_SECONDS:g}s"
+            )
+        except Exception as e:
+            logger.error(f"[Queue] Error reversing action '{item.id}': {e}")
+
+    async def _reverse_item(self, item: QueueItem) -> None:
+        await self._reverse_now(item)
+
+    def _spawn(self, coro, *, name: str) -> None:
+        """Track a background queue task until it completes."""
+        task = asyncio.create_task(coro, name=name)
+        self._tasks.add(task)
+        task.add_done_callback(self._task_done)
+
+    def _task_done(self, task: asyncio.Task) -> None:
+        self._tasks.discard(task)
+        if task.cancelled():
+            return
+        error = task.exception()
+        if error is not None:
+            logger.error(f"[Queue] Background task failed: {error}")
 
     def _notify_update(self) -> None:
         """Notify WebSocket clients of queue state change."""

@@ -35,3 +35,7 @@ class QueueItem:
     created_at: datetime = field(default_factory=datetime.now)
     started_at: Optional[datetime] = None
     completed_at: Optional[datetime] = None
+    # Monotonic clock values for scheduling (in-memory only). They start when
+    # apply() completes, so a slow handler does not consume the action duration.
+    started_monotonic: Optional[float] = None
+    expires_monotonic: Optional[float] = None

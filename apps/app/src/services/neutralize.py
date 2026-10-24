@@ -7,8 +7,9 @@ same order:
 
 1. stop every software ramp without applying its end action;
 2. cancel the action queue (running items are reversed by the queue);
-3. reset both channel multipliers and zero both channels on every unit;
-4. clear the active profile.
+3. cancel any in-flight handler tasks, so a late apply cannot undo the stop;
+4. reset both channel multipliers and zero both channels on every unit;
+5. clear the active profile.
 
 The order matters for hardware safety: ramps are stopped before the levels
 are zeroed so a surviving ramp cannot write its peak back on the next tick,
@@ -66,14 +67,17 @@ async def neutralize_all(reason: str) -> None:
         queue = None
     if queue is not None:
         await queue.cancel_all()
+        # 3. A handler may still be awaiting network/hardware work. Cancel it
+        #    before zeroing so it cannot complete and re-apply after the stop.
+        await queue.cancel_inflight()
 
-    # 3. Outputs: zero both channels and reset the multipliers on every unit.
+    # 4. Outputs: zero both channels and reset the multipliers on every unit.
     for unit_str in BT_UNITS:
         unit = UnitDict(unit_str)
         changes = _reset_unit(unit)
         ws_notifier.notify("units:update", {"id": unit.value, "changes": changes})
 
-    # 4. Active profile: nothing is driving the units anymore.
+    # 5. Active profile: nothing is driving the units anymore.
     if store.clear_active_profile():
         ws_notifier.notify("profiles:active", None)
 

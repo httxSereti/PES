@@ -128,12 +128,19 @@ No runtime testing was performed for the original review. Status reflects the cu
   - MULT has no clamp; repeated actions can produce extreme or negative multipliers. Session end only zeros `ch_A`/`ch_B`, not multipliers.
 - **Fix:** store before/applied values per field and restore conditionally, or use field ownership. Either make MULT reversible with clamping, or reject durations for non-reversible actions server-side and document the behavior.
 
-#### 9. The queue tick can be stalled by slow handlers — Open
+#### 9. The queue tick can be stalled by slow handlers — Fixed
 
-- **Where:** `events/queue.py`, `api/app.py::queue_tick_loop`.
-- **Problem:** `tick()` awaits `_start_item()` → `executor.apply()` inline. A slow integration handler, especially Chaster HTTP without an explicit timeout, blocks finalization/reversal of unrelated level/profile actions.
-- **Also:** duration is counted in tick iterations, not wall-clock or monotonic deadlines. A busy event loop extends every running action.
-- **Fix:** do network I/O outside the scheduler tick, use per-item tasks and timeouts, and track deadlines with `time.monotonic()`.
+- **Where:** `events/queue.py`, `events/models.py`, `services/neutralize.py`, `integrations/chaster/actions.py`.
+- **Problem:** `tick()` awaited `_start_item()` → `executor.apply()` inline. A slow integration handler, especially Chaster HTTP without an explicit timeout, blocked finalization/reversal of unrelated level/profile actions. Duration was counted in tick iterations, so loop stalls extended every running action.
+- **Current implementation:**
+  - `tick()` no longer awaits handlers. Apply and reverse operations run in tracked background `asyncio` tasks; the tick only performs state transitions and scheduling.
+  - Durations use `time.monotonic()` deadlines. `elapsed` is recomputed from the monotonic clock, and expiry works even if the tick loop is delayed.
+  - Duration starts when `apply()` completes, so a slow handler does not consume the configured action duration.
+  - Apply and reverse handlers have bounded timeouts (60s / 30s), and Chaster HTTP uses a 30s `aiohttp` timeout.
+  - `cancel_inflight()` cancels outstanding handler tasks during neutralization/shutdown, preventing a late apply from undoing a stop.
+  - Background tasks are tracked until completion and their unhandled failures are logged.
+- **Trade-off:** a timed action whose apply is still in flight is shown as RUNNING with elapsed `0` until the apply completes and its deadline starts.
+- **Verification:** tested slow apply and slow reverse handlers (tick returns immediately), monotonic elapsed, expiry finalization, cancel-during-apply, `cancel_inflight`, apply timeout, and disabled-action skipping.
 
 #### 10. Server-side payload/event validation is missing — Open
 
@@ -215,7 +222,7 @@ No runtime testing was performed for the original review. Status reflects the cu
 
 ### P2 — smaller issues
 
-- `pause()` documents that running timers continue, but `tick()` returns immediately while paused, so elapsed time freezes.
+- `pause()` stops tick updates, so the visible `elapsed` field is stale until resume; monotonic timers continue underneath and items may expire immediately on resume.
 - `dispatch_direct()` returns before persisting/broadcasting when every action is disabled, contradicting its docstring.
 - Deleting a session does not delete its `triggered_events`; there is no FK/cascade and no retention job.
 - `EventRegistry` logs a warning for every event with no matching rule, which can spam logs for high-frequency events.
@@ -295,6 +302,5 @@ No runtime testing was performed for the original review. Status reflects the cu
 2. Emergency-stop/shutdown safety cluster: cancel queue + stop ramps + reset multipliers + zero channels.
 3. Payload schema validation for trigger-rule actions and events.
 4. Level reversal correctness and MULT clamp/reversal semantics.
-5. Make the queue deadline-based and move slow integration I/O out of the tick.
-6. Fix WOF double dispatch and custom-WOF session scoping.
-7. Correct queue timestamps and legacy seed mappings.
+5. Fix WOF double dispatch and custom-WOF session scoping.
+6. Correct queue timestamps and legacy seed mappings.
