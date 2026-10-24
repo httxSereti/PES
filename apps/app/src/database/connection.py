@@ -73,6 +73,28 @@ class Database:
                 )
                 logger.info("[Database] Added sessions.integration_ids")
 
+            result = await conn.execute(text("PRAGMA table_info(triggered_events)"))
+            event_columns = {row[1] for row in result.fetchall()}
+            if event_columns and "session_id" not in event_columns:
+                await conn.execute(
+                    text(
+                        "ALTER TABLE triggered_events "
+                        "ADD COLUMN session_id VARCHAR"
+                    )
+                )
+                logger.info("[Database] Added triggered_events.session_id")
+
+            if event_columns:
+                # `create_all` does not add an index to a table that already
+                # exists, so create it explicitly (idempotent).
+                await conn.execute(
+                    text(
+                        "CREATE INDEX IF NOT EXISTS "
+                        "ix_triggered_events_session_id "
+                        "ON triggered_events (session_id)"
+                    )
+                )
+
     @property
     def session_maker(self) -> async_sessionmaker:
         return self._session_maker
