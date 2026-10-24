@@ -1,91 +1,166 @@
-import { Accumulations } from "@/components/common/sensors/common/accumulations";
 import { CfgSensorSlider } from "@/components/common/sensors/common/cfg-sensor-slider";
-import { LevelBlock } from "@/components/common/sensors/common/level-block";
-import { SensorAlarmStatus } from "@/components/common/sensors/common/sensor-alarm-status";
-import type { SoundSensor } from "@/types";
-import { Separator } from "@pes/ui/components/separator";
+import { SectionHeading } from "@/components/common/sensors/common/section-heading";
+import { SensorRecent } from "@/components/common/sensors/sensor-recent";
+import { SensorTrace } from "@/components/common/sensors/sensor-trace";
+import { useSensorEvents } from "@/hooks/useSensorEvents";
+import type { SensorTheme } from "@/lib/sensor-theme";
+import type { HardwareSensorId, SoundSensor } from "@/types";
+import { cn } from "@pes/ui/lib/utils";
 import type { FC } from "react";
 
 type SoundSensorProps = {
-    sensorId: string;
+    sensorId: HardwareSensorId;
     sensor: SoundSensor;
+    theme: SensorTheme;
 };
 
-export const SensorSound: FC<SoundSensorProps> = ({ sensorId, sensor }) => {
-    const isAlarming = sensor.alarm_enable && sensor.current_sound >= sensor.sound_alarm_level;
+type ConnectionRowProps = {
+    label: string;
+    value: string;
+    tone: "ok" | "warn" | "muted";
+};
+
+const ConnectionRow: FC<ConnectionRowProps> = ({ label, value, tone }) => (
+    <div className="flex items-center justify-between gap-3 font-mono text-[9px]">
+        <span className="text-muted-foreground/40">{label}</span>
+        <span
+            className={cn(
+                "flex items-center gap-1.5",
+                tone === "ok" && "text-emerald-500 dark:text-emerald-400",
+                tone === "warn" && "text-orange-500 dark:text-orange-400",
+                tone === "muted" && "text-muted-foreground/50",
+            )}
+        >
+            <span
+                className={cn(
+                    "size-1 rounded-full",
+                    tone === "ok" && "bg-emerald-500",
+                    tone === "warn" && "bg-orange-500",
+                    tone === "muted" && "bg-muted-foreground/40",
+                )}
+            />
+            {value}
+        </span>
+    </div>
+);
+
+export const SensorSound: FC<SoundSensorProps> = ({
+    sensorId,
+    sensor,
+    theme,
+}) => {
+    const { events, latestAt } = useSensorEvents(sensorId, 4);
+    const isAlarming =
+        sensor.sensor_online &&
+        sensor.alarm_enable &&
+        sensor.current_sound >= sensor.sound_alarm_level;
 
     return (
-        <div className="flex flex-col gap-3">
-            <LevelBlock
-                label="Current level" value={sensor.current_sound} unit="%"
-                note={`threshold ${sensor.sound_alarm_level} %`}
-                gaugeVal={sensor.current_sound} gaugeMax={90} isAlert={isAlarming}
-            />
-
-            <Separator className="bg-border/40" />
-            <p className="text-[11px] uppercase text-muted-foreground/50">
-                Status
-            </p>
-
-            <Accumulations items={[{
-                label: "Sound",
-                counter: sensor.sound_alarm_counter,
-                delayOn: sensor.sound_delay_on,
-                delayOff: sensor.sound_delay_off,
-            }]} />
-
-            <Separator className="bg-border/40" />
-            <p className="text-[11px] uppercase text-muted-foreground/50">
-                Settings
-            </p>
-
-            <SensorAlarmStatus sensorId={sensorId} />
-            <CfgSensorSlider
+        <div className="flex flex-1 flex-col gap-3">
+            <SensorTrace
                 sensorId={sensorId}
-                label={"Alarm level to trigger"}
-                unit={"%"}
-                propertyKey={"sound_alarm_level"}
-                step={1}
-                minValue={1}
+                value={sensor.current_sound}
+                threshold={sensor.sound_alarm_level}
+                unit="%"
                 maxValue={90}
-                disabled={false}
-            />
-            <CfgSensorSlider
-                sensorId={sensorId}
-                label={"Number of seconds it can be triggered"}
-                unit={"s"}
-                propertyKey={"sound_delay_on"}
-                step={1}
-                minValue={1}
-                maxValue={120}
-                disabled={false}
-            />
-            <CfgSensorSlider
-                sensorId={sensorId}
-                label={"Number of seconds until it can trigger again (cooldown)"}
-                unit={"s"}
-                propertyKey={"sound_delay_off"}
-                step={1}
-                minValue={1}
-                maxValue={120}
-                disabled={false}
+                color={theme.accent}
+                valueColor={theme.valueColor}
+                label="Sound · last 5m"
+                eventAt={latestAt}
+                online={sensor.sensor_online}
             />
 
-            <Separator className="bg-border/40" />
-            <p className="text-[11px] uppercase text-muted-foreground/50">
-                Statistics
-            </p>
+            <div className="flex flex-col gap-2">
+                <SectionHeading label="Controls" meta="3 settings" />
+                <CfgSensorSlider
+                    sensorId={sensorId}
+                    propertyKey="sound_alarm_level"
+                    label="Trigger level"
+                    minValue={1}
+                    maxValue={90}
+                    step={1}
+                    unit="%"
+                    disabled={false}
+                    compact
+                    accentClassName={theme.sliderAccentClassName}
+                />
+                <CfgSensorSlider
+                    sensorId={sensorId}
+                    propertyKey="sound_delay_on"
+                    label="Hold before trigger"
+                    minValue={1}
+                    maxValue={120}
+                    step={1}
+                    unit="s"
+                    disabled={false}
+                    compact
+                    accentClassName={theme.sliderAccentClassName}
+                />
+                <CfgSensorSlider
+                    sensorId={sensorId}
+                    propertyKey="sound_delay_off"
+                    label="Cooldown"
+                    minValue={1}
+                    maxValue={120}
+                    step={1}
+                    unit="s"
+                    disabled={false}
+                    compact
+                    accentClassName={theme.sliderAccentClassName}
+                />
+            </div>
 
-            <div>
-                <div className="flex justify-between items-center py-1 border-b border-border/50 last:border-0">
-                    <span className="font-mono text-[11px] text-muted-foreground/50">Alarms fired</span>
-                    <span className="font-mono text-[11px] text-foreground/80">{sensor.sound_alarm_number}</span>
-                </div>
-                <div className="flex justify-between items-center py-1 border-b border-border/50 last:border-0">
-                    <span className="font-mono text-[11px] text-muted-foreground/50">Actions triggered</span>
-                    <span className="font-mono text-[11px] text-foreground/80">{sensor.sound_alarm_number_action}</span>
-                </div>
+            <SensorRecent
+                events={events}
+                color={theme.accent}
+                live={sensor.sensor_online && sensor.alarm_enable}
+            />
+
+            <div className="mt-auto flex flex-col gap-1.5">
+                <SectionHeading label="Connection" meta="BLE" />
+                <ConnectionRow
+                    label="Link"
+                    value={sensor.sensor_online ? "connected" : "offline"}
+                    tone={sensor.sensor_online ? "ok" : "muted"}
+                />
+                <ConnectionRow
+                    label="Alarm"
+                    value={sensor.alarm_enable ? "enabled" : "disabled"}
+                    tone={sensor.alarm_enable ? "ok" : "muted"}
+                />
+                <ConnectionRow
+                    label="Readings"
+                    value={
+                        isAlarming
+                            ? "threshold reached"
+                            : sensor.sensor_online
+                              ? "live"
+                              : "paused"
+                    }
+                    tone={
+                        isAlarming
+                            ? "warn"
+                            : sensor.sensor_online
+                              ? "ok"
+                              : "muted"
+                    }
+                />
+            </div>
+
+            <div className="flex items-center justify-between gap-3 border-t border-border/30 pt-2 font-mono text-[8px] tracking-[0.1em] text-muted-foreground/40 uppercase">
+                <span>
+                    Alarms{" "}
+                    <span className="text-foreground/70 tabular-nums">
+                        {sensor.sound_alarm_number}
+                    </span>
+                </span>
+                <span>
+                    Actions{" "}
+                    <span className="text-foreground/70 tabular-nums">
+                        {sensor.sound_alarm_number_action}
+                    </span>
+                </span>
             </div>
         </div>
     );
-}
+};
