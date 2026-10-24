@@ -65,6 +65,9 @@ class PuryFiActionHandler:
         self._integration = integration
 
     async def apply(self, item: QueueItem) -> dict | None:
+        # Mark the expected echo before the request: the extension can report
+        # the state change while the request is still in flight.
+        self._integration.expect_action_echo(item.action_type, item.causation_depth)
         try:
             await self.run(item.payload)
         except PuryFiError as err:

@@ -89,6 +89,10 @@ class IntegrationRegistry:
         """Owning integration of a declared event (None for dynamic events)."""
         return self._event_owner.get(event_id)
 
+    def action_integration_id(self, action_id: str) -> str | None:
+        """Owning integration of a declared action (None for unknown actions)."""
+        return self._action_owner.get(action_id)
+
     def actions(self) -> list[ActionDef]:
         return [
             action for integration in self._integrations.values() for action in integration.actions()

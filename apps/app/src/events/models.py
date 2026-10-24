@@ -4,10 +4,11 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Optional
 
+# Import ORM models to keep existing imports working
+from database.models import TriggerAction, TriggerRule  # noqa: F401
+
 from .enums import ActionType, QueueItemStatus
 
-# Import ORM models to keep existing imports working
-from database.models import TriggerRule, TriggerAction
 
 @dataclass
 class QueueItem:
@@ -28,6 +29,9 @@ class QueueItem:
     snapshot_data: Optional[dict] = None  # Unit state backup for reverse
     trigger_action_id: Optional[str] = None
     trigger_rule_id: Optional[str] = None
+    # Event chain depth of the event that caused this item. Integration
+    # actions that can emit an event propagate this to the resulting echo.
+    causation_depth: int = 0
     created_at: datetime = field(default_factory=datetime.now)
     started_at: Optional[datetime] = None
     completed_at: Optional[datetime] = None

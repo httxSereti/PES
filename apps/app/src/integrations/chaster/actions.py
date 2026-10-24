@@ -13,7 +13,10 @@ from datetime import datetime, timedelta
 import aiohttp
 import structlog
 
+from events.enums import TriggerableEvent
 from events.models import QueueItem
+
+from .echo import expect_time_echo
 
 logger = structlog.get_logger("pes")
 
@@ -57,6 +60,21 @@ class ChasterTimeActionHandler:
                 lock_data = await resp.json()
 
             max_date_str = lock_data.get("maxLimitDate") or lock_data.get("maxDate", "")
+
+            # Chaster can deliver the webhook before the POST response reaches
+            # us, so register the expected echo before sending the update.
+            # Up to two API writes can be sent, so reserve that many echoes.
+            update_count = int(bool(max_date_str)) + int(not only_max)
+            if duration_secs and update_count:
+                event_type = (
+                    TriggerableEvent.CHASTER_TIME_ADD.value
+                    if duration_secs > 0
+                    else TriggerableEvent.CHASTER_TIME_SUB.value
+                )
+                expect_time_echo(
+                    event_type, item.causation_depth, count=update_count
+                )
+
             if max_date_str:
                 max_date = datetime.strptime(max_date_str, "%Y-%m-%dT%H:%M:%S.%fZ")
                 new_max = max_date + timedelta(seconds=duration_secs)

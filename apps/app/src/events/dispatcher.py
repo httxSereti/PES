@@ -23,6 +23,11 @@ if TYPE_CHECKING:
 logger = structlog.get_logger("pes")
 generate_id = cuid_wrapper()
 
+# Actions may cause events (integration polling/webhooks), which may trigger
+# more actions. Same-integration actions are filtered on tagged echoes; this
+# hard cap stops longer cross-integration cycles.
+_MAX_EVENT_CHAIN_DEPTH = 8
+
 store = Store()
 
 
@@ -54,6 +59,8 @@ class EventDispatcher:
         event_type: str,
         event_data: dict | None = None,
         origin: str = "unknown",
+        chain_depth: int = 0,
+        source_integration_id: str | None = None,
     ) -> None:
         """
         Dispatch an event: resolve trigger rules, create queue items, and enqueue them.
@@ -62,6 +69,8 @@ class EventDispatcher:
             event_type: The event type (TriggerableEvent value or WOF dynamic code)
             event_data: Contextual data from the event source
             origin: Human-readable origin description
+            chain_depth: Causation depth for an event caused by an action echo
+            source_integration_id: Integration whose action caused this echo
         """
         event_data = event_data or {}
         event_id = generate_id()
@@ -72,6 +81,8 @@ class EventDispatcher:
             event_id=event_id,
             event_type=event_type,
             origin=origin,
+            chain_depth=chain_depth,
+            source_integration_id=source_integration_id,
         )
 
         # Disabled at the integration or per-event level: drop the event
@@ -93,6 +104,19 @@ class EventDispatcher:
             )
             return
 
+        if chain_depth >= _MAX_EVENT_CHAIN_DEPTH:
+            logger.warning(
+                "[Dispatcher] Event chain depth limit reached, actions skipped",
+                event_id=event_id,
+                event_type=event_type,
+                origin=origin,
+                chain_depth=chain_depth,
+            )
+            await self._save_and_notify(
+                event_id, event_type, origin, event_data, triggered_at, []
+            )
+            return
+
         # Resolve trigger rules from DB
         rules = await self._registry.get_rules_for_event(event_type)
         if not rules:
@@ -111,7 +135,12 @@ class EventDispatcher:
         triggered_rules_summary: list[dict] = []
 
         for rule in rules:
-            items = self._rule_to_queue_items(rule, origin)
+            items = self._rule_to_queue_items(
+                rule,
+                origin,
+                source_integration_id=source_integration_id,
+                chain_depth=chain_depth,
+            )
             queue_items.extend(items)
             triggered_rules_summary.append(self._build_rule_summary(rule, items))
 
@@ -143,6 +172,8 @@ class EventDispatcher:
         event_data: dict | None = None,
         origin: str = "unknown",
         summary_name: str | None = None,
+        chain_depth: int = 0,
+        source_integration_id: str | None = None,
     ) -> None:
         """
         Dispatch pre-built queue items without resolving trigger rules.
@@ -171,17 +202,30 @@ class EventDispatcher:
             )
             return
 
-        # Manual/dynamic items follow the same action toggles as rule items
-        # (option semantics: toggles only gate the automated pipeline).
+        if chain_depth >= _MAX_EVENT_CHAIN_DEPTH:
+            logger.warning(
+                "[Dispatcher] Direct event chain depth limit reached, ignored",
+                event_id=event_id,
+                event_type=event_type,
+                origin=origin,
+                chain_depth=chain_depth,
+            )
+            return
+
+        # Manual/dynamic items follow the same action toggles and local-echo
+        # gates as rule items.
         enabled_items = [
             item
             for item in items
             if self._integrations.is_action_enabled(item.action_type.value)
+            and not self._is_local_echo_action(
+                item.action_type.value, source_integration_id
+            )
         ]
         skipped = len(items) - len(enabled_items)
         if skipped:
             logger.info(
-                f"[Dispatcher] Direct dispatch '{event_type}': {skipped} item(s) skipped (action disabled)",
+                f"[Dispatcher] Direct dispatch '{event_type}': {skipped} item(s) skipped (disabled or local echo)",
                 event_id=event_id,
                 origin=origin,
             )
@@ -189,10 +233,14 @@ class EventDispatcher:
         if not items:
             return
 
+        for item in items:
+            item.causation_depth = chain_depth + 1
+
         logger.info(
             f"[Dispatcher] Direct dispatch '{event_type}' with {len(items)} item(s)",
             event_id=event_id,
             origin=origin,
+            chain_depth=chain_depth,
         )
 
         await self._save_and_notify(
@@ -316,12 +364,32 @@ class EventDispatcher:
             }
         ]
 
-    def _rule_to_queue_items(self, rule: TriggerRule, origin: str) -> list[QueueItem]:
+    def _is_local_echo_action(
+        self, action_id: str, source_integration_id: str | None
+    ) -> bool:
+        """True when this action belongs to the integration whose echo this is."""
+        if source_integration_id is None:
+            return False
+        return (
+            self._integrations.action_integration_id(action_id)
+            == source_integration_id
+        )
+
+    def _rule_to_queue_items(
+        self,
+        rule: TriggerRule,
+        origin: str,
+        *,
+        source_integration_id: str | None = None,
+        chain_depth: int = 0,
+    ) -> list[QueueItem]:
         """
         Convert a TriggerRule's actions into QueueItems.
 
         Actions disabled at the integration or per-action level are skipped
         here, so the rule keeps working as-is when the toggle is turned back on.
+        Actions from the integration whose echo caused this event are also
+        skipped: they are the feedback edge that would close the loop.
         """
         items = []
         for action in rule.actions:
@@ -337,6 +405,14 @@ class EventDispatcher:
                     origin=origin,
                 )
                 continue
+            if self._is_local_echo_action(action_id, source_integration_id):
+                logger.info(
+                    f"[Dispatcher] Action '{action_id}' skipped (local action echo)",
+                    rule=rule.name,
+                    origin=origin,
+                    chain_depth=chain_depth,
+                )
+                continue
             item = QueueItem(
                 id=generate_id(),
                 action_type=action.action_type,
@@ -349,6 +425,7 @@ class EventDispatcher:
                 display_name=f"{rule.name}: {action.action_type.value}",
                 trigger_action_id=action.id,
                 trigger_rule_id=rule.id,
+                causation_depth=chain_depth + 1,
                 created_at=datetime.now(),
             )
             items.append(item)

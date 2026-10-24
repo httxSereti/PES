@@ -19,6 +19,7 @@ from events.enums import TriggerableEvent
 from integrations.base import IntegrationContext
 
 from . import wof
+from .echo import consume_time_echo
 
 router = APIRouter(prefix="/webhooks", tags=["webhooks"])
 security = HTTPBasic()
@@ -197,6 +198,14 @@ async def read_chaster_webhook(
                     if duration > 0
                     else TriggerableEvent.CHASTER_TIME_SUB.value
                 )
+                echo_depth = consume_time_echo(event_type)
+                if echo_depth is not None:
+                    logger.info(
+                        "[Webhook] Tagged time event as local action echo",
+                        event_type=event_type,
+                        chain_depth=echo_depth,
+                        webhook_id=webhook_id,
+                    )
                 await dispatcher.dispatch(
                     event_type=event_type,
                     event_data={
@@ -205,6 +214,12 @@ async def read_chaster_webhook(
                         "triggeredAt": created_at,
                     },
                     origin=origin,
+                    chain_depth=echo_depth if echo_depth is not None else 0,
+                    source_integration_id=(
+                        CHASTER_INTEGRATION_ID
+                        if echo_depth is not None
+                        else None
+                    ),
                 )
 
         # ── Shared Link votes ──

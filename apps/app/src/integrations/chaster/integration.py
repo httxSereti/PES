@@ -13,7 +13,7 @@ from integrations.base import (
     SettingType,
 )
 
-from . import webhooks
+from . import echo, webhooks
 from .actions import ChasterTimeActionHandler
 
 _EVENTS = [
@@ -155,3 +155,4 @@ class ChasterIntegration(Integration):
 
     async def stop(self) -> None:
         webhooks.teardown()
+        echo.clear()

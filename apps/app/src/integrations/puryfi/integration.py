@@ -25,6 +25,7 @@ from integrations.base import (
     SettingDef,
     SettingType,
 )
+from integrations.echo_guard import EchoGuard
 
 from . import labels
 from .actions import (
@@ -257,6 +258,7 @@ class PuryFiIntegration(Integration):
         self._last_detection: dict[str, float] = {}
         self._lock_task: asyncio.Task | None = None
         self._handshaked = False
+        self._echo_guard = EchoGuard()
         self._actions = [
             ActionDef(
                 id=ActionType.PURYFI_SET_ENABLED.value,
@@ -371,6 +373,7 @@ class PuryFiIntegration(Integration):
     async def stop(self) -> None:
         await self._cancel_lock_poll()
         await self._client.stop()
+        self._echo_guard.clear()
         self._ctx = None
 
     # ───────── PuryFi connection hooks ─────────
@@ -622,6 +625,41 @@ class PuryFiIntegration(Integration):
                 "puryfi_lock_changed", {"changed": changed, "lock": current}, "puryfi:lock"
             )
 
+    # ───────── Local action echoes ─────────
+
+    def expect_action_echo(self, action_type: ActionType, depth: int) -> None:
+        """Mark the state events a locally applied action is expected to cause."""
+        if action_type == ActionType.PURYFI_SET_ENABLED:
+            self._echo_guard.expect("state", 5.0, depth)
+        elif action_type in (
+            ActionType.PURYFI_SET_LOCK,
+            ActionType.PURYFI_SET_LOCK_TIMER,
+            ActionType.PURYFI_ENTER_LOCK_PASSWORD,
+            ActionType.PURYFI_EMERGENCY_UNLOCK,
+        ):
+            poll_seconds = max(2, self._int_setting("lock_poll_seconds", 10))
+            # One lock update can report both a timer change and a lock change
+            # in the same poll.
+            self._echo_guard.expect("lock", poll_seconds + 5.0, depth, count=2)
+        elif action_type == ActionType.PURYFI_UPDATE_WBLIST:
+            self._echo_guard.expect("wblist", 5.0, depth)
+
+    @staticmethod
+    def _echo_family(event_type: str) -> str | None:
+        if event_type in ("puryfi_enabled", "puryfi_disabled"):
+            return "state"
+        if event_type.startswith("puryfi_lock_"):
+            return "lock"
+        if event_type == "puryfi_wblist_changed":
+            return "wblist"
+        return None
+
+    def _consume_echo(self, event_type: str) -> int | None:
+        family = self._echo_family(event_type)
+        if family is None:
+            return None
+        return self._echo_guard.consume(family)
+
     # ───────── Dispatch ─────────
 
     async def _dispatch(self, event_type: str, event_data: dict, origin: str) -> None:
@@ -633,4 +671,19 @@ class PuryFiIntegration(Integration):
                 event_type=event_type,
             )
             return
-        await self._ctx.dispatcher.dispatch(event_type, event_data, origin=origin)
+
+        echo_depth = self._consume_echo(event_type)
+        if echo_depth is not None:
+            logger.debug(
+                "[PuryFi] Tagged event as local action echo",
+                event_type=event_type,
+                chain_depth=echo_depth,
+            )
+
+        await self._ctx.dispatcher.dispatch(
+            event_type,
+            event_data,
+            origin=origin,
+            chain_depth=echo_depth if echo_depth is not None else 0,
+            source_integration_id=self.id if echo_depth is not None else None,
+        )

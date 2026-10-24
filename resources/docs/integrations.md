@@ -4,12 +4,12 @@ Everything that contributes **events**, **actions** or **settings** to PES is an
 integration. They all live under `apps/app/src/integrations/` and are registered
 in one `IntegrationRegistry`.
 
-| Id        | Kind     | Events                | Actions                                  | Settings                  |
-| --------- | -------- | --------------------- | ---------------------------------------- | ------------------------- |
-| `units`   | core     | —                     | `PROFILE`, `LEVEL`, `MULT`               | — (units/hardware pages)  |
-| `sensors` | core     | `sensor_*_alarm`      | —                                        | — (sensors page)          |
-| `chaster` | external | `chaster_*`           | `CHASTER_TIME_UPDATE`                    | `CHASTER_*` (env, ro)     |
-| `puryfi`  | external | `puryfi_*` (17)       | `PURYFI_*` (6)                           | thresholds, port, secrets |
+| Id        | Kind     | Events           | Actions                    | Settings                  |
+| --------- | -------- | ---------------- | -------------------------- | ------------------------- |
+| `units`   | core     | —                | `PROFILE`, `LEVEL`, `MULT` | — (units/hardware pages)  |
+| `sensors` | core     | `sensor_*_alarm` | —                          | — (sensors page)          |
+| `chaster` | external | `chaster_*`      | `CHASTER_TIME_UPDATE`      | `CHASTER_*` (env, ro)     |
+| `puryfi`  | external | `puryfi_*` (17)  | `PURYFI_*` (6)             | thresholds, port, secrets |
 
 ### PuryFi (browser blocker)
 
@@ -43,6 +43,16 @@ intercepts images.
   owning its state and safety limits.
 - **external** integrations are third-party services: enable/disable,
   credentials, own REST routes, isolated failures.
+
+Disabling an external integration is a global kill switch: its events no
+longer trigger rules, its actions are skipped, and waiting actions are
+canceled. Per-event and per-action switches stay stored and editable while the
+integration is disabled.
+
+Actions that change an integration's own state (PuryFi lock/state updates,
+Chaster time updates) tag the resulting events as local echoes. The dispatcher
+skips actions from that same integration for those echoes and caps the
+causation chain, so a rule cannot feed back into itself indefinitely.
 
 ## The registry
 
