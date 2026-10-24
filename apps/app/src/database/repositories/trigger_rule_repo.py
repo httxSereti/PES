@@ -1,19 +1,58 @@
 from __future__ import annotations
+
+from dataclasses import dataclass
 from typing import List, Optional
+
 from cuid2 import cuid_wrapper
 from sqlalchemy import and_, delete, or_, select
+from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from database.connection import Database
 from database.models import (
-    TriggerRule,
     TriggerAction,
+    TriggerRule,
     TriggerRuleEvent,
     TriggerRuleLabel,
 )
 from events.enums import ActionType
 
 generate_id = cuid_wrapper()
+
+
+@dataclass(frozen=True)
+class TriggerActionSpec:
+    """Validated action fields for an atomic rule create/replace."""
+
+    action_type: ActionType
+    payload: dict
+    duration: int = -1
+    cumulative: bool = False
+    sort_order: int = 0
+
+
+def _build_event_links(event_types: List[str]) -> List[TriggerRuleEvent]:
+    return [
+        TriggerRuleEvent(event_type=event_type, sort_order=index)
+        for index, event_type in enumerate(event_types)
+    ]
+
+
+def _build_actions(
+    rule_id: str, specs: List[TriggerActionSpec]
+) -> List[TriggerAction]:
+    return [
+        TriggerAction(
+            id=generate_id(),
+            trigger_rule_id=rule_id,
+            action_type=spec.action_type,
+            payload=spec.payload,
+            duration=spec.duration,
+            cumulative=spec.cumulative,
+            sort_order=spec.sort_order,
+        )
+        for spec in specs
+    ]
 
 
 def unique_event_types(event_types: List[str]) -> List[str]:
@@ -89,7 +128,7 @@ class TriggerRuleRepo:
                     selectinload(TriggerRule.event_links),
                 )
                 .where(_matches_event(event_type))
-                .where(TriggerRule.enabled == True)
+                .where(TriggerRule.enabled)
                 .order_by(TriggerRule.priority.desc())
             )
             result = await session.execute(stmt)
@@ -162,6 +201,51 @@ class TriggerRuleRepo:
             await session.refresh(rule)
             return rule
 
+    async def create_rule_with_actions(
+        self,
+        *,
+        event_types: List[str],
+        name: str,
+        description: Optional[str],
+        enabled: bool,
+        priority: int,
+        actions: List[TriggerActionSpec],
+        labels: List[str],
+    ) -> tuple[TriggerRule, List[TriggerRuleLabel]]:
+        """
+        Create a rule, its actions and its labels in one transaction.
+
+        Either every row is written or none is, so a failed action or label
+        write can no longer leave a half-built rule behind.
+        """
+        types = unique_event_types(event_types)
+        if not types:
+            raise ValueError("A trigger rule needs at least one event type")
+
+        rule_id = generate_id()
+        async with self._db.session_maker() as session:
+            rule = TriggerRule(
+                id=rule_id,
+                event_type=types[0],
+                name=name,
+                description=description,
+                enabled=enabled,
+                priority=priority,
+                event_links=_build_event_links(types),
+                actions=_build_actions(rule_id, actions),
+            )
+            resolved_labels, created_labels = await self._resolve_labels(
+                session, labels
+            )
+            rule.labels = resolved_labels
+            session.add(rule)
+            await session.commit()
+
+        full_rule = await self.get_rule(rule_id)
+        if full_rule is None:
+            raise RuntimeError(f"TriggerRule '{rule_id}' not found after create")
+        return full_rule, created_labels
+
     async def update_rule(
         self,
         rule_id: str,
@@ -195,15 +279,78 @@ class TriggerRuleRepo:
                 rule.priority = priority
             if types is not None:
                 rule.event_type = types[0]
-                rule.event_links = [
-                    TriggerRuleEvent(event_type=event_type, sort_order=index)
-                    for index, event_type in enumerate(types)
-                ]
+                # Delete the old links before inserting the new ones: their
+                # primary key is (trigger_rule_id, event_type), so re-selecting
+                # the same event type would otherwise collide mid-flush.
+                rule.event_links.clear()
+                await session.flush()
+                rule.event_links = _build_event_links(types)
 
             await session.commit()
             await session.refresh(rule)
             # Fetch with actions for consistency
             return await self.get_rule(rule_id)
+
+    async def replace_rule_with_actions(
+        self,
+        *,
+        rule_id: str,
+        event_types: List[str],
+        name: str,
+        description: Optional[str],
+        enabled: bool,
+        priority: int,
+        actions: List[TriggerActionSpec],
+        labels: List[str],
+    ) -> tuple[Optional[TriggerRule], List[TriggerRuleLabel]]:
+        """
+        Update a rule and fully replace its actions/labels in one transaction.
+
+        Existing actions and event links are flushed as deleted before the new
+        rows are inserted, so re-selecting an event type cannot collide on the
+        composite primary key. Returns ``(None, [])`` when the rule is missing.
+        """
+        types = unique_event_types(event_types)
+        if not types:
+            raise ValueError("A trigger rule needs at least one event type")
+
+        async with self._db.session_maker() as session:
+            rule = await session.get(
+                TriggerRule,
+                rule_id,
+                options=[
+                    selectinload(TriggerRule.actions),
+                    selectinload(TriggerRule.event_links),
+                    selectinload(TriggerRule.labels),
+                ],
+            )
+            if not rule:
+                return None, []
+
+            rule.name = name
+            rule.description = description
+            rule.enabled = enabled
+            rule.priority = priority
+            rule.event_type = types[0]
+
+            # Flush the deletes first so the inserts below cannot race the
+            # old rows (event links share their primary key with the new ones).
+            rule.actions.clear()
+            rule.event_links.clear()
+            await session.flush()
+
+            rule.event_links = _build_event_links(types)
+            rule.actions = _build_actions(rule_id, actions)
+
+            resolved_labels, created_labels = await self._resolve_labels(
+                session, labels
+            )
+            rule.labels = resolved_labels
+
+            await session.commit()
+
+        full_rule = await self.get_rule(rule_id)
+        return full_rule, created_labels
 
     async def toggle_rule(self, rule_id: str, enabled: bool) -> Optional[TriggerRule]:
         """Toggle enabled state of a rule."""
@@ -314,6 +461,34 @@ class TriggerRuleRepo:
             result = await session.execute(stmt)
             return list(result.scalars().all())
 
+    async def _resolve_labels(
+        self, session: AsyncSession, label_names: List[str]
+    ) -> tuple[List[TriggerRuleLabel], List[TriggerRuleLabel]]:
+        """Resolve label names to rows, creating missing labels in `session`."""
+        labels: List[TriggerRuleLabel] = []
+        created: List[TriggerRuleLabel] = []
+        seen: set[str] = set()
+
+        for raw in label_names:
+            name = raw.strip()
+            if not name or name.lower() in seen:
+                continue
+            seen.add(name.lower())
+
+            result = await session.execute(
+                select(TriggerRuleLabel).where(TriggerRuleLabel.name == name)
+            )
+            label = result.scalar_one_or_none()
+
+            if label is None:
+                label = TriggerRuleLabel(id=generate_id(), name=name)
+                session.add(label)
+                created.append(label)
+
+            labels.append(label)
+
+        return labels, created
+
     async def set_labels_for_rule(
         self, rule_id: str, label_names: List[str]
     ) -> List[TriggerRuleLabel]:
@@ -332,27 +507,7 @@ class TriggerRuleRepo:
             if not rule:
                 return []
 
-            labels: List[TriggerRuleLabel] = []
-            created: List[TriggerRuleLabel] = []
-            seen: set[str] = set()
-
-            for raw in label_names:
-                name = raw.strip()
-                if not name or name.lower() in seen:
-                    continue
-                seen.add(name.lower())
-
-                result = await session.execute(
-                    select(TriggerRuleLabel).where(TriggerRuleLabel.name == name)
-                )
-                label = result.scalar_one_or_none()
-
-                if label is None:
-                    label = TriggerRuleLabel(id=generate_id(), name=name)
-                    session.add(label)
-                    created.append(label)
-
-                labels.append(label)
+            labels, created = await self._resolve_labels(session, label_names)
 
             rule.labels = labels
             await session.commit()

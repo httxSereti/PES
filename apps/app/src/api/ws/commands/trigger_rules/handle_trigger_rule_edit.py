@@ -4,7 +4,11 @@ from api.ws.context import CommandContext
 from api.ws.loaders.trigger_rules_loader import _serialize_rule
 from api.ws.registry import command
 from api.ws.schema import CommandResult, TriggerRulesEditCommand
-from database.repositories.trigger_rule_repo import TriggerRuleRepo, unique_event_types
+from database.repositories.trigger_rule_repo import (
+    TriggerActionSpec,
+    TriggerRuleRepo,
+    unique_event_types,
+)
 from events.enums import ActionType
 from integrations import integration_registry
 from typings import Permission
@@ -57,43 +61,40 @@ async def handle_trigger_rule_edit(
                 message=f"Invalid action_type. Must be one of: {[t.value for t in ActionType]}",
             )
 
-    try:
-        repo = TriggerRuleRepo()
+    action_specs = [
+        TriggerActionSpec(
+            action_type=action.action_type,
+            payload=action.payload,
+            duration=action.duration,
+            cumulative=action.cumulative,
+            # old dict fallback: an omitted sort_order meant "use the index"
+            sort_order=(
+                action.sort_order
+                if "sort_order" in action.model_fields_set
+                else index
+            ),
+        )
+        for index, action in enumerate(actions)
+    ]
 
-        rule = await repo.update_rule(
+    try:
+        # Rule, actions and labels are replaced in one transaction, so a
+        # failure cannot leave the rule with missing or partial actions.
+        rule, created_labels = await TriggerRuleRepo().replace_rule_with_actions(
             rule_id=rule_id,
             event_types=event_types,
             name=name,
             description=msg.payload.description,
             enabled=msg.payload.enabled,
             priority=msg.payload.priority,
+            actions=action_specs,
+            labels=labels,
         )
-        if not rule:
+        if rule is None:
             return CommandResult(status="error", message="Rule not found")
 
-        # Full replace of actions
-        await repo.delete_actions_for_rule(rule_id)
-        for index, action in enumerate(actions):
-            await repo.create_action(
-                trigger_rule_id=rule_id,
-                action_type=action.action_type,
-                payload=action.payload,
-                duration=action.duration,
-                cumulative=action.cumulative,
-                # old dict fallback: an omitted sort_order meant "use the index"
-                sort_order=(
-                    action.sort_order
-                    if "sort_order" in action.model_fields_set
-                    else index
-                ),
-            )
-
-        # Resolve labels by name (reuse existing, create missing) and attach
-        created_labels = await repo.set_labels_for_rule(rule_id, labels)
-
-        # Re-fetch with actions + labels eagerly loaded for serialization
-        full_rule = await repo.get_rule(rule_id)
-        serialized = _serialize_rule(full_rule)
+        # The repository returns the fully loaded rule for serialization.
+        serialized = _serialize_rule(rule)
 
     except KeyError:
         logger.exception(
