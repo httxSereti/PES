@@ -627,4 +627,10 @@ class PuryFiIntegration(Integration):
     async def _dispatch(self, event_type: str, event_data: dict, origin: str) -> None:
         if self._ctx is None:
             return
+        if not self._ctx.registry.is_enabled(self.id):
+            logger.debug(
+                "[PuryFi] Integration disabled, event suppressed",
+                event_type=event_type,
+            )
+            return
         await self._ctx.dispatcher.dispatch(event_type, event_data, origin=origin)

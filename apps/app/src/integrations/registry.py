@@ -140,24 +140,40 @@ class IntegrationRegistry:
             return True
         return bool(values.get(item_id, True))
 
-    def is_event_enabled(self, event_id: str) -> bool:
-        """
-        True when the event may trigger rules.
-
-        Unknown ids (`custom:*` pseudo events) keep firing: they cannot be
-        toggled and never have a rule of their own.
-        """
+    def is_event_toggled(self, event_id: str) -> bool:
+        """Per-event switch, independent of the owning integration's state."""
         owner_id = self._event_owner.get(event_id)
         if owner_id is None:
             return True
         return self._is_item_toggled(owner_id, "events", event_id)
+
+    def is_action_toggled(self, action_id: str) -> bool:
+        """Per-action switch, independent of the owning integration's state."""
+        owner_id = self._action_owner.get(action_id)
+        if owner_id is None:
+            return True
+        return self._is_item_toggled(owner_id, "actions", action_id)
+
+    def is_event_enabled(self, event_id: str) -> bool:
+        """
+        True when the event may trigger rules.
+
+        This is the effective state: the owning integration must be enabled
+        and the per-event switch must be on. Unknown ids (`custom:*` pseudo
+        events) keep firing: they cannot be toggled and never have a rule of
+        their own.
+        """
+        owner_id = self._event_owner.get(event_id)
+        if owner_id is None:
+            return True
+        return self.is_enabled(owner_id) and self.is_event_toggled(event_id)
 
     def is_action_enabled(self, action_id: str) -> bool:
         """True when trigger rules may run this action type."""
         owner_id = self._action_owner.get(action_id)
         if owner_id is None:
             return True
-        return self._is_item_toggled(owner_id, "actions", action_id)
+        return self.is_enabled(owner_id) and self.is_action_toggled(action_id)
 
     def set_event_enabled(self, integration_id: str, event_id: str, enabled: bool) -> None:
         integration = self._require(integration_id)
@@ -290,13 +306,16 @@ class IntegrationRegistry:
             "kind": integration.kind.value,
             "enabled": self.is_enabled(integration.id),
             "endpoint": integration.endpoint(),
+            # Item switches stay independently configurable while the
+            # integration itself is disabled; `enabled` above is the global
+            # kill switch shown separately in the UI.
             "events": [
                 {
                     "id": event.id,
                     "label": event.label,
                     "description": event.description,
                     "group": event.group,
-                    "enabled": self.is_event_enabled(event.id),
+                    "enabled": self.is_event_toggled(event.id),
                     "data_schema": event.data_schema,
                     "image_url": event.image_url,
                 }
@@ -308,7 +327,7 @@ class IntegrationRegistry:
                     "label": action.label,
                     "description": action.description,
                     "group": action.group,
-                    "enabled": self.is_action_enabled(action.id),
+                    "enabled": self.is_action_toggled(action.id),
                     "payload_schema": action.payload_schema,
                     "reversible": action.reversible,
                 }

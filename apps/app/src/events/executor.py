@@ -82,6 +82,12 @@ class ActionExecutor:
         definition = self._registry.get_action(item.action_type.value)
         return definition.handler if definition else None
 
+    def is_action_enabled(self, item: QueueItem) -> bool:
+        """True when the item's action type is still allowed to run."""
+        if self._registry is None:
+            return True
+        return self._registry.is_action_enabled(item.action_type.value)
+
     def targets_unit(self, item: QueueItem, unit: UnitDict) -> bool:
         """
         True when applying `item` may change `unit`'s hardware state.
@@ -184,7 +190,7 @@ class ActionExecutor:
         """Apply level changes and return snapshot of previous values."""
         from typings import UnitDict
 
-        snapshot = {"type": "level", "changes": []}
+        snapshot: dict = {"type": "level", "changes": []}
         units_str = payload.get("units", "")
         channels_str = payload.get("channels", "")
         value_str = payload.get("value", "0")

@@ -74,8 +74,9 @@ class EventDispatcher:
             origin=origin,
         )
 
-        # Disabled at the integration level: drop the event entirely (no DB
-        # record, no queue items). Re-enabling brings the rules back.
+        # Disabled at the integration or per-event level: drop the event
+        # entirely (no DB record, no queue items). Re-enabling brings the
+        # rules back.
         if not self._integrations.is_event_enabled(event_type):
             logger.info(
                 f"[Dispatcher] Event '{event_type}' disabled, ignored",
@@ -157,6 +158,14 @@ class EventDispatcher:
         if not self._session_allows_event(event_type):
             logger.info(
                 f"[Dispatcher] Direct event '{event_type}' outside session scope, ignored",
+                event_id=event_id,
+                origin=origin,
+            )
+            return
+
+        if not self._integrations.is_event_enabled(event_type):
+            logger.info(
+                f"[Dispatcher] Direct event '{event_type}' disabled, ignored",
                 event_id=event_id,
                 origin=origin,
             )
@@ -311,8 +320,8 @@ class EventDispatcher:
         """
         Convert a TriggerRule's actions into QueueItems.
 
-        Actions disabled at the integration level are skipped here, so the
-        rule keeps working as-is when the toggle is turned back on.
+        Actions disabled at the integration or per-action level are skipped
+        here, so the rule keeps working as-is when the toggle is turned back on.
         """
         items = []
         for action in rule.actions:

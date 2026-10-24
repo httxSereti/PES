@@ -4,14 +4,17 @@ import threading
 from datetime import datetime
 from typing import TYPE_CHECKING
 
-from .enums import QueueItemStatus
-from .models import QueueItem
-from typings import UnitDict
 import structlog
 
+from typings import UnitDict
+
+from .enums import QueueItemStatus
+from .models import QueueItem
+
 if TYPE_CHECKING:
-    from .executor import ActionExecutor
     from api.ws.websocket_notifier import WebSocketNotifier
+
+    from .executor import ActionExecutor
 
 logger = structlog.get_logger("pes")
 
@@ -260,13 +263,32 @@ class ActionQueue:
         """Start executing an item. Returns True if it was actually started."""
         # Atomic claim: only start if still WAITING and still queued (it may
         # have been cancelled by the other loop since the tick snapshot).
+        skipped = False
         with self._lock:
             if item.status != QueueItemStatus.WAITING or not self._is_queued(item):
                 return False
-            item.status = QueueItemStatus.RUNNING
-            item.started_at = datetime.now()
-            item.elapsed = 0
-            self._applying.add(item.id)
+            # The integration or action may have been disabled while this item
+            # was waiting, so re-check at claim time and drop it instead of
+            # applying an action the user turned off.
+            if not self._executor.is_action_enabled(item):
+                item.status = QueueItemStatus.CANCELLED
+                item.completed_at = datetime.now()
+                self._items = [i for i in self._items if i.id != item.id]
+                self._total_cancelled += 1
+                skipped = True
+            else:
+                item.status = QueueItemStatus.RUNNING
+                item.started_at = datetime.now()
+                item.elapsed = 0
+                self._applying.add(item.id)
+
+        if skipped:
+            logger.info(
+                f"[Queue] Skipped '{item.action_type.value}' (action disabled)",
+                origin=item.origin,
+            )
+            self._notify_update()
+            return False
 
         try:
             snapshot = await self._executor.apply(item)
