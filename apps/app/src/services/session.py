@@ -20,6 +20,7 @@ from database.models import AppSession, EdgingSession, TriggeredEvent
 from database.repositories.edging_repo import EdgingRepo
 from database.repositories.session_repo import SessionRepo
 from database.repositories.triggered_event_repo import TriggeredEventRepo
+from events.redaction import redact_payload, redact_triggered_rules
 from services.neutralize import neutralize_all
 from services.training import serialize_session as serialize_edging_session
 from store import Store
@@ -235,9 +236,9 @@ def serialize_event(event: TriggeredEvent) -> dict:
         "id": event.id,
         "event_type": event.event_type,
         "origin": event.origin,
-        "event_data": event.event_data,
+        "event_data": redact_payload(event.event_data),
         "triggered_at": to_utc_iso(event.triggered_at),
-        "triggered_rules": event.triggered_rules,
+        "triggered_rules": redact_triggered_rules(event.triggered_rules),
     }
 
 

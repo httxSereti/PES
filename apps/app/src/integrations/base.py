@@ -82,6 +82,9 @@ class ActionDef:
     description: str = ""
     group: str = ""
     payload_schema: dict[str, str] = field(default_factory=dict)
+    # Payload keys that must never be stored/broadcast verbatim (e.g. a
+    # legacy per-rule password). Key-name redaction is applied as a fallback.
+    secret_fields: tuple[str, ...] = ()
     reversible: bool = False
     handler: ActionHandler | None = None
 

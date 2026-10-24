@@ -1,12 +1,14 @@
 import asyncio
-import structlog
 from typing import Optional
 
-from utils import to_utc_iso
+import structlog
+
+from api.ws.loaders import trigger_rules_loader
 from api.ws.schema import MESSAGE_AUDIENCE
+from events.redaction import redact_payload, redact_triggered_rules
+from utils import to_utc_iso
 
 from .websocket_manager import WebSocketManager
-from api.ws.loaders import trigger_rules_loader
 
 logger = structlog.get_logger("pes")
 
@@ -63,9 +65,9 @@ class WebSocketNotifier:
                 "id": ev.id,
                 "event_type": ev.event_type,
                 "origin": ev.origin,
-                "event_data": ev.event_data,
+                "event_data": redact_payload(ev.event_data),
                 "triggered_at": to_utc_iso(ev.triggered_at),
-                "triggered_rules": ev.triggered_rules,
+                "triggered_rules": redact_triggered_rules(ev.triggered_rules),
             }
             for ev in events
         ]
@@ -83,9 +85,12 @@ class WebSocketNotifier:
         await trigger_rules_loader(client_id, ws_manager)
 
     async def consume(self, ws_manager: WebSocketManager):
+        queue = self._queue
+        if queue is None:
+            raise RuntimeError("WSNotifier not ready")
         while True:
             try:
-                message = await self._queue.get()
+                message = await queue.get()
                 audience = message.pop("_audience", None)
                 await ws_manager.broadcast(message, audience=audience)
             except Exception:

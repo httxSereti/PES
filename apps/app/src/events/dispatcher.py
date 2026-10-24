@@ -11,6 +11,7 @@ from database.repositories.triggered_event_repo import TriggeredEventRepo
 from events.enums import QueueItemStatus
 from events.models import QueueItem, TriggerRule
 from events.queue import ActionQueue
+from events.redaction import redact_payload, redact_triggered_rules
 from events.registry import EventRegistry
 from integrations import integration_registry
 from integrations.base import IntegrationKind
@@ -291,14 +292,16 @@ class EventDispatcher:
         triggered_rules: list[dict],
     ) -> None:
         """Persist the event to DB and broadcast it to all WS clients."""
+        safe_event_data = redact_payload(event_data)
+        safe_triggered_rules = redact_triggered_rules(triggered_rules)
         active_session = store.get_active_session()
         record = TriggeredEvent(
             id=event_id,
             event_type=event_type,
             origin=origin,
-            event_data=event_data,
+            event_data=safe_event_data,
             triggered_at=triggered_at,
-            triggered_rules=triggered_rules,
+            triggered_rules=safe_triggered_rules,
             session_id=active_session["id"] if active_session else None,
         )
         await self._event_repo.save(record)
@@ -310,14 +313,18 @@ class EventDispatcher:
                     "id": event_id,
                     "event_type": event_type,
                     "origin": origin,
-                    "event_data": event_data,
+                    "event_data": safe_event_data,
                     "triggered_at": triggered_at.isoformat(),
-                    "triggered_rules": triggered_rules,
+                    "triggered_rules": safe_triggered_rules,
                 },
             )
 
-    @staticmethod
-    def _build_rule_summary(rule: TriggerRule, queue_items: list[QueueItem]) -> dict:
+    def _redacted_action_payload(self, action_type: str, payload: dict) -> dict:
+        definition = self._integrations.get_action(action_type)
+        secret_fields = definition.secret_fields if definition else ()
+        return redact_payload(payload, secret_fields)
+
+    def _build_rule_summary(self, rule: TriggerRule, queue_items: list[QueueItem]) -> dict:
         """
         Build a serializable summary of a TriggerRule and its resulting QueueItems
         for storage in TriggeredEvent.triggered_rules and WS payloads.
@@ -334,15 +341,18 @@ class EventDispatcher:
                     "display_name": item.display_name,
                     "duration": item.duration,
                     "cumulative": item.cumulative,
-                    "payload": item.payload,
+                    "payload": self._redacted_action_payload(
+                        item.action_type.value, item.payload
+                    ),
                 }
                 for item in queue_items
                 if item.trigger_rule_id == rule.id
             ],
         }
 
-    @staticmethod
-    def _build_direct_summary(summary_name: str, queue_items: list[QueueItem]) -> list[dict]:
+    def _build_direct_summary(
+        self, summary_name: str, queue_items: list[QueueItem]
+    ) -> list[dict]:
         """Build a summary for direct dispatches (no DB rule involved)."""
         return [
             {
@@ -357,7 +367,9 @@ class EventDispatcher:
                         "display_name": item.display_name,
                         "duration": item.duration,
                         "cumulative": item.cumulative,
-                        "payload": item.payload,
+                        "payload": self._redacted_action_payload(
+                            item.action_type.value, item.payload
+                        ),
                     }
                     for item in queue_items
                 ],

@@ -277,6 +277,8 @@ class PuryFiIntegration(Integration):
                 ),
                 group="Lock",
                 payload_schema={"timer_minutes": "integer (0 = no timer)"},
+                # Legacy rules could still carry a per-rule password.
+                secret_fields=("password",),
                 handler=SetLockHandler(self),
             ),
             ActionDef(

@@ -54,6 +54,11 @@ Chaster time updates) tag the resulting events as local echoes. The dispatcher
 skips actions from that same integration for those echoes and caps the
 causation chain, so a rule cannot feed back into itself indefinitely.
 
+Event history and live event payloads are sanitised: sensitive keys in action
+payloads and event data (`password`, `secret`, `token`, `api_key`, …) are
+replaced before storage and broadcast, and older rows are redacted again when
+read.
+
 ## The registry
 
 `integrations/registry.py` is the single source of truth:

@@ -89,19 +89,33 @@ No runtime testing was performed for the original review. Status reflects the cu
 - **Note:** PuryFi’s WebSocket client remains connected while disabled, but it no longer emits events or executes queued actions.
 - **Verification:** tested effective vs. per-item state and catalog output, PuryFi dispatch suppression, direct-dispatch gating, and queue cancellation/retention for disabled vs. enabled actions.
 
-#### 6. No feedback-loop protection — Open
+#### 6. No feedback-loop protection — Fixed
 
-- **Where:** `integrations/puryfi/integration.py`, `integrations/chaster/actions.py`, `integrations/chaster/webhooks.py`.
-- **Problem:** integration actions can generate the events that trigger them. PuryFi lock polling dispatches `puryfi_lock_time_added` after its own timer changes, so a rule on that event that calls `PURYFI_SET_LOCK_TIMER` loops. Chaster time actions have the same risk if Chaster emits an action-log webhook for API time changes.
-- **Impact:** endless event → action → event loops, repeated hardware actions, and unbounded history growth.
-- **Fix:** per-rule cooldowns/rate limits, a causation chain (`caused_by_event_id`), and suppression of events caused by PES actions.
+- **Where:** `integrations/puryfi/integration.py`, `integrations/puryfi/actions.py`, `integrations/chaster/actions.py`, `integrations/chaster/webhooks.py`, `events/dispatcher.py`, `events/models.py`.
+- **Problem:** integration actions could generate the events that trigger them. PuryFi lock polling dispatches `puryfi_lock_time_added` after its own timer changes, so a rule on that event that calls `PURYFI_SET_LOCK_TIMER` could loop. Chaster time actions had the same risk if Chaster emitted an action-log webhook for API time changes.
+- **Current implementation:**
+  - Added `integrations/echo_guard.py`, a bounded, TTL-based queue of expected local-action echoes carrying causation depth.
+  - PuryFi action handlers register the state/lock/wblist events their action may cause. PuryFi event dispatch consumes the expectation and tags the event with `chain_depth` and `source_integration_id="puryfi"`.
+  - Chaster time updates register an expected `time_changed` echo before sending the API request. The webhook consumes it and tags the event with `chain_depth` and `source_integration_id="chaster"`.
+  - Dispatcher events now carry an optional causation chain. Actions belonging to the integration that caused an echo are skipped, so the feedback edge is removed while cross-integration reactions can still run.
+  - A hard chain-depth cap (`8`) stops longer cross-integration cycles; rule-driven events are still recorded, but no further actions are queued.
+  - `QueueItem.causation_depth` propagates the chain through asynchronous actions.
+- **Trade-off:** a legitimate external change in the same short suppression window can be treated as a local echo. The TTL bounds this, and the same-integration action filter is only applied to tagged echoes.
+- **Verification:** tested `EchoGuard` counts/TTL, PuryFi action → echo tagging, Chaster action → webhook echo tagging, same-integration action filtering, and the chain-depth cap.
 
-#### 7. Secrets leak into event history and live broadcasts — Open
+#### 7. Secrets leak into event history and live broadcasts — Fixed
 
-- **Where:** `events/dispatcher.py`, `database/models/triggered_event.py`, `api/ws/websocket_notifier.py`, `typings/enums/user_roles_enum.py`.
-- **Problem:** `_build_rule_summary()` copies the full action payload into `triggered_events` and the `events:triggered` WS message. `PURYFI_SET_LOCK` can contain a plaintext `password`. `READ_EVENTS` is granted to the normal `USER` role, while trigger rules require `ADMIN`.
-- **Impact:** regular users can see lock passwords or other action secrets in history and the live event feed.
-- **Fix:** redact secret payload fields, store secret references instead of values, or restrict event payloads to non-secret summaries.
+- **Where:** `events/redaction.py`, `events/dispatcher.py`, `api/ws/websocket_notifier.py`, `services/session.py`, `integrations/base.py`, `integrations/puryfi/integration.py`.
+- **Problem:** `_build_rule_summary()` copied the full action payload into `triggered_events` and the `events:triggered` WS message. `PURYFI_SET_LOCK` could contain a legacy plaintext `password`. `READ_EVENTS` is granted to the normal `USER` role, while trigger rules require `ADMIN`.
+- **Impact:** regular users could see lock passwords or other action secrets in history and the live event feed.
+- **Current implementation:**
+  - Added `events/redaction.py` with recursive key-name redaction (`password`, `secret`, `token`, `api_key`, …) and support for action-declared `secret_fields`.
+  - Added `ActionDef.secret_fields`; `PURYFI_SET_LOCK` declares `password` for legacy rules.
+  - Dispatcher summaries redact action payloads before persistence and broadcast.
+  - Event `event_data` is redacted before persistence and broadcast as well.
+  - History read paths (`websocket_notifier.send_history`, `services.session.serialize_event`) redact existing rows before sending them to clients, so older records do not leak either.
+- **Note:** existing rows still contain their original stored values; they are sanitised on read. A future data migration can rewrite those rows permanently.
+- **Verification:** tested generic and declared-field redaction, nested/list payloads, dispatcher summaries, write-path persistence/broadcast, and history read-path serialization.
 
 ### P1 — important
 
@@ -219,7 +233,7 @@ No runtime testing was performed for the original review. Status reflects the cu
 - **Cooldowns and rate limits** per rule, event, session, or user.
   - Examples: “max 3 triggers per hour”, debounce bursts, minimum time between fires.
 - **Deduplication / idempotency** using Chaster `requestId`, an event hash, or a per-source key.
-- **Loop protection** with event causation chains and suppression of self-generated integration events.
+- **Configurable loop protection**: expose the echo-suppression TTLs, expectation counts, and chain-depth cap per integration/rule instead of using built-in defaults.
 - **Exclusive rule groups / stop-on-match**: let priority mean “first matching rule wins” when desired.
 - **Sequences and counters**: “event A followed by event B within 60 seconds”, “third vote in this session”.
 - **Scheduled/time windows**: only fire on certain days/hours, or add a time-based trigger event.
@@ -272,8 +286,8 @@ No runtime testing was performed for the original review. Status reflects the cu
 
 1. PuryFi unlock/emergency-unlock bug and unified password source.
 2. Emergency-stop/shutdown safety cluster: cancel queue + stop ramps + reset multipliers + zero channels.
-3. Payload schema validation + secret redaction in event history.
-4. Level reversal correctness, MULT clamp/reversal semantics, and loop protection/cooldowns.
+3. Payload schema validation for trigger-rule actions and events.
+4. Level reversal correctness and MULT clamp/reversal semantics.
 5. Make the queue deadline-based and move slow integration I/O out of the tick.
 6. Fix WOF double dispatch and custom-WOF session scoping.
 7. Correct event history ordering, queue timestamps, and legacy seed mappings.
