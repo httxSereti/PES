@@ -10,7 +10,7 @@ async def handle_session_history(
     msg: SessionsHistoryCommand, ctx: CommandContext
 ) -> CommandResult:
     try:
-        history = await get_history()
+        history = await get_history(ctx.user.id)
     except Exception as e:
         return CommandResult(status="error", message=str(e))
 

@@ -2,7 +2,7 @@
 // by apps/app/scripts/generate_ws_types.py — DO NOT EDIT.
 // Regenerate with: pnpm codegen:ws
 
-export const WS_SCHEMA_VERSION = 16;
+export const WS_SCHEMA_VERSION = 17;
 
 export enum ActionType {
     PROFILE = "PROFILE",
@@ -173,6 +173,7 @@ export interface TrainingSessionDraft {
     name: string;
     goals: TrainingGoalDraft[];
     auto_stop_on_goal: boolean;
+    participant_ids?: string[] | null;
 }
 
 export interface TrainingGoalDraft {
@@ -185,6 +186,7 @@ export interface TrainingUpdatePayload {
     name?: string | null;
     goals?: TrainingGoalDraft[] | null;
     auto_stop_on_goal?: boolean | null;
+    participant_ids?: string[] | null;
     notes?: string | null;
     rating?: number | null;
 }
@@ -201,6 +203,16 @@ export interface TrainingRecordEdgePayload {
     session_id: string;
     difficulty: 'easy' | 'normal' | 'hard' | 'extreme';
     outcome: 'success' | 'fail';
+    client_edge_id?: string | null;
+    note?: string | null;
+}
+
+export interface TrainingPausePayload {
+    session_id: string;
+}
+
+export interface TrainingResumePayload {
+    session_id: string;
 }
 
 export interface TrainingDeleteEdgePayload {
@@ -291,6 +303,9 @@ export interface EdgingSessionSummary {
     initiator: string;
     status: string;
     rating: number | null;
+    app_session_id: string | null;
+    paused_at: string | null;
+    total_paused_seconds: number;
     created_at: string;
     started_at: string | null;
     ended_at: string | null;
@@ -310,6 +325,11 @@ export interface EdgingEdge {
     difficulty: string;
     outcome: string;
     recorded_by: string;
+    source: string;
+    interval_seconds: number | null;
+    level_snapshot: Record<string, unknown> | null;
+    note: string | null;
+    client_edge_id: string | null;
     recorded_at: string;
 }
 
@@ -679,6 +699,7 @@ export interface TriggerRuleEditDraft extends TriggerRuleDraft {
 export interface EdgingSession extends EdgingSessionSummary {
     initiator_user_id: string | null;
     created_by: string;
+    participant_ids: string[];
     notes: string | null;
 }
 
@@ -949,6 +970,18 @@ export interface TrainingRecordEdgeCommand {
     id?: string | null;
     type: 'training:record_edge';
     payload: TrainingRecordEdgePayload;
+}
+
+export interface TrainingPauseCommand {
+    id?: string | null;
+    type: 'training:pause';
+    payload: TrainingPausePayload;
+}
+
+export interface TrainingResumeCommand {
+    id?: string | null;
+    type: 'training:resume';
+    payload: TrainingResumePayload;
 }
 
 export interface TrainingDeleteEdgeCommand {
@@ -1314,6 +1347,8 @@ export type WebSocketClientMessage =
     | TrainingDeleteCommand
     | TrainingStartCommand
     | TrainingRecordEdgeCommand
+    | TrainingPauseCommand
+    | TrainingResumeCommand
     | TrainingDeleteEdgeCommand
     | TrainingEndCommand
     | HardwareUpdateMk2btCommand

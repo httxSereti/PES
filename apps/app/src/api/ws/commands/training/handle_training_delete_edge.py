@@ -1,3 +1,4 @@
+from api.ws.commands.training._access import is_host
 from api.ws.context import CommandContext
 from api.ws.registry import command
 from api.ws.schema import CommandResult, TrainingDeleteEdgeCommand
@@ -13,6 +14,8 @@ async def handle_training_delete_edge(
         session = await delete_edging_edge(
             msg.payload.session_id,
             edge_id=msg.payload.edge_id,
+            viewer_id=ctx.user.id,
+            is_host=is_host(ctx),
         )
     except ValueError as e:
         return CommandResult(status="error", message=str(e))

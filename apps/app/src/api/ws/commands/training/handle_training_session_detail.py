@@ -1,3 +1,4 @@
+from api.ws.commands.training._access import is_host
 from api.ws.context import CommandContext
 from api.ws.registry import command
 from api.ws.schema import CommandResult, TrainingSessionDetailCommand
@@ -18,6 +19,8 @@ async def handle_training_session_detail(
         detail = await get_session_detail(
             msg.payload.session_id,
             include_notes=can_manage,
+            viewer_id=ctx.user.id,
+            is_host=is_host(ctx),
         )
     except Exception as e:
         return CommandResult(status="error", message=str(e))

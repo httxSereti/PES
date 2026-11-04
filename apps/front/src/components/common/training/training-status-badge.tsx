@@ -1,8 +1,17 @@
 import { STATUS_META } from "@/lib/training";
 import { cn } from "@pes/ui/lib/utils";
 
-export function TrainingStatusBadge({ status }: { status: string }) {
-  const meta = STATUS_META[status] ?? {
+interface TrainingStatusBadgeProps {
+  status: string;
+  paused?: boolean;
+}
+
+export function TrainingStatusBadge({
+  status,
+  paused = false,
+}: TrainingStatusBadgeProps) {
+  const effectiveStatus = status === "running" && paused ? "paused" : status;
+  const meta = STATUS_META[effectiveStatus] ?? {
     label: status,
     className: "border-zinc-500/30 bg-zinc-500/10 text-muted-foreground",
   };

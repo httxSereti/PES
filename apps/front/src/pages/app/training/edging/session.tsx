@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { useNavigate, useParams } from "react-router";
+import { Link, useNavigate, useParams } from "react-router";
 import { Button } from "@pes/ui/components/button";
 import {
   Dialog,
@@ -27,11 +27,13 @@ import {
   TabsList,
   TabsTrigger,
 } from "@pes/ui/components/tabs";
+import { Input } from "@pes/ui/components/input";
 import { Textarea } from "@pes/ui/components/textarea";
 import {
   Ban,
   Ellipsis,
   Flame,
+  Pause,
   Pencil,
   Play,
   Trash2,
@@ -60,6 +62,13 @@ import type { CommandResult, EdgeDifficulty } from "@/types";
 
 export function meta() {
   return [{ title: "PES | Training - Edging Session" }];
+}
+
+function newClientEdgeId(): string {
+  if (typeof globalThis.crypto?.randomUUID === "function") {
+    return globalThis.crypto.randomUUID();
+  }
+  return `${Date.now()}-${Math.random().toString(36).slice(2)}`;
 }
 
 const EDGE_BUTTONS: {
@@ -108,6 +117,7 @@ export default function EdgingSessionPage() {
   const [busy, setBusy] = useState(false);
   const [notes, setNotes] = useState("");
   const [notesDirty, setNotesDirty] = useState(false);
+  const [edgeNote, setEdgeNote] = useState("");
   const [editOpen, setEditOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
 
@@ -149,21 +159,23 @@ export default function EdgingSessionPage() {
   async function run(
     action: () => Promise<CommandResult>,
     successMessage?: string,
-  ) {
-    if (!id) return;
+  ): Promise<boolean> {
+    if (!id) return false;
     setBusy(true);
     setError(null);
     try {
       const result = await action();
       if (result.status !== "ok") {
         setError(result.message ?? "Request failed");
-        return;
+        return false;
       }
       if (successMessage)
         toast.success(successMessage, { position: "bottom-right" });
       await load();
+      return true;
     } catch (err) {
       setError(err instanceof Error ? err.message : "Request failed");
+      return false;
     } finally {
       setBusy(false);
     }
@@ -185,6 +197,7 @@ export default function EdgingSessionPage() {
   const running = session.status === "running";
   const configured = session.status === "configured";
   const ended = !running && !configured;
+  const participantCount = session.participant_ids?.length ?? 0;
 
   async function handleStart() {
     await run(
@@ -194,12 +207,30 @@ export default function EdgingSessionPage() {
   }
 
   async function handleEdge(difficulty: EdgeDifficulty) {
-    await run(() =>
+    const note = edgeNote.trim() || undefined;
+    const saved = await run(() =>
       sendCommand("training:record_edge", {
         session_id: session.id,
         difficulty,
         outcome: "success",
+        client_edge_id: newClientEdgeId(),
+        note,
       }),
+    );
+    if (saved) setEdgeNote("");
+  }
+
+  async function handlePause() {
+    await run(
+      () => sendCommand("training:pause", { session_id: session.id }),
+      "Session paused",
+    );
+  }
+
+  async function handleResume() {
+    await run(
+      () => sendCommand("training:resume", { session_id: session.id }),
+      "Session resumed",
     );
   }
 
@@ -273,7 +304,10 @@ export default function EdgingSessionPage() {
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex min-w-0 flex-col gap-1">
           <div className="flex items-center gap-2.5">
-            <TrainingStatusBadge status={session.status} />
+            <TrainingStatusBadge
+              status={session.status}
+              paused={Boolean(session.paused_at)}
+            />
             <h2 className="truncate text-lg font-semibold">{session.name}</h2>
           </div>
           <p className="text-[11px] text-muted-foreground/70">
@@ -283,6 +317,24 @@ export default function EdgingSessionPage() {
             )}
             {session.ended_at && (
               <> · ended {formatDateTime(session.ended_at)}</>
+            )}
+            {session.app_session_id && (
+              <>
+                {" · "}
+                <Link
+                  to={`/app/sessions/${session.app_session_id}`}
+                  className="text-violet-600 hover:underline dark:text-violet-400"
+                >
+                  application session
+                </Link>
+              </>
+            )}
+            {participantCount > 0 && (
+              <>
+                {" · shared with "}
+                {participantCount}
+                {participantCount === 1 ? " participant" : " participants"}
+              </>
             )}
           </p>
         </div>
@@ -324,16 +376,21 @@ export default function EdgingSessionPage() {
           <CardHeader>
             <div className="flex flex-wrap items-center justify-between gap-3">
               <div>
-                <CardTitle>Session in progress</CardTitle>
+                <CardTitle>
+                  {session.paused_at ? "Session paused" : "Session in progress"}
+                </CardTitle>
                 <CardDescription>
                   {session.edge_count} successful edge
                   {session.edge_count === 1 ? "" : "s"} · {edges.length}{" "}
                   recorded
+                  {session.paused_at ? " · timer paused" : ""}
                 </CardDescription>
               </div>
               <TrainingTimer
                 startedAt={session.started_at}
                 endedAt={session.ended_at}
+                pausedAt={session.paused_at}
+                totalPausedSeconds={session.total_paused_seconds}
                 className="text-4xl font-bold tracking-tight text-violet-600 dark:text-violet-400"
               />
             </div>
@@ -344,13 +401,22 @@ export default function EdgingSessionPage() {
                 {/* Record an edge */}
                 <div className="space-y-2">
                   <p className="text-xs font-medium text-muted-foreground">
-                    Record an edge — how hard was it?
+                    {session.paused_at
+                      ? "Session paused — resume to record edges."
+                      : "Record an edge — how hard was it?"}
                   </p>
+                  <Input
+                    value={edgeNote}
+                    onChange={(event) => setEdgeNote(event.target.value)}
+                    placeholder="Optional note for the next edge"
+                    maxLength={500}
+                    disabled={busy || Boolean(session.paused_at)}
+                  />
                   <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
                     {EDGE_BUTTONS.map((button) => (
                       <Button
                         key={button.difficulty}
-                        disabled={busy}
+                        disabled={busy || Boolean(session.paused_at)}
                         onClick={() => void handleEdge(button.difficulty)}
                         className={`${button.className} text-white`}
                       >
@@ -364,9 +430,31 @@ export default function EdgingSessionPage() {
                 {/* Session control */}
                 <div className="flex flex-wrap items-center gap-2 pt-1">
                   <Button
-                    variant="destructive"
+                    variant={session.paused_at ? "secondary" : "outline"}
                     size="sm"
                     disabled={busy}
+                    onClick={() =>
+                      void (session.paused_at
+                        ? handleResume()
+                        : handlePause())
+                    }
+                  >
+                    {session.paused_at ? (
+                      <>
+                        <Play size={14} />
+                        Resume
+                      </>
+                    ) : (
+                      <>
+                        <Pause size={14} />
+                        Pause
+                      </>
+                    )}
+                  </Button>
+                  <Button
+                    variant="destructive"
+                    size="sm"
+                    disabled={busy || Boolean(session.paused_at)}
                     onClick={() => void handleFail()}
                   >
                     <X size={14} />

@@ -1,5 +1,5 @@
 import type { EdgingEdge } from "@/types";
-import { difficultyMeta, OUTCOME_META } from "@/lib/training";
+import { difficultyMeta, formatDuration, OUTCOME_META } from "@/lib/training";
 import { formatDateTime } from "@/lib/format-date";
 import { X } from "lucide-react";
 
@@ -51,6 +51,11 @@ export function EdgeTimeline({ edges, startedAt }: EdgeTimelineProps) {
                   {String(elapsed % 60).padStart(2, "0")}
                 </span>
               )}
+              {edge.interval_seconds != null && (
+                <span className="font-mono text-[10px] tabular-nums text-muted-foreground/40">
+                  Δ {formatDuration(edge.interval_seconds)}
+                </span>
+              )}
               <span
                 className={`ml-auto inline-flex items-center gap-1 rounded-md border px-1.5 py-0.5 text-[10px] font-medium ${outcome.className}`}
               >
@@ -58,6 +63,11 @@ export function EdgeTimeline({ edges, startedAt }: EdgeTimelineProps) {
                 {outcome.label}
               </span>
             </div>
+            {edge.note && (
+              <p className="mt-1 text-[11px] italic text-muted-foreground/70">
+                {edge.note}
+              </p>
+            )}
           </li>
         );
       })}

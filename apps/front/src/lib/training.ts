@@ -28,7 +28,11 @@ export function formatMinutes(totalSeconds: number | null | undefined): string {
 export function sessionElapsedSeconds(
     session: Pick<
         EdgingSessionSummary,
-        "started_at" | "ended_at" | "duration_seconds"
+        | "started_at"
+        | "ended_at"
+        | "duration_seconds"
+        | "paused_at"
+        | "total_paused_seconds"
     >,
     nowMs: number = Date.now(),
 ): number | null {
@@ -37,11 +41,14 @@ export function sessionElapsedSeconds(
     const start = new Date(session.started_at).getTime();
     const end = session.ended_at
         ? new Date(session.ended_at).getTime()
-        : nowMs;
+        : session.paused_at
+          ? new Date(session.paused_at).getTime()
+          : nowMs;
     if (Number.isNaN(start) || Number.isNaN(end)) {
         return session.duration_seconds ?? null;
     }
-    return Math.max(0, Math.floor((end - start) / 1000));
+    const raw = Math.max(0, Math.floor((end - start) / 1000));
+    return Math.max(0, raw - (session.total_paused_seconds ?? 0));
 }
 
 /** True when every configured goal is reached at `nowMs`. */
@@ -53,6 +60,8 @@ export function sessionGoalsMet(
         | "started_at"
         | "ended_at"
         | "duration_seconds"
+        | "paused_at"
+        | "total_paused_seconds"
     >,
     nowMs: number = Date.now(),
 ): boolean {
@@ -106,4 +115,5 @@ export const STATUS_META: Record<
     failed: { label: 'Failed', className: 'border-rose-500/30 bg-rose-500/10 text-rose-600 dark:text-rose-400' },
     cancelled: { label: 'Cancelled', className: 'border-amber-500/30 bg-amber-500/10 text-amber-600 dark:text-amber-400' },
     interrupted: { label: 'Interrupted', className: 'border-amber-500/30 bg-amber-500/10 text-amber-600 dark:text-amber-400' },
+    paused: { label: 'Paused', className: 'border-amber-500/30 bg-amber-500/10 text-amber-600 dark:text-amber-400' },
 };

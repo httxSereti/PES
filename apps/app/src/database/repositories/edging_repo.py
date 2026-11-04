@@ -31,6 +31,8 @@ class EdgingRepo:
         initiator: str,
         initiator_user_id: str | None,
         created_by: str,
+        app_session_id: str | None = None,
+        participant_ids: list[str] | None = None,
     ) -> EdgingSession:
         session = EdgingSession(
             id=generate_id(),
@@ -40,6 +42,8 @@ class EdgingRepo:
             initiator=initiator,
             initiator_user_id=initiator_user_id,
             created_by=created_by,
+            app_session_id=app_session_id,
+            participant_ids=participant_ids or [],
         )
         async with self._db.session_maker() as db_session:
             db_session.add(session)
@@ -105,6 +109,23 @@ class EdgingRepo:
             result = await db_session.execute(stmt)
             return list(result.scalars().all())
 
+    async def list_running_sessions_for_app_session(
+        self, app_session_id: str
+    ) -> List[EdgingSession]:
+        """Running training sessions linked to one application session."""
+        async with self._db.session_maker() as db_session:
+            stmt = (
+                select(EdgingSession)
+                .options(selectinload(EdgingSession.edges))
+                .where(
+                    EdgingSession.status == "running",
+                    EdgingSession.app_session_id == app_session_id,
+                )
+                .order_by(EdgingSession.started_at.desc())
+            )
+            result = await db_session.execute(stmt)
+            return list(result.scalars().all())
+
     async def update_session(
         self, session_id: str, **fields
     ) -> Optional[EdgingSession]:
@@ -156,6 +177,11 @@ class EdgingRepo:
         difficulty: str,
         outcome: str,
         recorded_by: str,
+        source: str = "host",
+        interval_seconds: int | None = None,
+        level_snapshot: dict | None = None,
+        note: str | None = None,
+        client_edge_id: str | None = None,
     ) -> Optional[EdgingEdge]:
         edge = EdgingEdge(
             id=generate_id(),
@@ -163,6 +189,11 @@ class EdgingRepo:
             difficulty=difficulty,
             outcome=outcome,
             recorded_by=recorded_by,
+            source=source,
+            interval_seconds=interval_seconds,
+            level_snapshot=level_snapshot,
+            note=note,
+            client_edge_id=client_edge_id,
         )
         async with self._db.session_maker() as db_session:
             session = await db_session.get(EdgingSession, session_id)
@@ -172,6 +203,18 @@ class EdgingRepo:
             await db_session.commit()
             await db_session.refresh(edge)
             return edge
+
+    async def get_edge_by_client_id(
+        self, session_id: str, client_edge_id: str
+    ) -> Optional[EdgingEdge]:
+        """Find an already-recorded edge by its client idempotency key."""
+        async with self._db.session_maker() as db_session:
+            stmt = select(EdgingEdge).where(
+                EdgingEdge.session_id == session_id,
+                EdgingEdge.client_edge_id == client_edge_id,
+            )
+            result = await db_session.execute(stmt)
+            return result.scalar_one_or_none()
 
     async def delete_edge(self, session_id: str, edge_id: str) -> bool:
         """Delete one edge, restricted to the session it belongs to."""

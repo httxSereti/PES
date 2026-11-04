@@ -186,7 +186,10 @@ export default function SessionHistoryDetailPage() {
                       className="flex items-center justify-between gap-3 py-2.5 px-2 -mx-2 rounded-md transition-colors hover:bg-accent/40"
                     >
                       <div className="flex min-w-0 items-center gap-2.5">
-                        <TrainingStatusBadge status={edging.status} />
+                        <TrainingStatusBadge
+                          status={edging.status}
+                          paused={Boolean(edging.paused_at)}
+                        />
                         <span className="truncate text-sm font-medium">
                           {edging.name}
                         </span>

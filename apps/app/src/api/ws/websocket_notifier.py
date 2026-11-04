@@ -1,5 +1,5 @@
 import asyncio
-from typing import Optional
+from typing import Iterable, Optional
 
 import structlog
 
@@ -48,6 +48,28 @@ class WebSocketNotifier:
         }
         self._loop.call_soon_threadsafe(self._queue.put_nowait, message)
 
+    def notify_to_users(
+        self,
+        payload_type: str,
+        payload: dict | list | None,
+        user_ids: Iterable[str],
+    ) -> None:
+        """Queue a message for specific users instead of a permission audience."""
+        if self._loop is None or self._queue is None:
+            logger.warning("WSNotifier not ready, dropping event")
+            return
+
+        recipients = {user_id for user_id in user_ids if user_id}
+        if not recipients:
+            return
+
+        message = {
+            "type": payload_type,
+            "payload": payload,
+            "_recipients": recipients,
+        }
+        self._loop.call_soon_threadsafe(self._queue.put_nowait, message)
+
     async def send_history(
         self, client_id: str, ws_manager: WebSocketManager, limit: int = 1000
     ):
@@ -92,7 +114,14 @@ class WebSocketNotifier:
             try:
                 message = await queue.get()
                 audience = message.pop("_audience", None)
-                await ws_manager.broadcast(message, audience=audience)
+                recipients = message.pop("_recipients", None)
+                if recipients:
+                    for user_id in recipients:
+                        await ws_manager.send_personal_message(
+                            message, client_id=user_id
+                        )
+                else:
+                    await ws_manager.broadcast(message, audience=audience)
             except Exception:
                 logger.exception("WSNotifier consume error")
 

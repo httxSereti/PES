@@ -134,7 +134,10 @@ export default function EdgingSessionsPage() {
                     className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3 rounded-md px-2 py-3 -mx-2 transition-colors hover:bg-accent/40 sm:grid-cols-[minmax(0,1fr)_auto_auto_auto_auto_auto]"
                   >
                     <div className="flex min-w-0 items-center gap-2.5">
-                      <TrainingStatusBadge status={session.status} />
+                      <TrainingStatusBadge
+                        status={session.status}
+                        paused={Boolean(session.paused_at)}
+                      />
                       <span className="truncate text-sm font-medium">
                         {session.name}
                       </span>
@@ -147,6 +150,8 @@ export default function EdgingSessionsPage() {
                         <TrainingTimer
                           startedAt={session.started_at}
                           endedAt={session.ended_at}
+                          pausedAt={session.paused_at}
+                          totalPausedSeconds={session.total_paused_seconds}
                         />
                       ) : (
                         formatDuration(session.duration_seconds)

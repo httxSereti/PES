@@ -1,3 +1,4 @@
+from api.ws.commands.training._access import is_host
 from api.ws.context import CommandContext
 from api.ws.registry import command
 from api.ws.schema import CommandResult, TrainingIndexCommand
@@ -11,7 +12,10 @@ async def handle_training_index(
     msg: TrainingIndexCommand, ctx: CommandContext
 ) -> CommandResult:
     try:
-        overview = await get_overview()
+        overview = await get_overview(
+            viewer_id=ctx.user.id,
+            is_host=is_host(ctx),
+        )
     except Exception as e:
         return CommandResult(status="error", message=str(e))
 

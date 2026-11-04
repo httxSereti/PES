@@ -1,3 +1,4 @@
+from api.ws.commands.training._access import is_host
 from api.ws.context import CommandContext
 from api.ws.registry import command
 from api.ws.schema import CommandResult, TrainingRecordEdgeCommand
@@ -15,6 +16,11 @@ async def handle_training_record_edge(
             difficulty=msg.payload.difficulty,
             outcome=msg.payload.outcome,
             recorded_by=ctx.user.id,
+            source="host",
+            client_edge_id=msg.payload.client_edge_id,
+            note=msg.payload.note,
+            viewer_id=ctx.user.id,
+            is_host=is_host(ctx),
         )
     except ValueError as e:
         return CommandResult(status="error", message=str(e))

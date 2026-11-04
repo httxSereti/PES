@@ -390,6 +390,11 @@ class EdgingEdge(WireModel):
     difficulty: str
     outcome: str
     recorded_by: str
+    source: str
+    interval_seconds: int | None
+    level_snapshot: dict[str, Any] | None
+    note: str | None
+    client_edge_id: str | None
     recorded_at: datetime
 
 
@@ -407,10 +412,13 @@ class EdgingSessionSummary(WireModel):
     initiator: str
     status: str
     rating: int | None
+    app_session_id: str | None
+    paused_at: datetime | None
+    total_paused_seconds: int
     created_at: datetime
     started_at: datetime | None
     ended_at: datetime | None
-    # Derived: successful edges so far, elapsed seconds, and whether every
+    # Derived: successful edges so far, active seconds, and whether every
     # goal is currently reached.
     edge_count: int
     duration_seconds: int | None
@@ -422,6 +430,7 @@ class EdgingSession(EdgingSessionSummary):
 
     initiator_user_id: str | None
     created_by: str
+    participant_ids: list[str]
     notes: str | None
 
 

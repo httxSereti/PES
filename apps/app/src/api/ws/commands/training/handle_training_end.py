@@ -1,3 +1,4 @@
+from api.ws.commands.training._access import is_host
 from api.ws.context import CommandContext
 from api.ws.registry import command
 from api.ws.schema import CommandResult, TrainingEndCommand
@@ -11,7 +12,10 @@ async def handle_training_end(
 ) -> CommandResult:
     try:
         session = await end_edging_session(
-            msg.payload.session_id, status=msg.payload.status
+            msg.payload.session_id,
+            status=msg.payload.status,
+            viewer_id=ctx.user.id,
+            is_host=is_host(ctx),
         )
     except ValueError as e:
         return CommandResult(status="error", message=str(e))

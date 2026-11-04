@@ -23,6 +23,7 @@ from database.repositories.triggered_event_repo import TriggeredEventRepo
 from events.redaction import redact_payload, redact_triggered_rules
 from services.neutralize import neutralize_all
 from services.training import (
+    can_access_session,
     serialize_session_summary as serialize_edging_session,
 )
 from store import Store
@@ -182,6 +183,18 @@ async def end_session(repo: Optional[SessionRepo] = None) -> Optional[dict]:
     store.set_active_session(None)
 
     if ended is not None:
+        # A training session running inside this application session cannot
+        # outlive it: close it before reporting the application session end.
+        from services.training import end_sessions_for_app_session
+
+        try:
+            await end_sessions_for_app_session(ended.id)
+        except Exception:
+            logger.exception(
+                "[Session] Failed to cancel linked training sessions",
+                session_id=ended.id,
+            )
+
         serialized = serialize_session(ended)
         broadcast_session(serialized)
         logger.info("[Session] Ended", session_id=ended.id)
@@ -232,6 +245,18 @@ def _edging_overlaps(
     return start <= period_end and end >= period_start
 
 
+def _edging_belongs(
+    session: EdgingSession,
+    app_session_id: str,
+    period_start: datetime,
+    period_end: datetime,
+) -> bool:
+    """Prefer the explicit link; fall back to the legacy time overlap."""
+    if session.app_session_id is not None:
+        return session.app_session_id == app_session_id
+    return _edging_overlaps(session, period_start, period_end)
+
+
 def serialize_event(event: TriggeredEvent) -> dict:
     """Same wire shape as the WS events history/triggered payloads."""
     return {
@@ -261,7 +286,7 @@ async def send_personal(payload_type: str, payload, client_id: str) -> None:
     )
 
 
-async def get_history() -> list[dict]:
+async def get_history(user_id: str | None = None) -> list[dict]:
     """Every application session, newest first, with quick log counts."""
     sessions = await SessionRepo().list_sessions(limit=200)
     if not sessions:
@@ -271,12 +296,21 @@ async def get_history() -> list[dict]:
         [s.id for s in sessions]
     )
     edging_sessions = await EdgingRepo().list_sessions(limit=1000)
+    is_host = bool(
+        user_id and store.check_permission(user_id, Permission.HOST)
+    )
 
     result = []
     for session in sessions:
         start, end = _period(session)
         edging_count = sum(
-            1 for es in edging_sessions if _edging_overlaps(es, start, end)
+            1
+            for es in edging_sessions
+            if _edging_belongs(es, session.id, start, end)
+            and (
+                user_id is None
+                or can_access_session(es, user_id, is_host)
+            )
         )
         result.append(
             serialize_history_item(
@@ -295,8 +329,14 @@ async def get_history_detail(session_id: str, user_id: str) -> dict:
     start, end = _period(session)
 
     if store.check_permission(user_id, Permission.TRAINING_EDGING_READ):
+        is_host = store.check_permission(user_id, Permission.HOST)
         all_edging = await EdgingRepo().list_sessions(limit=1000)
-        matching = [es for es in all_edging if _edging_overlaps(es, start, end)]
+        matching = [
+            es
+            for es in all_edging
+            if _edging_belongs(es, session.id, start, end)
+            and can_access_session(es, user_id, is_host)
+        ]
         edging_sessions = [serialize_edging_session(es) for es in matching]
     else:
         matching = []

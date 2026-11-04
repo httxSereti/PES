@@ -73,6 +73,67 @@ class Database:
                 )
                 logger.info("[Database] Added sessions.integration_ids")
 
+            result = await conn.execute(
+                text("PRAGMA table_info(training_edging_sessions)")
+            )
+            edging_session_columns = {row[1] for row in result.fetchall()}
+            if edging_session_columns:
+                edging_session_migrations = {
+                    "app_session_id": "VARCHAR",
+                    "participant_ids": "JSON",
+                    "paused_at": "DATETIME",
+                    "total_paused_seconds": "INTEGER DEFAULT 0",
+                }
+                for column, sql_type in edging_session_migrations.items():
+                    if column not in edging_session_columns:
+                        await conn.execute(
+                            text(
+                                "ALTER TABLE training_edging_sessions "
+                                f"ADD COLUMN {column} {sql_type}"
+                            )
+                        )
+                        logger.info(
+                            f"[Database] Added training_edging_sessions.{column}"
+                        )
+                await conn.execute(
+                    text(
+                        "CREATE INDEX IF NOT EXISTS "
+                        "ix_training_edging_sessions_app_session_id "
+                        "ON training_edging_sessions (app_session_id)"
+                    )
+                )
+
+            result = await conn.execute(
+                text("PRAGMA table_info(training_edging_edges)")
+            )
+            edging_edge_columns = {row[1] for row in result.fetchall()}
+            if edging_edge_columns:
+                edging_edge_migrations = {
+                    "source": "VARCHAR DEFAULT 'host'",
+                    "interval_seconds": "INTEGER",
+                    "level_snapshot": "JSON",
+                    "note": "TEXT",
+                    "client_edge_id": "VARCHAR",
+                }
+                for column, sql_type in edging_edge_migrations.items():
+                    if column not in edging_edge_columns:
+                        await conn.execute(
+                            text(
+                                "ALTER TABLE training_edging_edges "
+                                f"ADD COLUMN {column} {sql_type}"
+                            )
+                        )
+                        logger.info(
+                            f"[Database] Added training_edging_edges.{column}"
+                        )
+                await conn.execute(
+                    text(
+                        "CREATE UNIQUE INDEX IF NOT EXISTS "
+                        "uq_edging_edge_client "
+                        "ON training_edging_edges (session_id, client_edge_id)"
+                    )
+                )
+
             result = await conn.execute(text("PRAGMA table_info(triggered_events)"))
             event_columns = {row[1] for row in result.fetchall()}
             if event_columns and "session_id" not in event_columns:

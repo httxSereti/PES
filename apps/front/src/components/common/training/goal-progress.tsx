@@ -15,11 +15,11 @@ export function GoalProgress({ session }: GoalProgressProps) {
   const [now, setNow] = useState(() => Date.now());
 
   useEffect(() => {
-    if (!running) return;
+    if (!running || session.paused_at) return;
     setNow(Date.now());
     const id = setInterval(() => setNow(Date.now()), 1000);
     return () => clearInterval(id);
-  }, [running, session.started_at]);
+  }, [running, session.paused_at, session.started_at]);
 
   if (goals.length === 0) {
     return <p className="text-xs text-muted-foreground">No goals defined.</p>;

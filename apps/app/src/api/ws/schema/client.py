@@ -443,6 +443,7 @@ class TrainingSessionDraft(WireModel):
     name: str = Field(min_length=1, max_length=120)
     goals: list[TrainingGoalDraft] = Field(min_length=1, max_length=10)
     auto_stop_on_goal: bool = False
+    participant_ids: list[str] | None = Field(default=None, max_length=20)
 
 
 class TrainingCreateCommand(ClientMessage):
@@ -455,6 +456,7 @@ class TrainingUpdatePayload(WireModel):
     name: str | None = Field(default=None, min_length=1, max_length=120)
     goals: list[TrainingGoalDraft] | None = None
     auto_stop_on_goal: bool | None = None
+    participant_ids: list[str] | None = Field(default=None, max_length=20)
     notes: str | None = None
     rating: int | None = Field(default=None, ge=1, le=5)
 
@@ -486,11 +488,32 @@ class TrainingRecordEdgePayload(WireModel):
     session_id: str
     difficulty: Literal["easy", "normal", "hard", "extreme"]
     outcome: Literal["success", "fail"]
+    # Client-generated idempotency key: retrying the same command is a no-op.
+    client_edge_id: str | None = Field(default=None, min_length=1, max_length=64)
+    note: str | None = Field(default=None, max_length=500)
 
 
 class TrainingRecordEdgeCommand(ClientMessage):
     type: Literal["training:record_edge"] = "training:record_edge"
     payload: TrainingRecordEdgePayload
+
+
+class TrainingPausePayload(WireModel):
+    session_id: str
+
+
+class TrainingPauseCommand(ClientMessage):
+    type: Literal["training:pause"] = "training:pause"
+    payload: TrainingPausePayload
+
+
+class TrainingResumePayload(WireModel):
+    session_id: str
+
+
+class TrainingResumeCommand(ClientMessage):
+    type: Literal["training:resume"] = "training:resume"
+    payload: TrainingResumePayload
 
 
 class TrainingDeleteEdgePayload(WireModel):
@@ -645,6 +668,10 @@ __all__ = [
     "TrainingStartCommand",
     "TrainingRecordEdgePayload",
     "TrainingRecordEdgeCommand",
+    "TrainingPausePayload",
+    "TrainingPauseCommand",
+    "TrainingResumePayload",
+    "TrainingResumeCommand",
     "TrainingDeleteEdgePayload",
     "TrainingDeleteEdgeCommand",
     "TrainingEndPayload",

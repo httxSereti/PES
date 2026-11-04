@@ -11,11 +11,12 @@ from datetime import datetime
 from typing import Optional
 
 import structlog
+from sqlalchemy.exc import IntegrityError
 
 from api.ws.websocket_notifier import ws_notifier
 from database.models import EdgingEdge, EdgingSession
 from database.repositories.edging_repo import EdgingRepo
-from typings import EdgeDifficulty, EdgeOutcome, EdgingGoalType
+from typings import EdgeDifficulty, EdgeOutcome, EdgingGoalType, Permission
 from utils import to_utc_iso
 
 logger = structlog.get_logger("pes")
@@ -37,15 +38,99 @@ def _session_lock(session_id: str) -> asyncio.Lock:
     return lock
 
 
+def can_access_session(
+    session: EdgingSession, viewer_id: str | None, is_host: bool = False
+) -> bool:
+    """Creator, explicit participants and Hosts can see a training session."""
+    if is_host or viewer_id is None:
+        return True
+    return session.created_by == viewer_id or viewer_id in (
+        session.participant_ids or []
+    )
+
+
+def _require_session_access(
+    session: EdgingSession, viewer_id: str | None, is_host: bool
+) -> None:
+    if not can_access_session(session, viewer_id, is_host):
+        # Same message as a missing row: do not leak other users' session ids.
+        raise ValueError("Session not found")
+
+
+def _session_recipients(session: EdgingSession) -> set[str]:
+    """Users that should receive live updates for this session."""
+    from store import Store
+
+    store = Store()
+    recipients: set[str] = set()
+    candidates = {session.created_by, *(session.participant_ids or [])}
+    for user_id in candidates:
+        user = store.get_user(user_id)
+        if user is not None and (
+            user.has_permission(Permission.HOST)
+            or user.has_any_permission(
+                Permission.TRAINING_EDGING_READ,
+                Permission.TRAINING_EDGING_MANAGE,
+            )
+        ):
+            recipients.add(user_id)
+
+    for user in store.get_all_users().values():
+        if user.has_permission(Permission.HOST):
+            recipients.add(user.id)
+    return recipients
+
+
+def _capture_intensity_snapshot() -> dict:
+    """Compact snapshot of the live units/profile for an edge record."""
+    from store import Store
+
+    store = Store()
+    units: dict[str, dict] = {}
+    keys = (
+        "ch_A",
+        "ch_B",
+        "ch_A_multiplier",
+        "ch_B_multiplier",
+        "adj_1",
+        "adj_2",
+        "mode",
+        "power_bias",
+    )
+    for unit_name, settings in store.get_all_units_settings().items():
+        if not settings:
+            continue
+        units[unit_name] = {
+            key: settings.get(key) for key in keys if key in settings
+        }
+    return {"profile": store.get_active_profile(), "units": units}
+
+
+def _finalize_pause_fields(session: EdgingSession, now: datetime) -> dict:
+    """Close an open pause before the session ends."""
+    total = session.total_paused_seconds or 0
+    if session.paused_at is not None:
+        total += max(0, int((now - session.paused_at).total_seconds()))
+    return {"paused_at": None, "total_paused_seconds": total}
+
+
 # ───────── Serialization ─────────
 
 
-def session_elapsed_seconds(session: EdgingSession, now: Optional[datetime] = None) -> int | None:
-    """Seconds spent in the session: started -> ended (or now while running)."""
+def session_elapsed_seconds(
+    session: EdgingSession, now: Optional[datetime] = None
+) -> int | None:
+    """Active seconds in the session, excluding every pause."""
     if session.started_at is None:
         return None
-    end = session.ended_at or now or datetime.utcnow()
-    return max(0, int((end - session.started_at).total_seconds()))
+    current = now or datetime.utcnow()
+    end = session.ended_at or current
+    elapsed = max(0.0, (end - session.started_at).total_seconds())
+    paused = float(session.total_paused_seconds or 0)
+    if session.paused_at is not None:
+        pause_end = session.ended_at or current
+        paused += max(0.0, (pause_end - session.paused_at).total_seconds())
+    return max(0, int(elapsed - paused))
 
 
 def success_edge_count(session: EdgingSession) -> int:
@@ -77,6 +162,11 @@ def serialize_edge(edge: EdgingEdge) -> dict:
         "difficulty": edge.difficulty,
         "outcome": edge.outcome,
         "recorded_by": edge.recorded_by,
+        "source": edge.source or "host",
+        "interval_seconds": edge.interval_seconds,
+        "level_snapshot": edge.level_snapshot,
+        "note": edge.note,
+        "client_edge_id": edge.client_edge_id,
         "recorded_at": to_utc_iso(edge.recorded_at),
     }
 
@@ -93,6 +183,9 @@ def serialize_session_summary(
         "initiator": session.initiator,
         "status": session.status,
         "rating": session.rating,
+        "app_session_id": session.app_session_id,
+        "paused_at": to_utc_iso(session.paused_at),
+        "total_paused_seconds": session.total_paused_seconds or 0,
         "created_at": to_utc_iso(session.created_at),
         "started_at": to_utc_iso(session.started_at),
         "ended_at": to_utc_iso(session.ended_at),
@@ -109,6 +202,7 @@ def serialize_session(session: EdgingSession, now: Optional[datetime] = None) ->
         {
             "initiator_user_id": session.initiator_user_id,
             "created_by": session.created_by,
+            "participant_ids": list(session.participant_ids or []),
             "notes": session.notes,
         }
     )
@@ -236,28 +330,49 @@ def compute_session_stats(
 
 
 def broadcast_session(session: EdgingSession) -> None:
-    ws_notifier.notify("training:session", serialize_session_summary(session))
-
-
-def broadcast_session_deleted(session_id: str) -> None:
-    ws_notifier.notify("training:session_deleted", {"id": session_id})
-
-
-def broadcast_edge(edge: EdgingEdge) -> None:
-    ws_notifier.notify("training:edge", serialize_edge(edge))
-
-
-def broadcast_edge_deleted(edge_id: str, session_id: str) -> None:
-    ws_notifier.notify(
-        "training:edge_deleted", {"id": edge_id, "session_id": session_id}
+    ws_notifier.notify_to_users(
+        "training:session",
+        serialize_session_summary(session),
+        _session_recipients(session),
     )
 
 
-async def get_live_snapshot(repo: Optional[EdgingRepo] = None) -> dict:
+def broadcast_session_deleted(session: EdgingSession) -> None:
+    ws_notifier.notify_to_users(
+        "training:session_deleted",
+        {"id": session.id},
+        _session_recipients(session),
+    )
+
+
+def broadcast_edge(edge: EdgingEdge, session: EdgingSession) -> None:
+    ws_notifier.notify_to_users(
+        "training:edge",
+        serialize_edge(edge),
+        _session_recipients(session),
+    )
+
+
+def broadcast_edge_deleted(
+    edge_id: str, session: EdgingSession
+) -> None:
+    ws_notifier.notify_to_users(
+        "training:edge_deleted",
+        {"id": edge_id, "session_id": session.id},
+        _session_recipients(session),
+    )
+
+
+async def get_live_snapshot(
+    repo: Optional[EdgingRepo] = None,
+    *,
+    viewer_id: str | None = None,
+    is_host: bool = False,
+) -> dict:
     """Current live session + its edges, for the WS init sequence."""
     repo = repo or EdgingRepo()
     session = await repo.get_running_session()
-    if session is None:
+    if session is None or not can_access_session(session, viewer_id, is_host):
         return {"session": None, "edges": []}
     return {
         "session": serialize_session_summary(session),
@@ -270,6 +385,17 @@ async def get_live_snapshot(repo: Optional[EdgingRepo] = None) -> dict:
 # These replace the former REST handlers; errors surface as `ValueError`
 # with user-facing messages, translated into CommandResult errors by the
 # WS command handlers.
+
+
+def _validate_participants(
+    participant_ids: list[str] | None, owner_id: str
+) -> list[str]:
+    """De-duplicate participants and keep the owner out of the explicit list."""
+    return [
+        participant
+        for participant in dict.fromkeys(participant_ids or [])
+        if participant and participant != owner_id
+    ]
 
 
 def _validate_goals(goals: list[dict]) -> list[dict]:
@@ -286,26 +412,46 @@ def _require_ended(session_status: str) -> None:
         raise ValueError("Only allowed once the session ended")
 
 
-async def get_overview(repo: Optional[EdgingRepo] = None) -> dict:
+async def get_overview(
+    repo: Optional[EdgingRepo] = None,
+    *,
+    viewer_id: str | None = None,
+    is_host: bool = False,
+) -> dict:
     """Stats for the whole Training module (one stats card per submodule)."""
     repo = repo or EdgingRepo()
-    sessions = await repo.list_sessions(limit=1000)
+    sessions = [
+        session
+        for session in await repo.list_sessions(limit=1000)
+        if can_access_session(session, viewer_id, is_host)
+    ]
     return {
         "edging": compute_overview_stats(sessions),
         "recent_sessions": [serialize_session_summary(s) for s in sessions[:5]],
     }
 
 
-async def list_edging_sessions(repo: Optional[EdgingRepo] = None) -> list[dict]:
+async def list_edging_sessions(
+    repo: Optional[EdgingRepo] = None,
+    *,
+    viewer_id: str | None = None,
+    is_host: bool = False,
+) -> list[dict]:
     repo = repo or EdgingRepo()
     sessions = await repo.list_sessions(limit=100)
-    return [serialize_session_summary(s) for s in sessions]
+    return [
+        serialize_session_summary(session)
+        for session in sessions
+        if can_access_session(session, viewer_id, is_host)
+    ]
 
 
 async def get_session_detail(
     session_id: str,
     *,
     include_notes: bool = True,
+    viewer_id: str | None = None,
+    is_host: bool = False,
     repo: Optional[EdgingRepo] = None,
 ) -> dict:
     """One session + its edges + per-session stats.
@@ -317,8 +463,13 @@ async def get_session_detail(
     session = await repo.get_session(session_id)
     if session is None:
         raise ValueError("Session not found")
+    _require_session_access(session, viewer_id, is_host)
 
-    all_sessions = await repo.list_sessions(limit=1000)
+    all_sessions = [
+        candidate
+        for candidate in await repo.list_sessions(limit=1000)
+        if can_access_session(candidate, viewer_id, is_host)
+    ]
     serialized = serialize_session(session)
     if not include_notes:
         serialized["notes"] = None
@@ -336,6 +487,8 @@ async def create_edging_session(
     auto_stop_on_goal: bool,
     is_host: bool,
     created_by: str,
+    app_session_id: str | None = None,
+    participant_ids: list[str] | None = None,
     repo: Optional[EdgingRepo] = None,
 ) -> dict:
     """Create (configure) a session. Hosts create for themselves; members
@@ -348,6 +501,8 @@ async def create_edging_session(
         initiator="self" if is_host else "member",
         initiator_user_id=created_by,
         created_by=created_by,
+        app_session_id=app_session_id,
+        participant_ids=_validate_participants(participant_ids, created_by),
     )
     broadcast_session(session)
     return serialize_session(session)
@@ -357,9 +512,11 @@ async def update_edging_session(
     session_id: str,
     *,
     is_host: bool,
+    viewer_id: str | None = None,
     name: Optional[str] = None,
     goals: Optional[list[dict]] = None,
     auto_stop_on_goal: Optional[bool] = None,
+    participant_ids: Optional[list[str]] = None,
     notes: Optional[str] = None,
     rating: Optional[int] = None,
     repo: Optional[EdgingRepo] = None,
@@ -369,10 +526,16 @@ async def update_edging_session(
     session = await repo.get_session(session_id)
     if session is None:
         raise ValueError("Session not found")
+    _require_session_access(session, viewer_id, is_host)
 
     fields: dict = {}
 
-    if name is not None or goals is not None or auto_stop_on_goal is not None:
+    if (
+        name is not None
+        or goals is not None
+        or auto_stop_on_goal is not None
+        or participant_ids is not None
+    ):
         if session.status != "configured":
             raise ValueError(
                 "Goals and auto-stop can only be changed before the session starts"
@@ -383,6 +546,10 @@ async def update_edging_session(
             fields["goals"] = _validate_goals(goals)
         if auto_stop_on_goal is not None:
             fields["auto_stop_on_goal"] = auto_stop_on_goal
+        if participant_ids is not None:
+            fields["participant_ids"] = _validate_participants(
+                participant_ids, session.created_by
+            )
 
     if notes is not None or rating is not None:
         if not is_host:
@@ -404,40 +571,55 @@ async def update_edging_session(
 
 
 async def delete_edging_session(
-    session_id: str, repo: Optional[EdgingRepo] = None
+    session_id: str,
+    *,
+    viewer_id: str | None = None,
+    is_host: bool = False,
+    repo: Optional[EdgingRepo] = None,
 ) -> bool:
     repo = repo or EdgingRepo()
     async with _session_lock(session_id):
         session = await repo.get_session(session_id)
         if session is None:
             raise ValueError("Session not found")
+        _require_session_access(session, viewer_id, is_host)
         if session.status == "running":
             raise ValueError("Cannot delete a running session — end it first")
         if not await repo.delete_session(session_id):
             raise ValueError("Session not found")
-        broadcast_session_deleted(session_id)
+        broadcast_session_deleted(session)
         return True
 
 
 async def start_edging_session(
-    session_id: str, repo: Optional[EdgingRepo] = None
+    session_id: str,
+    *,
+    viewer_id: str | None = None,
+    is_host: bool = False,
+    app_session_id: str | None = None,
+    repo: Optional[EdgingRepo] = None,
 ) -> dict:
     repo = repo or EdgingRepo()
     async with _start_lock:
         session = await repo.get_session(session_id)
         if session is None:
             raise ValueError("Session not found")
+        _require_session_access(session, viewer_id, is_host)
         if session.status != "configured":
             raise ValueError(f"Session is {session.status}, not configured")
 
         if await repo.get_running_session() is not None:
             raise ValueError("A session is already running")
 
+        fields: dict = {
+            "status": "running",
+            "started_at": datetime.utcnow(),
+        }
+        if app_session_id is not None:
+            fields["app_session_id"] = app_session_id
+
         updated = await repo.update_session_if_status(
-            session_id,
-            "configured",
-            status="running",
-            started_at=datetime.utcnow(),
+            session_id, "configured", **fields
         )
         if updated is None:
             raise ValueError("Session is no longer configured")
@@ -451,6 +633,11 @@ async def record_edging_edge(
     difficulty: str,
     outcome: str,
     recorded_by: str,
+    source: str = "host",
+    client_edge_id: str | None = None,
+    note: str | None = None,
+    viewer_id: str | None = None,
+    is_host: bool = False,
     repo: Optional[EdgingRepo] = None,
 ) -> dict:
     """Record an edge on the running session. A failed edge ends the session."""
@@ -464,32 +651,90 @@ async def record_edging_edge(
         session = await repo.get_session(session_id)
         if session is None:
             raise ValueError("Session not found")
+        _require_session_access(session, viewer_id, is_host)
+
+        # Retries with the same client id are no-ops, even after the session
+        # ended (the original edge was already committed).
+        if client_edge_id is not None:
+            existing = await repo.get_edge_by_client_id(
+                session_id, client_edge_id
+            )
+            if existing is not None:
+                return {
+                    "edge": serialize_edge(existing),
+                    "session": serialize_session(session),
+                }
+
         if session.status != "running":
             raise ValueError("Session is not running")
-
-        edge = await repo.add_edge(
-            session_id,
-            difficulty=difficulty,
-            outcome=outcome,
-            recorded_by=recorded_by,
-        )
-        if edge is None:
-            raise ValueError("Session is not running")
-        broadcast_edge(edge)
+        if session.paused_at is not None:
+            raise ValueError("Session is paused — resume it before recording an edge")
 
         now = datetime.utcnow()
+        previous = session.edges[-1] if session.edges else None
+        reference = previous.recorded_at if previous else session.started_at
+        interval_seconds = (
+            max(0, int((now - reference).total_seconds()))
+            if reference is not None
+            else None
+        )
+        try:
+            level_snapshot = _capture_intensity_snapshot()
+        except Exception:
+            # Metadata must never block recording an edge.
+            logger.warning("[Training] Intensity snapshot failed")
+            level_snapshot = None
+
+        try:
+            edge = await repo.add_edge(
+                session_id,
+                difficulty=difficulty,
+                outcome=outcome,
+                recorded_by=recorded_by,
+                source=source,
+                interval_seconds=interval_seconds,
+                level_snapshot=level_snapshot,
+                note=note,
+                client_edge_id=client_edge_id,
+            )
+        except IntegrityError:
+            # Concurrent retry with the same idempotency key.
+            existing = (
+                await repo.get_edge_by_client_id(session_id, client_edge_id)
+                if client_edge_id
+                else None
+            )
+            if existing is None:
+                raise
+            return {
+                "edge": serialize_edge(existing),
+                "session": serialize_session(session),
+            }
+        if edge is None:
+            raise ValueError("Session is not running")
+        broadcast_edge(edge, session)
+
         session = await repo.get_session(session_id)
         if session is None:
             raise ValueError("Session not found")
 
         updated = session
+        pause_fields = _finalize_pause_fields(session, now)
         if outcome == EdgeOutcome.FAIL.value:
             updated = await repo.update_session_if_status(
-                session_id, "running", status="failed", ended_at=now
+                session_id,
+                "running",
+                status="failed",
+                ended_at=now,
+                **pause_fields,
             )
         elif goals_met(session, now) and session.auto_stop_on_goal:
             updated = await repo.update_session_if_status(
-                session_id, "running", status="succeeded", ended_at=now
+                session_id,
+                "running",
+                status="succeeded",
+                ended_at=now,
+                **pause_fields,
             )
 
         if updated is None:
@@ -510,6 +755,8 @@ async def delete_edging_edge(
     session_id: str,
     *,
     edge_id: str,
+    viewer_id: str | None = None,
+    is_host: bool = False,
     repo: Optional[EdgingRepo] = None,
 ) -> dict:
     """Undo one edge while the session is still running."""
@@ -518,15 +765,80 @@ async def delete_edging_edge(
         session = await repo.get_session(session_id)
         if session is None:
             raise ValueError("Session not found")
+        _require_session_access(session, viewer_id, is_host)
         if session.status != "running":
             raise ValueError("Edges can only be undone while the session is running")
         if not await repo.delete_edge(session_id, edge_id):
             raise ValueError("Edge not found")
 
-        broadcast_edge_deleted(edge_id, session_id)
+        broadcast_edge_deleted(edge_id, session)
         updated = await repo.get_session(session_id)
         if updated is None:
             raise ValueError("Session not found")
+        broadcast_session(updated)
+        return serialize_session(updated)
+
+
+async def pause_edging_session(
+    session_id: str,
+    *,
+    viewer_id: str | None = None,
+    is_host: bool = False,
+    repo: Optional[EdgingRepo] = None,
+) -> dict:
+    """Pause a running session; active duration stops advancing."""
+    repo = repo or EdgingRepo()
+    async with _session_lock(session_id):
+        session = await repo.get_session(session_id)
+        if session is None:
+            raise ValueError("Session not found")
+        _require_session_access(session, viewer_id, is_host)
+        if session.status != "running":
+            raise ValueError("Session is not running")
+        if session.paused_at is not None:
+            return serialize_session(session)
+
+        updated = await repo.update_session_if_status(
+            session_id, "running", paused_at=datetime.utcnow()
+        )
+        if updated is None:
+            raise ValueError("Session is not running")
+        broadcast_session(updated)
+        return serialize_session(updated)
+
+
+async def resume_edging_session(
+    session_id: str,
+    *,
+    viewer_id: str | None = None,
+    is_host: bool = False,
+    repo: Optional[EdgingRepo] = None,
+) -> dict:
+    """Resume a paused session, accumulating the paused duration."""
+    repo = repo or EdgingRepo()
+    async with _session_lock(session_id):
+        session = await repo.get_session(session_id)
+        if session is None:
+            raise ValueError("Session not found")
+        _require_session_access(session, viewer_id, is_host)
+        if session.status != "running":
+            raise ValueError("Session is not running")
+        if session.paused_at is None:
+            return serialize_session(session)
+
+        now = datetime.utcnow()
+        paused_seconds = max(
+            0, int((now - session.paused_at).total_seconds())
+        )
+        updated = await repo.update_session_if_status(
+            session_id,
+            "running",
+            paused_at=None,
+            total_paused_seconds=(session.total_paused_seconds or 0)
+            + paused_seconds,
+        )
+        if updated is None:
+            raise ValueError("Session is not running")
         broadcast_session(updated)
         return serialize_session(updated)
 
@@ -535,6 +847,8 @@ async def end_edging_session(
     session_id: str,
     *,
     status: str,
+    viewer_id: str | None = None,
+    is_host: bool = False,
     repo: Optional[EdgingRepo] = None,
 ) -> dict:
     """Host ends a running session: succeeded (goals must be met) or cancelled."""
@@ -543,6 +857,7 @@ async def end_edging_session(
         session = await repo.get_session(session_id)
         if session is None:
             raise ValueError("Session not found")
+        _require_session_access(session, viewer_id, is_host)
         if session.status != "running":
             raise ValueError("Session is not running")
 
@@ -551,11 +866,13 @@ async def end_edging_session(
                 "Goals are not all reached yet — end as cancelled or keep going"
             )
 
+        now = datetime.utcnow()
         updated = await repo.update_session_if_status(
             session_id,
             "running",
             status=status,
-            ended_at=datetime.utcnow(),
+            ended_at=now,
+            **_finalize_pause_fields(session, now),
         )
         if updated is None:
             raise ValueError("Session is not running")
@@ -587,11 +904,13 @@ async def tick_running_sessions(repo: Optional[EdgingRepo] = None) -> None:
         if not goals_met(session):
             return
 
+        now = datetime.utcnow()
         updated = await repo.update_session_if_status(
             session.id,
             "running",
             status="succeeded",
-            ended_at=datetime.utcnow(),
+            ended_at=now,
+            **_finalize_pause_fields(session, now),
         )
         if updated is not None:
             broadcast_session(updated)
@@ -620,6 +939,7 @@ async def recover_orphan_sessions(repo: Optional[EdgingRepo] = None) -> int:
             "running",
             status="interrupted",
             ended_at=now,
+            **_finalize_pause_fields(session, now),
         )
         if updated is not None:
             broadcast_session(updated)
@@ -631,3 +951,35 @@ async def recover_orphan_sessions(repo: Optional[EdgingRepo] = None) -> int:
             count=recovered,
         )
     return recovered
+
+
+async def end_sessions_for_app_session(
+    app_session_id: str, repo: Optional[EdgingRepo] = None
+) -> int:
+    """Cancel running training sessions linked to an application session."""
+    repo = repo or EdgingRepo()
+    sessions = await repo.list_running_sessions_for_app_session(app_session_id)
+    ended = 0
+    now = datetime.utcnow()
+    for session in sessions:
+        async with _session_lock(session.id):
+            current = await repo.get_session(session.id)
+            if current is None or current.status != "running":
+                continue
+            updated = await repo.update_session_if_status(
+                session.id,
+                "running",
+                status="cancelled",
+                ended_at=now,
+                **_finalize_pause_fields(current, now),
+            )
+            if updated is not None:
+                broadcast_session(updated)
+                ended += 1
+    if ended:
+        logger.info(
+            "[Training] Cancelled sessions with the application session",
+            app_session_id=app_session_id,
+            count=ended,
+        )
+    return ended

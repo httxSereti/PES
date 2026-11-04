@@ -67,7 +67,7 @@ function LiveSessionCard({ session }: { session: EdgingSessionSummary }) {
               <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500" />
             </span>
             <p className="min-w-0 truncate text-sm font-medium">
-              Live · {session.name}
+              {session.paused_at ? "Paused" : "Live"} · {session.name}
             </p>
           </div>
 
@@ -279,7 +279,10 @@ export default function TrainingOverviewPage() {
                       className="flex items-center justify-between gap-3 py-2.5 transition-colors hover:bg-accent/40 rounded-md px-2 -mx-2"
                     >
                       <div className="flex min-w-0 items-center gap-2.5">
-                        <TrainingStatusBadge status={session.status} />
+                        <TrainingStatusBadge
+                          status={session.status}
+                          paused={Boolean(session.paused_at)}
+                        />
                         <span className="truncate text-sm font-medium">
                           {session.name}
                         </span>

@@ -64,7 +64,10 @@ export default function TrainingLivePage() {
       <Card>
         <CardHeader className="flex-row items-center justify-between space-y-0">
           <div className="flex min-w-0 flex-wrap items-center gap-2.5">
-            <TrainingStatusBadge status={liveSession.status} />
+            <TrainingStatusBadge
+              status={liveSession.status}
+              paused={Boolean(liveSession.paused_at)}
+            />
             <CardTitle className="truncate text-base">
               {liveSession.name}
             </CardTitle>
@@ -82,6 +85,8 @@ export default function TrainingLivePage() {
             <TrainingTimer
               startedAt={liveSession.started_at}
               endedAt={liveSession.ended_at}
+              pausedAt={liveSession.paused_at}
+              totalPausedSeconds={liveSession.total_paused_seconds}
               className="text-5xl font-bold tracking-tight text-violet-600 dark:text-violet-400"
             />
             <span className="flex items-center gap-1.5 rounded-md border border-border/60 bg-muted/30 px-2.5 py-1.5 text-xs text-muted-foreground">

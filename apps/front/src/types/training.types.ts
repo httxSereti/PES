@@ -23,6 +23,7 @@ export interface TrainingSessionFields {
     name: string;
     goals: { type: 'duration' | 'edges'; value: number }[];
     auto_stop_on_goal: boolean;
+    participant_ids?: string[];
 }
 
 export type EdgeDifficulty = 'easy' | 'normal' | 'hard' | 'extreme';

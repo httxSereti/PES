@@ -1,3 +1,4 @@
+from api.ws.commands.training._access import is_host
 from api.ws.context import CommandContext
 from api.ws.registry import command
 from api.ws.schema import CommandResult, TrainingSessionsCommand
@@ -11,7 +12,10 @@ async def handle_training_sessions(
     msg: TrainingSessionsCommand, ctx: CommandContext
 ) -> CommandResult:
     try:
-        sessions = await list_edging_sessions()
+        sessions = await list_edging_sessions(
+            viewer_id=ctx.user.id,
+            is_host=is_host(ctx),
+        )
     except Exception as e:
         return CommandResult(status="error", message=str(e))
 

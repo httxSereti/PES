@@ -100,7 +100,13 @@ async def _send_init_sequence(websocket: WebSocket, user) -> None:
         from services.training import get_live_snapshot
 
         await websocket.send_json(
-            {"type": "training:init", "payload": await get_live_snapshot()}
+            {
+                "type": "training:init",
+                "payload": await get_live_snapshot(
+                    viewer_id=user.id,
+                    is_host=user.has_permission(Permission.HOST),
+                ),
+            }
         )
 
     # Active application session snapshot (session readers)
