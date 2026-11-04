@@ -2,7 +2,7 @@
 // by apps/app/scripts/generate_ws_types.py — DO NOT EDIT.
 // Regenerate with: pnpm codegen:ws
 
-export const WS_SCHEMA_VERSION = 17;
+export const WS_SCHEMA_VERSION = 18;
 
 export enum ActionType {
     PROFILE = "PROFILE",
@@ -600,6 +600,14 @@ export interface TrainingSessionDeletedPayload {
 export interface TrainingEdgeDeletedPayload {
     id: string;
     session_id: string;
+}
+
+export interface TrainingNotificationPayload {
+    kind: 'started' | 'edge' | 'goal_reached' | 'paused' | 'resumed' | 'ended';
+    session_id: string;
+    message: string;
+    actor_user_id?: string | null;
+    status?: string | null;
 }
 
 export interface TrainingOverviewPayload {
@@ -1257,6 +1265,12 @@ export interface TrainingEdgeDeletedMessage {
     payload: TrainingEdgeDeletedPayload;
 }
 
+export interface TrainingNotificationMessage {
+    id?: string | null;
+    type: 'training:notification';
+    payload: TrainingNotificationPayload;
+}
+
 export interface TrainingOverviewMessage {
     id?: string | null;
     type: 'training:overview';
@@ -1397,6 +1411,7 @@ export type WebSocketServerMessage =
     | TrainingSessionDeletedMessage
     | TrainingEdgeMessage
     | TrainingEdgeDeletedMessage
+    | TrainingNotificationMessage
     | TrainingOverviewMessage
     | TrainingSessionsMessage
     | TrainingSessionDetailMessage

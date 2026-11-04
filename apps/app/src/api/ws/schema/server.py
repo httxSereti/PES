@@ -408,6 +408,29 @@ class TrainingEdgeDeletedMessage(ServerMessage):
     payload: TrainingEdgeDeletedPayload
 
 
+class TrainingNotificationPayload(WireModel):
+    """Targeted user-facing notification for a training session event."""
+
+    kind: Literal[
+        "started",
+        "edge",
+        "goal_reached",
+        "paused",
+        "resumed",
+        "ended",
+    ]
+    session_id: str
+    message: str
+    actor_user_id: str | None = None
+    status: str | None = None
+
+
+@server_message(audience=Permission.TRAINING_EDGING_READ)
+class TrainingNotificationMessage(ServerMessage):
+    type: Literal["training:notification"] = "training:notification"
+    payload: TrainingNotificationPayload
+
+
 class TrainingOverviewPayload(WireModel):
     """Personal reply to `training:index`: module stats + recent sessions."""
 
@@ -551,6 +574,8 @@ __all__ = [
     "TrainingEdgeMessage",
     "TrainingEdgeDeletedPayload",
     "TrainingEdgeDeletedMessage",
+    "TrainingNotificationPayload",
+    "TrainingNotificationMessage",
     "TrainingOverviewPayload",
     "TrainingOverviewMessage",
     "TrainingSessionsMessage",

@@ -16,6 +16,7 @@ from sqlalchemy.exc import IntegrityError
 from api.ws.websocket_notifier import ws_notifier
 from database.models import EdgingEdge, EdgingSession
 from database.repositories.edging_repo import EdgingRepo
+from events.enums import TriggerableEvent
 from typings import EdgeDifficulty, EdgeOutcome, EdgingGoalType, Permission
 from utils import to_utc_iso
 
@@ -28,6 +29,8 @@ SUCCESS_EDGE_OUTCOME = EdgeOutcome.SUCCESS.value
 # decide whether the session ends" and the timer from interleaving.
 _session_locks: dict[str, asyncio.Lock] = {}
 _start_lock = asyncio.Lock()
+# Session ids already announced as "goals reached" (avoid one event per edge).
+_goal_announced: set[str] = set()
 
 
 def _session_lock(session_id: str) -> asyncio.Lock:
@@ -112,6 +115,126 @@ def _finalize_pause_fields(session: EdgingSession, now: datetime) -> dict:
     if session.paused_at is not None:
         total += max(0, int((now - session.paused_at).total_seconds()))
     return {"paused_at": None, "total_paused_seconds": total}
+
+
+def _training_event_data(session: EdgingSession, **extra) -> dict:
+    """Privacy-safe event payload (no name, notes or participant ids)."""
+    return {
+        "session_id": session.id,
+        "status": session.status,
+        "edge_count": success_edge_count(session),
+        "duration_seconds": session_elapsed_seconds(session),
+        "goals_met": goals_met(session),
+        "auto_stop_on_goal": session.auto_stop_on_goal,
+        **extra,
+    }
+
+
+async def _dispatch_training_event(
+    event_type: str, session: EdgingSession, **extra
+) -> None:
+    """Send a training event through the normal trigger-rule pipeline."""
+    try:
+        from events.dispatcher import EventDispatcher
+
+        dispatcher = EventDispatcher.get_instance()
+    except RuntimeError:
+        # Tests / early startup: no dispatcher yet.
+        return
+
+    try:
+        await dispatcher.dispatch(
+            event_type,
+            event_data=_training_event_data(session, **extra),
+            origin=f"training:{session.id}",
+        )
+    except Exception:
+        logger.exception(
+            "[Training] Failed to dispatch event",
+            event_type=event_type,
+            session_id=session.id,
+        )
+
+
+def _notify_training(
+    session: EdgingSession,
+    kind: str,
+    message: str,
+    *,
+    actor_user_id: str | None = None,
+    status: str | None = None,
+) -> None:
+    recipients = _session_recipients(session)
+    if actor_user_id:
+        recipients.discard(actor_user_id)
+    if not recipients:
+        return
+    ws_notifier.notify_to_users(
+        "training:notification",
+        {
+            "kind": kind,
+            "session_id": session.id,
+            "message": message,
+            "actor_user_id": actor_user_id,
+            "status": status,
+        },
+        recipients,
+    )
+
+
+def _ended_message(session: EdgingSession) -> str:
+    labels = {
+        "succeeded": "session succeeded",
+        "failed": "session failed",
+        "cancelled": "session cancelled",
+        "interrupted": "session interrupted",
+    }
+    return f"{session.name}: {labels.get(session.status, session.status)}"
+
+
+async def _announce_goal_reached(
+    session: EdgingSession, actor_user_id: str | None = None
+) -> None:
+    if session.id in _goal_announced:
+        return
+    _goal_announced.add(session.id)
+    _notify_training(
+        session,
+        "goal_reached",
+        f"{session.name}: all goals reached",
+        actor_user_id=actor_user_id,
+        status=session.status,
+    )
+    await _dispatch_training_event(
+        TriggerableEvent.TRAINING_GOAL_REACHED.value, session
+    )
+
+
+_ENDED_EVENT_TYPES = {
+    "succeeded": TriggerableEvent.TRAINING_SESSION_SUCCEEDED.value,
+    "failed": TriggerableEvent.TRAINING_SESSION_FAILED.value,
+    "cancelled": TriggerableEvent.TRAINING_SESSION_CANCELLED.value,
+}
+
+
+async def _announce_session_ended(
+    session: EdgingSession,
+    actor_user_id: str | None = None,
+    *,
+    dispatch_event: bool = True,
+) -> None:
+    _notify_training(
+        session,
+        "ended",
+        _ended_message(session),
+        actor_user_id=actor_user_id,
+        status=session.status,
+    )
+    event_type = _ENDED_EVENT_TYPES.get(session.status)
+    if dispatch_event and event_type is not None:
+        extra = {"outcome": "fail"} if session.status == "failed" else {}
+        await _dispatch_training_event(event_type, session, **extra)
+    _goal_announced.discard(session.id)
 
 
 # ───────── Serialization ─────────
@@ -587,6 +710,7 @@ async def delete_edging_session(
             raise ValueError("Cannot delete a running session — end it first")
         if not await repo.delete_session(session_id):
             raise ValueError("Session not found")
+        _goal_announced.discard(session_id)
         broadcast_session_deleted(session)
         return True
 
@@ -623,7 +747,18 @@ async def start_edging_session(
         )
         if updated is None:
             raise ValueError("Session is no longer configured")
+        _goal_announced.discard(session_id)
         broadcast_session(updated)
+        _notify_training(
+            updated,
+            "started",
+            f"{updated.name}: session started",
+            actor_user_id=viewer_id,
+            status=updated.status,
+        )
+        await _dispatch_training_event(
+            TriggerableEvent.TRAINING_SESSION_STARTED.value, updated
+        )
         return serialize_session(updated)
 
 
@@ -670,6 +805,7 @@ async def record_edging_edge(
         if session.paused_at is not None:
             raise ValueError("Session is paused — resume it before recording an edge")
 
+        was_met = goals_met(session)
         now = datetime.utcnow()
         previous = session.edges[-1] if session.edges else None
         reference = previous.recorded_at if previous else session.started_at
@@ -744,6 +880,34 @@ async def record_edging_edge(
             raise ValueError("Session not found")
 
         broadcast_session(updated)
+        await _dispatch_training_event(
+            TriggerableEvent.TRAINING_EDGE_RECORDED.value,
+            updated,
+            difficulty=difficulty,
+            outcome=outcome,
+            interval_seconds=interval_seconds,
+            source=source,
+        )
+        _notify_training(
+            updated,
+            "edge",
+            f"{updated.name}: "
+            + (
+                "edge failed"
+                if outcome == EdgeOutcome.FAIL.value
+                else f"edge recorded ({difficulty})"
+            ),
+            actor_user_id=recorded_by,
+            status=updated.status,
+        )
+        if (
+            outcome != EdgeOutcome.FAIL.value
+            and goals_met(updated)
+            and not was_met
+        ):
+            await _announce_goal_reached(updated, recorded_by)
+        if updated.status in _ENDED_STATUSES:
+            await _announce_session_ended(updated, recorded_by)
 
         return {
             "edge": serialize_edge(edge),
@@ -775,6 +939,8 @@ async def delete_edging_edge(
         updated = await repo.get_session(session_id)
         if updated is None:
             raise ValueError("Session not found")
+        if not goals_met(updated):
+            _goal_announced.discard(session_id)
         broadcast_session(updated)
         return serialize_session(updated)
 
@@ -804,6 +970,16 @@ async def pause_edging_session(
         if updated is None:
             raise ValueError("Session is not running")
         broadcast_session(updated)
+        _notify_training(
+            updated,
+            "paused",
+            f"{updated.name}: session paused",
+            actor_user_id=viewer_id,
+            status=updated.status,
+        )
+        await _dispatch_training_event(
+            TriggerableEvent.TRAINING_SESSION_PAUSED.value, updated
+        )
         return serialize_session(updated)
 
 
@@ -840,6 +1016,16 @@ async def resume_edging_session(
         if updated is None:
             raise ValueError("Session is not running")
         broadcast_session(updated)
+        _notify_training(
+            updated,
+            "resumed",
+            f"{updated.name}: session resumed",
+            actor_user_id=viewer_id,
+            status=updated.status,
+        )
+        await _dispatch_training_event(
+            TriggerableEvent.TRAINING_SESSION_RESUMED.value, updated
+        )
         return serialize_session(updated)
 
 
@@ -877,6 +1063,9 @@ async def end_edging_session(
         if updated is None:
             raise ValueError("Session is not running")
         broadcast_session(updated)
+        if status == "succeeded":
+            await _announce_goal_reached(updated, viewer_id)
+        await _announce_session_ended(updated, viewer_id)
         return serialize_session(updated)
 
 
@@ -889,7 +1078,28 @@ async def tick_running_sessions(repo: Optional[EdgingRepo] = None) -> None:
     repo = repo or EdgingRepo()
     # Lightweight check first: most sessions do not auto-stop.
     session = await repo.get_running_session(load_edges=False)
-    if session is None or not session.auto_stop_on_goal:
+    if session is None:
+        return
+
+    if not session.auto_stop_on_goal:
+        # Still announce a duration-only goal once, even when the Host keeps
+        # the session running manually.
+        if (
+            session.id in _goal_announced
+            or session.paused_at is not None
+            or not any(
+                goal.get("type") == EdgingGoalType.DURATION.value
+                for goal in session.goals
+            )
+        ):
+            return
+        full = await repo.get_session(session.id)
+        if (
+            full is not None
+            and full.status == "running"
+            and goals_met(full)
+        ):
+            await _announce_goal_reached(full)
         return
 
     async with _session_lock(session.id):
@@ -914,6 +1124,8 @@ async def tick_running_sessions(repo: Optional[EdgingRepo] = None) -> None:
         )
         if updated is not None:
             broadcast_session(updated)
+            await _announce_goal_reached(updated)
+            await _announce_session_ended(updated)
             logger.info(
                 "[Training] Auto-stopped session on goals",
                 session_id=updated.id,
@@ -942,6 +1154,7 @@ async def recover_orphan_sessions(repo: Optional[EdgingRepo] = None) -> int:
             **_finalize_pause_fields(session, now),
         )
         if updated is not None:
+            _goal_announced.discard(session.id)
             broadcast_session(updated)
             recovered += 1
 
@@ -975,6 +1188,9 @@ async def end_sessions_for_app_session(
             )
             if updated is not None:
                 broadcast_session(updated)
+                # Do not run trigger rules after the application session was
+                # neutralized: an action must not re-energize hardware.
+                await _announce_session_ended(updated, dispatch_event=False)
                 ended += 1
     if ended:
         logger.info(

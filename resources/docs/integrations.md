@@ -6,8 +6,9 @@ in one `IntegrationRegistry`.
 
 | Id        | Kind     | Events           | Actions                    | Settings                  |
 | --------- | -------- | ---------------- | -------------------------- | ------------------------- |
-| `units`   | core     | —                | `PROFILE`, `LEVEL`, `MULT` | — (units/hardware pages)  |
-| `sensors` | core     | `sensor_*_alarm` | —                          | — (sensors page)          |
+| `units`    | core     | —                | `PROFILE`, `LEVEL`, `MULT` | — (units/hardware pages)  |
+| `sensors`  | core     | `sensor_*_alarm` | —                          | — (sensors page)          |
+| `training` | core     | `training_*` (8) | —                          | —                         |
 | `chaster` | external | `chaster_*`      | `CHASTER_TIME_UPDATE`      | `CHASTER_*` (env, ro)     |
 | `puryfi`  | external | `puryfi_*` (17)  | `PURYFI_*` (6)             | thresholds, port, secrets |
 

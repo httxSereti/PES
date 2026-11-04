@@ -30,6 +30,20 @@ export function EventTypeBadge({ type, className, title }: { type: string; class
     if (type.startsWith("puryfi_"))
         color = "bg-pink-500/15 text-pink-700 border-pink-500/30 dark:text-pink-300"
 
+    // Training lifecycle events
+    if (type.startsWith("training_")) {
+        if (type === "training_session_failed") {
+            color = "bg-rose-500/15 text-rose-700 border-rose-500/30 dark:text-rose-300";
+        } else if (
+            type === "training_session_succeeded" ||
+            type === "training_goal_reached"
+        ) {
+            color = "bg-emerald-500/15 text-emerald-700 border-emerald-500/30 dark:text-emerald-300";
+        } else {
+            color = "bg-violet-500/15 text-violet-700 border-violet-500/30 dark:text-violet-300";
+        }
+    }
+
     return (
         <span className={`inline-flex max-w-full items-center truncate px-2.5 py-0.5 rounded-md text-[11px] font-medium border font-mono ${color} ${className ?? ""}`} title={title}>
             {type}

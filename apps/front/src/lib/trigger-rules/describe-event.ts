@@ -9,7 +9,16 @@ export interface DescribedEvent {
     detail: string | null;
 }
 
-const TYPE_PREFIXES = new Set(["chaster", "puryfi", "sensor", "sensors", "unit", "units", "custom"]);
+const TYPE_PREFIXES = new Set([
+    "chaster",
+    "puryfi",
+    "sensor",
+    "sensors",
+    "unit",
+    "units",
+    "training",
+    "custom",
+]);
 
 /** "chaster_pillory_vote" → "Pillory vote", "puryfi_detected_female_breast" → "Detected female breast". */
 export function humanizeEventType(type: string): string {
@@ -171,6 +180,67 @@ function describeChaster(eventType: string, data: Record<string, unknown>): Desc
     return { title: humanizeEventType(eventType), detail: summarizeData(data) };
 }
 
+function describeTraining(
+    eventType: string,
+    data: Record<string, unknown>,
+): DescribedEvent {
+    const difficulty = str(data.difficulty);
+    const outcome = str(data.outcome);
+    const interval = num(data.interval_seconds);
+    const edgeCount = num(data.edge_count);
+
+    switch (eventType) {
+        case "training_session_started":
+            return { title: "Training session started", detail: null };
+
+        case "training_edge_recorded": {
+            const parts = [
+                difficulty,
+                edgeCount !== null ? `edge #${edgeCount}` : null,
+                interval !== null ? `after ${formatEventSpan(interval)}` : null,
+            ].filter((part): part is string => Boolean(part));
+
+            return {
+                title:
+                    outcome === "fail"
+                        ? "Training edge failed"
+                        : "Training edge recorded",
+                detail: parts.length > 0 ? parts.join(" · ") : null,
+            };
+        }
+
+        case "training_goal_reached":
+            return {
+                title: "Training goals reached",
+                detail:
+                    edgeCount !== null
+                        ? `${edgeCount} successful edge${edgeCount === 1 ? "" : "s"}`
+                        : null,
+            };
+
+        case "training_session_paused":
+            return { title: "Training session paused", detail: null };
+
+        case "training_session_resumed":
+            return { title: "Training session resumed", detail: null };
+
+        case "training_session_succeeded":
+            return { title: "Training session succeeded", detail: null };
+
+        case "training_session_failed":
+            return { title: "Training session failed", detail: null };
+
+        case "training_session_cancelled":
+            return { title: "Training session cancelled", detail: null };
+
+        default:
+            return {
+                title: humanizeEventType(eventType),
+                detail: summarizeData(data),
+            };
+    }
+}
+
 function describePuryfi(eventType: string, data: Record<string, unknown>): DescribedEvent {
     const label = str(data.label);
     const count = num(data.count);
@@ -196,6 +266,10 @@ export function describeEvent(event: Pick<TriggeredEvent, "event_type" | "origin
         return describePuryfi(event.event_type, data);
     }
 
+    if (event.event_type.startsWith("training_")) {
+        return describeTraining(event.event_type, data);
+    }
+
     if (event.event_type.startsWith("chaster_") || event.event_type.startsWith("custom:wof_")) {
         return describeChaster(event.event_type, data);
     }
@@ -210,6 +284,13 @@ export function describeEvent(event: Pick<TriggeredEvent, "event_type" | "origin
 export function eventTone(eventType: string, origin: string): EventTone {
     if (eventType.startsWith("puryfi_") || origin.startsWith("puryfi:")) return "pink";
     if (eventType.startsWith("sensor_") || origin.startsWith("sensor:")) return "teal";
-    if (eventType.startsWith("chaster_") || origin.startsWith("chaster:")) return "violet";
+    if (
+        eventType.startsWith("chaster_") ||
+        eventType.startsWith("training_") ||
+        origin.startsWith("chaster:") ||
+        origin.startsWith("training:")
+    ) {
+        return "violet";
+    }
     return "slate";
 }

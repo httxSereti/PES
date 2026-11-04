@@ -28,6 +28,7 @@ const EVENT_ID_PREFIXES = new Set([
     "sensors",
     "units",
     "unit",
+    "training",
 ]);
 
 /** Readable fallback label while the live integration catalog is loading. */
@@ -69,6 +70,20 @@ export const FALLBACK_EVENT_GROUPS: Record<string, EventGroupDef> = {
             "sensor_sound_alarm",
             "sensor_position_alarm",
             "sensor_move_alarm",
+        ],
+    },
+    training: {
+        key: "training",
+        label: "Training",
+        types: [
+            "training_session_started",
+            "training_edge_recorded",
+            "training_goal_reached",
+            "training_session_paused",
+            "training_session_resumed",
+            "training_session_succeeded",
+            "training_session_failed",
+            "training_session_cancelled",
         ],
     },
 };

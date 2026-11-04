@@ -20,6 +20,7 @@ from .base import (
 )
 from .chaster import ChasterIntegration
 from .core.sensors import SensorsIntegration
+from .core.training import TrainingIntegration
 from .core.units import UnitsIntegration
 from .puryfi import PuryFiIntegration
 from .registry import IntegrationRegistry
@@ -31,6 +32,7 @@ def build_default_registry() -> IntegrationRegistry:
     registry = IntegrationRegistry(IntegrationSettingsStore())
     registry.register(UnitsIntegration())
     registry.register(SensorsIntegration())
+    registry.register(TrainingIntegration())
     registry.register(ChasterIntegration())
     registry.register(PuryFiIntegration())
     return registry

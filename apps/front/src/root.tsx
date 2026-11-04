@@ -11,6 +11,7 @@ import { useEffect } from "react";
 import { Toaster } from "@pes/ui/components/sonner"
 
 import { ThemeProvider } from "@/components/layout/theme-provider";
+import { TrainingNotifications } from "@/components/common/training/training-notifications";
 
 
 import { Provider } from 'react-redux';
@@ -56,6 +57,7 @@ export function Layout({
                             <AppInitializer>
                                 <WebSocketProvider>
                                     {children}
+                                    <TrainingNotifications />
                                     <Toaster />
                                 </WebSocketProvider>
                             </AppInitializer>

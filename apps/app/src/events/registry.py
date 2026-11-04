@@ -26,7 +26,8 @@ class EventRegistry:
         rules = await self._repo.get_enabled_rules(event_type)
 
         if not rules:
-            logger.warning(
+            # No rule is a normal state, not a misconfiguration.
+            logger.debug(
                 f"[EventRegistry] No enabled rules for event '{event_type}'",
                 event_type=event_type,
             )

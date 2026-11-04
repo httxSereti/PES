@@ -54,3 +54,13 @@ class TriggerableEvent(str, Enum):
     SENSOR_SOUND_ALARM = "sensor_sound_alarm"
     SENSOR_POSITION_ALARM = "sensor_position_alarm"
     SENSOR_MOVE_ALARM = "sensor_move_alarm"
+
+    # Training / edging
+    TRAINING_SESSION_STARTED = "training_session_started"
+    TRAINING_EDGE_RECORDED = "training_edge_recorded"
+    TRAINING_GOAL_REACHED = "training_goal_reached"
+    TRAINING_SESSION_PAUSED = "training_session_paused"
+    TRAINING_SESSION_RESUMED = "training_session_resumed"
+    TRAINING_SESSION_SUCCEEDED = "training_session_succeeded"
+    TRAINING_SESSION_FAILED = "training_session_failed"
+    TRAINING_SESSION_CANCELLED = "training_session_cancelled"
