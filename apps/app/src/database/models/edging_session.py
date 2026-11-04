@@ -17,7 +17,8 @@ class EdgingSession(Base):
     An edging training session. Goals are a JSON list of
     ``{"type": "duration"|"edges", "value": int}`` — the session reaches its
     goal when *all* of them are met. ``status`` follows
-    EdgingSessionStatus (configured -> running -> succeeded/failed/cancelled).
+    EdgingSessionStatus (configured -> running -> succeeded/failed/cancelled);
+    a session still ``running`` at startup is marked ``interrupted``.
     """
 
     __tablename__ = "training_edging_sessions"

@@ -3,8 +3,8 @@ from __future__ import annotations
 from typing import List, Optional
 
 from cuid2 import cuid_wrapper
-from sqlalchemy import delete, select
-from sqlalchemy.orm import selectinload
+from sqlalchemy import delete, select, update
+from sqlalchemy.orm import noload, selectinload
 
 from database.connection import Database
 from database.models import EdgingEdge, EdgingSession
@@ -69,18 +69,41 @@ class EdgingRepo:
             result = await db_session.execute(stmt)
             return list(result.scalars().all())
 
-    async def get_running_session(self) -> Optional[EdgingSession]:
-        """The live session, if any (status == running)."""
+    async def get_running_session(
+        self, *, load_edges: bool = True
+    ) -> Optional[EdgingSession]:
+        """The live session, if any (status == running).
+
+        ``load_edges=False`` skips the eager edges load; the auto-stop tick
+        uses it to check the flag every second without loading a long history.
+        """
         async with self._db.session_maker() as db_session:
+            edges_option = (
+                selectinload(EdgingSession.edges)
+                if load_edges
+                else noload(EdgingSession.edges)
+            )
             stmt = (
                 select(EdgingSession)
-                .options(selectinload(EdgingSession.edges))
+                .options(edges_option)
                 .where(EdgingSession.status == "running")
                 .order_by(EdgingSession.started_at.desc())
                 .limit(1)
             )
             result = await db_session.execute(stmt)
             return result.scalar_one_or_none()
+
+    async def list_running_sessions(self) -> List[EdgingSession]:
+        """Every session still marked running (startup/shutdown recovery)."""
+        async with self._db.session_maker() as db_session:
+            stmt = (
+                select(EdgingSession)
+                .options(selectinload(EdgingSession.edges))
+                .where(EdgingSession.status == "running")
+                .order_by(EdgingSession.started_at.desc())
+            )
+            result = await db_session.execute(stmt)
+            return list(result.scalars().all())
 
     async def update_session(
         self, session_id: str, **fields
@@ -92,6 +115,29 @@ class EdgingRepo:
             for key, value in fields.items():
                 setattr(session, key, value)
             await db_session.commit()
+        return await self.get_session(session_id)
+
+    async def update_session_if_status(
+        self, session_id: str, expected_status: str, **fields
+    ) -> Optional[EdgingSession]:
+        """Atomically update a session only while it is in `expected_status`.
+
+        Returns None when the row no longer matches, so callers can tell that
+        another coroutine (timer, edge, end) already moved the session.
+        """
+        async with self._db.session_maker() as db_session:
+            stmt = (
+                update(EdgingSession)
+                .where(
+                    EdgingSession.id == session_id,
+                    EdgingSession.status == expected_status,
+                )
+                .values(**fields)
+            )
+            result = await db_session.execute(stmt)
+            await db_session.commit()
+            if result.rowcount == 0:
+                return None
         return await self.get_session(session_id)
 
     async def delete_session(self, session_id: str) -> bool:
@@ -120,9 +166,20 @@ class EdgingRepo:
         )
         async with self._db.session_maker() as db_session:
             session = await db_session.get(EdgingSession, session_id)
-            if not session:
+            if not session or session.status != "running":
                 return None
             db_session.add(edge)
             await db_session.commit()
             await db_session.refresh(edge)
             return edge
+
+    async def delete_edge(self, session_id: str, edge_id: str) -> bool:
+        """Delete one edge, restricted to the session it belongs to."""
+        async with self._db.session_maker() as db_session:
+            stmt = delete(EdgingEdge).where(
+                EdgingEdge.id == edge_id,
+                EdgingEdge.session_id == session_id,
+            )
+            result = await db_session.execute(stmt)
+            await db_session.commit()
+            return result.rowcount > 0

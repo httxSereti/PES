@@ -9,6 +9,7 @@ export type {
     TrainingSessionDetail,
     TrainingOverviewStats,
     EdgingSessionStats,
+    EdgingSessionSummary,
 } from './websocket.generated';
 
 /** Reply to `training:index`: module stats + the 5 most recent sessions. */

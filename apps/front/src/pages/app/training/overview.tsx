@@ -24,21 +24,25 @@ import { useAppSelector } from "@/store/hooks";
 import { formatDuration } from "@/lib/training";
 import { formatDateTime } from "@/lib/format-date";
 import { TrainingStatusBadge } from "@/components/common/training/training-status-badge";
-import type { EdgingSession } from "@/types";
+import type { EdgingSessionSummary } from "@/types";
 
 export function meta() {
   return [{ title: "PES | Training - Overview" }];
 }
 
-/** Sum of the targets for a goal type (duration in seconds, edges as count). */
-function goalTotal(session: EdgingSession, type: "duration" | "edges") {
-  return session.goals
+/**
+ * Effective target for a goal type. The backend requires *every* goal, so
+ * duplicate goals of the same type are redundant: the highest one wins.
+ */
+function goalTotal(session: EdgingSessionSummary, type: "duration" | "edges") {
+  const values = session.goals
     .filter((goal) => goal.type === type)
-    .reduce((sum, goal) => sum + goal.value, 0);
+    .map((goal) => goal.value);
+  return values.length ? Math.max(...values) : 0;
 }
 
 /** Compact "live now" banner shown on the overview when a session is running. */
-function LiveSessionCard({ session }: { session: EdgingSession }) {
+function LiveSessionCard({ session }: { session: EdgingSessionSummary }) {
   const durationTarget = goalTotal(session, "duration");
   const edgesTarget = goalTotal(session, "edges");
 
@@ -195,7 +199,11 @@ export default function TrainingOverviewPage() {
             icon={Target}
             label="Edging sessions"
             value={String(stats.total_sessions)}
-            sub={`${stats.succeeded_sessions} succeeded · ${stats.failed_sessions} failed · ${stats.cancelled_sessions} cancelled`}
+            sub={`${stats.succeeded_sessions} succeeded · ${stats.failed_sessions} failed · ${stats.cancelled_sessions} cancelled${
+              stats.interrupted_sessions > 0
+                ? ` · ${stats.interrupted_sessions} interrupted`
+                : ""
+            }`}
           />
           <StatCard
             icon={Flame}

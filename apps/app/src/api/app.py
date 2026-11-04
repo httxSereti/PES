@@ -57,6 +57,20 @@ async def sensor_alarm_loop():
         await asyncio.sleep(1)
 
 
+async def training_tick_loop():
+    """Auto-stop edging sessions when their duration goal is reached."""
+    from services.training import tick_running_sessions
+
+    while True:
+        try:
+            await tick_running_sessions()
+        except asyncio.CancelledError:
+            raise
+        except Exception:
+            logger.exception("[Training] Task exception for training tick")
+        await asyncio.sleep(1)
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # startup
@@ -89,6 +103,15 @@ async def lifespan(app: FastAPI):
 
     await db.ensure_schema()
 
+    # Any training session still marked running belongs to a previous process
+    # (crash or restart): close it so it no longer blocks new sessions.
+    from services.training import recover_orphan_sessions
+
+    await recover_orphan_sessions()
+
+    # Auto-stop sessions whose duration goal is reached.
+    training_task = asyncio.create_task(training_tick_loop())
+
     await seed_from_json(db)
 
     # Load persisted users into the Store cache, then bootstrap HOST if needed
@@ -114,9 +137,16 @@ async def lifespan(app: FastAPI):
     # shutdown
     queue_task.cancel()
     alarm_task.cancel()
+    training_task.cancel()
+    try:
+        await training_task
+    except asyncio.CancelledError:
+        pass
     # Same neutralize path as session end and the panic stop: no ramp or
     # queued action may outlive the process and leave a unit driven.
     await neutralize_all(reason="shutdown")
+    # Do not leave a "running" training session behind across restarts.
+    await recover_orphan_sessions()
     await integration_registry.stop()
     await db.close()
 

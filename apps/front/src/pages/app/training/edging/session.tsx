@@ -30,12 +30,12 @@ import {
 import { Textarea } from "@pes/ui/components/textarea";
 import {
   Ban,
-  CheckCheck,
   Ellipsis,
   Flame,
   Pencil,
   Play,
   Trash2,
+  Undo2,
   X,
 } from "lucide-react";
 import { toast } from "sonner";
@@ -48,6 +48,7 @@ import { formatDuration } from "@/lib/training";
 import { TrainingStatusBadge } from "@/components/common/training/training-status-badge";
 import { TrainingTimer } from "@/components/common/training/training-timer";
 import { GoalProgress } from "@/components/common/training/goal-progress";
+import { GoalsReachedBanner } from "@/components/common/training/goals-reached-banner";
 import { EdgeTimeline } from "@/components/common/training/edge-timeline";
 import { EdgeChart } from "@/components/common/training/edge-chart";
 import { SessionStats } from "@/components/common/training/session-stats";
@@ -184,8 +185,6 @@ export default function EdgingSessionPage() {
   const running = session.status === "running";
   const configured = session.status === "configured";
   const ended = !running && !configured;
-  const goalsReached =
-    running && session.goals_met && !session.auto_stop_on_goal;
 
   async function handleStart() {
     await run(
@@ -213,6 +212,19 @@ export default function EdgingSessionPage() {
           outcome: "fail",
         }),
       "Session failed and stopped",
+    );
+  }
+
+  async function handleUndoEdge() {
+    const lastEdge = edges[edges.length - 1];
+    if (!lastEdge) return;
+    await run(
+      () =>
+        sendCommand("training:delete_edge", {
+          session_id: session.id,
+          edge_id: lastEdge.id,
+        }),
+      "Last edge removed",
     );
   }
 
@@ -363,6 +375,15 @@ export default function EdgingSessionPage() {
                   <Button
                     variant="outline"
                     size="sm"
+                    disabled={busy || edges.length === 0}
+                    onClick={() => void handleUndoEdge()}
+                  >
+                    <Undo2 size={14} />
+                    Undo last edge
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
                     disabled={busy}
                     onClick={() => void handleEnd("cancelled")}
                   >
@@ -377,32 +398,12 @@ export default function EdgingSessionPage() {
               </p>
             )}
 
-            {goalsReached && (
-              <div className="flex flex-wrap items-center gap-3 rounded-lg border border-violet-500/30 bg-violet-500/10 px-4 py-3">
-                <CheckCheck
-                  size={16}
-                  className="shrink-0 text-violet-600 dark:text-violet-400"
-                />
-                <p className="flex-1 min-w-40 text-sm">
-                  <span className="font-medium">All goals reached!</span>{" "}
-                  <span className="text-muted-foreground">
-                    {isHost
-                      ? "You can end the session or keep going."
-                      : "Waiting for the Host to end it or continue."}
-                  </span>
-                </p>
-                {isHost && (
-                  <Button
-                    size="sm"
-                    disabled={busy}
-                    onClick={() => void handleEnd("succeeded")}
-                  >
-                    <CheckCheck size={14} />
-                    End session (success)
-                  </Button>
-                )}
-              </div>
-            )}
+            <GoalsReachedBanner
+              session={session}
+              isHost={isHost}
+              busy={busy}
+              onEnd={() => void handleEnd("succeeded")}
+            />
           </CardContent>
         </Card>
       )}
@@ -484,7 +485,10 @@ export default function EdgingSessionPage() {
                 </>
               ) : (
                 <p className="whitespace-pre-wrap text-sm text-muted-foreground">
-                  {session.notes || "No notes yet."}
+                  {session.notes ||
+                    (canManage
+                      ? "No notes yet."
+                      : "Notes are private to the Host.")}
                 </p>
               )}
             </CardContent>

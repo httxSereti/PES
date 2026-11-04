@@ -1,4 +1,8 @@
-import type { EdgeDifficulty, EdgeOutcome } from '@/types';
+import type {
+    EdgeDifficulty,
+    EdgeOutcome,
+    EdgingSessionSummary,
+} from '@/types';
 
 /** "83" -> "1:23", "3725" -> "1:02:05" */
 export function formatDuration(totalSeconds: number | null | undefined): string {
@@ -15,6 +19,51 @@ export function formatDuration(totalSeconds: number | null | undefined): string 
 export function formatMinutes(totalSeconds: number | null | undefined): string {
     if (totalSeconds == null || Number.isNaN(totalSeconds)) return "—";
     return `${Math.floor(totalSeconds / 60)} min`;
+}
+
+/**
+ * Elapsed seconds, ticking client-side while the session is running.
+ * Falls back to the server value when the timestamps are unusable.
+ */
+export function sessionElapsedSeconds(
+    session: Pick<
+        EdgingSessionSummary,
+        "started_at" | "ended_at" | "duration_seconds"
+    >,
+    nowMs: number = Date.now(),
+): number | null {
+    if (!session.started_at) return session.duration_seconds ?? null;
+
+    const start = new Date(session.started_at).getTime();
+    const end = session.ended_at
+        ? new Date(session.ended_at).getTime()
+        : nowMs;
+    if (Number.isNaN(start) || Number.isNaN(end)) {
+        return session.duration_seconds ?? null;
+    }
+    return Math.max(0, Math.floor((end - start) / 1000));
+}
+
+/** True when every configured goal is reached at `nowMs`. */
+export function sessionGoalsMet(
+    session: Pick<
+        EdgingSessionSummary,
+        | "goals"
+        | "edge_count"
+        | "started_at"
+        | "ended_at"
+        | "duration_seconds"
+    >,
+    nowMs: number = Date.now(),
+): boolean {
+    if (!session.goals?.length) return false;
+
+    const elapsed = sessionElapsedSeconds(session, nowMs) ?? 0;
+    return session.goals.every((goal) => {
+        if (goal.type === "duration") return elapsed >= goal.value;
+        if (goal.type === "edges") return session.edge_count >= goal.value;
+        return false;
+    });
 }
 
 export const DIFFICULTY_META: Record<
@@ -56,4 +105,5 @@ export const STATUS_META: Record<
     succeeded: { label: 'Succeeded', className: 'border-violet-500/30 bg-violet-500/10 text-violet-600 dark:text-violet-400' },
     failed: { label: 'Failed', className: 'border-rose-500/30 bg-rose-500/10 text-rose-600 dark:text-rose-400' },
     cancelled: { label: 'Cancelled', className: 'border-amber-500/30 bg-amber-500/10 text-amber-600 dark:text-amber-400' },
+    interrupted: { label: 'Interrupted', className: 'border-amber-500/30 bg-amber-500/10 text-amber-600 dark:text-amber-400' },
 };

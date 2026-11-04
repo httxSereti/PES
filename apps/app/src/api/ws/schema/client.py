@@ -493,6 +493,16 @@ class TrainingRecordEdgeCommand(ClientMessage):
     payload: TrainingRecordEdgePayload
 
 
+class TrainingDeleteEdgePayload(WireModel):
+    session_id: str
+    edge_id: str
+
+
+class TrainingDeleteEdgeCommand(ClientMessage):
+    type: Literal["training:delete_edge"] = "training:delete_edge"
+    payload: TrainingDeleteEdgePayload
+
+
 class TrainingEndPayload(WireModel):
     session_id: str
     status: Literal["succeeded", "cancelled"]
@@ -635,6 +645,8 @@ __all__ = [
     "TrainingStartCommand",
     "TrainingRecordEdgePayload",
     "TrainingRecordEdgeCommand",
+    "TrainingDeleteEdgePayload",
+    "TrainingDeleteEdgeCommand",
     "TrainingEndPayload",
     "TrainingEndCommand",
     "HardwareMk2btUpdatePayload",

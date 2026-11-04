@@ -13,7 +13,7 @@ import type { Middleware } from '@reduxjs/toolkit';
 import { triggerRulesInitialized, triggerRuleUpdated, triggerRuleAdded, triggerRuleRemoved } from '@/store/slices/triggerRulesSlice';
 import { triggerRuleLabelsInitialized, triggerRuleLabelAdded } from '@/store/slices/triggerRuleLabelsSlice';
 import { integrationsInitialized, integrationUpdated } from '@/store/slices/integrationsSlice';
-import { trainingInit, trainingSessionUpdated, trainingEdgeAdded, trainingSessionDeleted, trainingOverviewLoaded, trainingSessionsLoaded, trainingSessionDetailLoaded } from '@/store/slices/trainingSlice';
+import { trainingInit, trainingSessionUpdated, trainingEdgeAdded, trainingEdgeDeleted, trainingSessionDeleted, trainingOverviewLoaded, trainingSessionsLoaded, trainingSessionDetailLoaded } from '@/store/slices/trainingSlice';
 import { sessionInit, sessionUpdated } from '@/store/slices/sessionSlice';
 import { sessionHistoryLoaded, sessionHistoryDetailLoaded, sessionHistoryDeleted } from '@/store/slices/sessionHistorySlice';
 import { profilesLoaded, profileSaved, profileDeleted, profileDetailLoaded, activeProfileUpdated, pendingProfilesLoaded } from '@/store/slices/profilesSlice';
@@ -282,6 +282,10 @@ export function createWebSocketMiddleware(config: WebSocketConfig): Middleware {
 
                     case 'training:edge':
                         dispatch(trainingEdgeAdded(message.payload));
+                        break;
+
+                    case 'training:edge_deleted':
+                        dispatch(trainingEdgeDeleted(message.payload));
                         break;
 
                     case 'training:overview':

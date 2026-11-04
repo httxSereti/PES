@@ -20,7 +20,7 @@ import { formatDateTime } from "@/lib/format-date";
 import { TrainingStatusBadge } from "@/components/common/training/training-status-badge";
 import { TrainingTimer } from "@/components/common/training/training-timer";
 import { ConfirmDeleteDialog } from "@/components/common/dialogs/confirm-delete-dialog";
-import type { EdgingSession } from "@/types";
+import type { EdgingSessionSummary } from "@/types";
 import { Permission } from "@/types";
 
 export function meta() {
@@ -61,7 +61,8 @@ export default function EdgingSessionsPage() {
 
   const canManage = hasPermission(user, Permission.TRAINING_EDGING_MANAGE);
   const isHost = hasPermission(user, Permission.HOST);
-  const [deleteTarget, setDeleteTarget] = useState<EdgingSession | null>(null);
+  const [deleteTarget, setDeleteTarget] =
+    useState<EdgingSessionSummary | null>(null);
 
   async function handleDelete() {
     if (!deleteTarget) return;

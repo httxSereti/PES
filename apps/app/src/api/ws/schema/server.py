@@ -20,6 +20,7 @@ from .models import (
     EdgingEdge,
     EdgingSession,
     EdgingSessionStats,
+    EdgingSessionSummary,
     IntegrationCatalogEntry,
     PendingProfile,
     ProfileDetail,
@@ -360,7 +361,7 @@ class TriggerRulesDeleteMessage(ServerMessage):
 class TrainingInitPayload(WireModel):
     """Snapshot sent on WS connect: live session (null when none) + its edges."""
 
-    session: EdgingSession | None
+    session: EdgingSessionSummary | None
     edges: list[EdgingEdge]
 
 
@@ -375,7 +376,7 @@ class TrainingSessionMessage(ServerMessage):
     """Broadcast on any session state change (create/start/edge/end/update)."""
 
     type: Literal["training:session"] = "training:session"
-    payload: EdgingSession
+    payload: EdgingSessionSummary
 
 
 class TrainingSessionDeletedPayload(WireModel):
@@ -394,11 +395,24 @@ class TrainingEdgeMessage(ServerMessage):
     payload: EdgingEdge
 
 
+class TrainingEdgeDeletedPayload(WireModel):
+    id: str
+    session_id: str
+
+
+@server_message(audience=Permission.TRAINING_EDGING_READ)
+class TrainingEdgeDeletedMessage(ServerMessage):
+    """Broadcast after the Host undoes an edge."""
+
+    type: Literal["training:edge_deleted"] = "training:edge_deleted"
+    payload: TrainingEdgeDeletedPayload
+
+
 class TrainingOverviewPayload(WireModel):
     """Personal reply to `training:index`: module stats + recent sessions."""
 
     edging: TrainingOverviewStats
-    recent_sessions: list[EdgingSession]
+    recent_sessions: list[EdgingSessionSummary]
 
 
 @server_message(audience=Permission.TRAINING_EDGING_READ)
@@ -412,7 +426,7 @@ class TrainingSessionsMessage(ServerMessage):
     """Personal reply to `training:sessions`: every edging session."""
 
     type: Literal["training:sessions"] = "training:sessions"
-    payload: list[EdgingSession]
+    payload: list[EdgingSessionSummary]
 
 
 class TrainingSessionDetail(WireModel):
@@ -535,6 +549,8 @@ __all__ = [
     "TrainingSessionDeletedPayload",
     "TrainingSessionDeletedMessage",
     "TrainingEdgeMessage",
+    "TrainingEdgeDeletedPayload",
+    "TrainingEdgeDeletedMessage",
     "TrainingOverviewPayload",
     "TrainingOverviewMessage",
     "TrainingSessionsMessage",

@@ -22,7 +22,9 @@ from database.repositories.session_repo import SessionRepo
 from database.repositories.triggered_event_repo import TriggeredEventRepo
 from events.redaction import redact_payload, redact_triggered_rules
 from services.neutralize import neutralize_all
-from services.training import serialize_session as serialize_edging_session
+from services.training import (
+    serialize_session_summary as serialize_edging_session,
+)
 from store import Store
 from typings import Permission, SessionStatus, SessionType
 from utils import to_utc_iso

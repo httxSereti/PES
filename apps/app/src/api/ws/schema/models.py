@@ -393,17 +393,20 @@ class EdgingEdge(WireModel):
     recorded_at: datetime
 
 
-class EdgingSession(WireModel):
+class EdgingSessionSummary(WireModel):
+    """Public session state (broadcasts, lists, live snapshots).
+
+    Deliberately excludes private fields such as ``notes``; those are only
+    returned by the personal ``training:session_detail`` reply.
+    """
+
     id: str
     name: str
     goals: list[EdgingGoal]
     auto_stop_on_goal: bool
     initiator: str
-    initiator_user_id: str | None
-    created_by: str
     status: str
     rating: int | None
-    notes: str | None
     created_at: datetime
     started_at: datetime | None
     ended_at: datetime | None
@@ -414,6 +417,14 @@ class EdgingSession(WireModel):
     goals_met: bool
 
 
+class EdgingSession(EdgingSessionSummary):
+    """Full session document, including the private Host-authored fields."""
+
+    initiator_user_id: str | None
+    created_by: str
+    notes: str | None
+
+
 class TrainingOverviewStats(WireModel):
     """Aggregate stats for the whole Training module (see overview page)."""
 
@@ -422,6 +433,7 @@ class TrainingOverviewStats(WireModel):
     succeeded_sessions: int
     failed_sessions: int
     cancelled_sessions: int
+    interrupted_sessions: int
     total_edges: int
     total_success_edges: int
     total_failed_edges: int
@@ -487,7 +499,7 @@ class SessionHistoryDetail(WireModel):
 
     session: SessionHistoryItem
     # null when the requester lacks the matching read permission
-    edging_sessions: list[EdgingSession] | None
+    edging_sessions: list[EdgingSessionSummary] | None
     events: list[TriggeredEvent] | None
 
 
@@ -523,6 +535,7 @@ __all__ = [
     "IntegrationCatalogEntry",
     "EdgingGoal",
     "EdgingEdge",
+    "EdgingSessionSummary",
     "EdgingSession",
     "TrainingOverviewStats",
     "EdgingSessionStats",

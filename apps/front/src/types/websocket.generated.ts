@@ -2,7 +2,7 @@
 // by apps/app/scripts/generate_ws_types.py — DO NOT EDIT.
 // Regenerate with: pnpm codegen:ws
 
-export const WS_SCHEMA_VERSION = 15;
+export const WS_SCHEMA_VERSION = 16;
 
 export enum ActionType {
     PROFILE = "PROFILE",
@@ -203,6 +203,11 @@ export interface TrainingRecordEdgePayload {
     outcome: 'success' | 'fail';
 }
 
+export interface TrainingDeleteEdgePayload {
+    session_id: string;
+    edge_id: string;
+}
+
 export interface TrainingEndPayload {
     session_id: string;
     status: 'succeeded' | 'cancelled';
@@ -278,17 +283,14 @@ export interface TriggerRuleLabel {
     description: string | null;
 }
 
-export interface EdgingSession {
+export interface EdgingSessionSummary {
     id: string;
     name: string;
     goals: EdgingGoal[];
     auto_stop_on_goal: boolean;
     initiator: string;
-    initiator_user_id: string | null;
-    created_by: string;
     status: string;
     rating: number | null;
-    notes: string | null;
     created_at: string;
     started_at: string | null;
     ended_at: string | null;
@@ -567,7 +569,7 @@ export interface TriggerRuleDeletedPayload {
 }
 
 export interface TrainingInitPayload {
-    session: EdgingSession | null;
+    session: EdgingSessionSummary | null;
     edges: EdgingEdge[];
 }
 
@@ -575,9 +577,14 @@ export interface TrainingSessionDeletedPayload {
     id: string;
 }
 
+export interface TrainingEdgeDeletedPayload {
+    id: string;
+    session_id: string;
+}
+
 export interface TrainingOverviewPayload {
     edging: TrainingOverviewStats;
-    recent_sessions: EdgingSession[];
+    recent_sessions: EdgingSessionSummary[];
 }
 
 export interface TrainingOverviewStats {
@@ -586,6 +593,7 @@ export interface TrainingOverviewStats {
     succeeded_sessions: number;
     failed_sessions: number;
     cancelled_sessions: number;
+    interrupted_sessions: number;
     total_edges: number;
     total_success_edges: number;
     total_failed_edges: number;
@@ -638,7 +646,7 @@ export interface Session {
 
 export interface SessionHistoryDetail {
     session: SessionHistoryItem;
-    edging_sessions: EdgingSession[] | null;
+    edging_sessions: EdgingSessionSummary[] | null;
     events: TriggeredEvent[] | null;
 }
 
@@ -666,6 +674,12 @@ export interface RampStopPayload extends RampTarget {
 
 export interface TriggerRuleEditDraft extends TriggerRuleDraft {
     rule_id: string;
+}
+
+export interface EdgingSession extends EdgingSessionSummary {
+    initiator_user_id: string | null;
+    created_by: string;
+    notes: string | null;
 }
 
 export interface MotionSensor extends BaseSensor {
@@ -937,6 +951,12 @@ export interface TrainingRecordEdgeCommand {
     payload: TrainingRecordEdgePayload;
 }
 
+export interface TrainingDeleteEdgeCommand {
+    id?: string | null;
+    type: 'training:delete_edge';
+    payload: TrainingDeleteEdgePayload;
+}
+
 export interface TrainingEndCommand {
     id?: string | null;
     type: 'training:end';
@@ -1183,7 +1203,7 @@ export interface TrainingInitMessage {
 export interface TrainingSessionMessage {
     id?: string | null;
     type: 'training:session';
-    payload: EdgingSession;
+    payload: EdgingSessionSummary;
 }
 
 export interface TrainingSessionDeletedMessage {
@@ -1198,6 +1218,12 @@ export interface TrainingEdgeMessage {
     payload: EdgingEdge;
 }
 
+export interface TrainingEdgeDeletedMessage {
+    id?: string | null;
+    type: 'training:edge_deleted';
+    payload: TrainingEdgeDeletedPayload;
+}
+
 export interface TrainingOverviewMessage {
     id?: string | null;
     type: 'training:overview';
@@ -1207,7 +1233,7 @@ export interface TrainingOverviewMessage {
 export interface TrainingSessionsMessage {
     id?: string | null;
     type: 'training:sessions';
-    payload: EdgingSession[];
+    payload: EdgingSessionSummary[];
 }
 
 export interface TrainingSessionDetailMessage {
@@ -1288,6 +1314,7 @@ export type WebSocketClientMessage =
     | TrainingDeleteCommand
     | TrainingStartCommand
     | TrainingRecordEdgeCommand
+    | TrainingDeleteEdgeCommand
     | TrainingEndCommand
     | HardwareUpdateMk2btCommand
     | HardwareRescanMk2btCommand
@@ -1334,6 +1361,7 @@ export type WebSocketServerMessage =
     | TrainingSessionMessage
     | TrainingSessionDeletedMessage
     | TrainingEdgeMessage
+    | TrainingEdgeDeletedMessage
     | TrainingOverviewMessage
     | TrainingSessionsMessage
     | TrainingSessionDetailMessage

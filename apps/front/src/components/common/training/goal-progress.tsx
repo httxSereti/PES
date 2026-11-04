@@ -1,27 +1,38 @@
-import type { EdgingSession } from "@/types";
-import { formatDuration } from "@/lib/training";
+import { useEffect, useState } from "react";
+import type { EdgingSessionSummary } from "@/types";
+import { formatDuration, sessionElapsedSeconds } from "@/lib/training";
 import { Check, Clock, Flame } from "lucide-react";
 import { Progress } from "@pes/ui/components/progress";
 
 interface GoalProgressProps {
-  session: EdgingSession;
+  session: EdgingSessionSummary;
 }
 
 /** One card per goal: type icon, current/target value and a progress bar. */
 export function GoalProgress({ session }: GoalProgressProps) {
   const goals = session.goals ?? [];
+  const running = session.status === "running";
+  const [now, setNow] = useState(() => Date.now());
+
+  useEffect(() => {
+    if (!running) return;
+    setNow(Date.now());
+    const id = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(id);
+  }, [running, session.started_at]);
 
   if (goals.length === 0) {
     return <p className="text-xs text-muted-foreground">No goals defined.</p>;
   }
 
+  // Duration goals must tick locally: no server message is sent every second.
+  const elapsed = sessionElapsedSeconds(session, now) ?? 0;
+
   return (
     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
       {goals.map((goal, index) => {
         const isDuration = goal.type === "duration";
-        const current = isDuration
-          ? (session.duration_seconds ?? 0)
-          : session.edge_count;
+        const current = isDuration ? elapsed : session.edge_count;
         const target = goal.value;
         const pct = Math.min(
           100,

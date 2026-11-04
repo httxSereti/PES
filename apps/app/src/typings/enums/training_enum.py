@@ -9,6 +9,8 @@ class EdgingSessionStatus(Enum):
     SUCCEEDED = "succeeded"
     FAILED = "failed"
     CANCELLED = "cancelled"
+    # The process stopped while the session was running (crash/restart).
+    INTERRUPTED = "interrupted"
 
 
 class EdgingGoalType(Enum):
