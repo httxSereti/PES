@@ -413,6 +413,9 @@ class EdgingSessionSummary(WireModel):
     status: str
     rating: int | None
     app_session_id: str | None
+    program_id: str | None
+    program_step: int | None
+    mode: str
     paused_at: datetime | None
     total_paused_seconds: int
     created_at: datetime
@@ -432,6 +435,76 @@ class EdgingSession(EdgingSessionSummary):
     created_by: str
     participant_ids: list[str]
     notes: str | None
+
+
+class TrainingTemplate(WireModel):
+    id: str
+    name: str
+    goals: list[EdgingGoal]
+    auto_stop_on_goal: bool
+    mode: str
+    created_by: str
+    created_at: datetime
+
+
+class TrainingProgramStep(WireModel):
+    name: str
+    goals: list[EdgingGoal]
+    auto_stop_on_goal: bool
+
+
+class TrainingProgram(WireModel):
+    id: str
+    name: str
+    description: str | None
+    steps: list[TrainingProgramStep]
+    created_by: str
+    created_at: datetime
+    # Derived progress across every user's sessions in this program.
+    completed_steps: int
+    completed_step_indices: list[int]
+    step_count: int
+    next_step: int | None
+
+
+class TrainingTrendPoint(WireModel):
+    session_id: str
+    name: str
+    status: str
+    ended_at: datetime
+    duration_seconds: int | None
+    edges: int
+    edges_per_minute: float | None
+    rating: int | None
+
+
+class TrainingDailyPoint(WireModel):
+    date: str
+    sessions: int
+    edges: int
+    duration_seconds: int
+
+
+class TrainingIntervalBucket(WireModel):
+    label: str
+    count: int
+
+
+class TrainingRecords(WireModel):
+    longest_duration_seconds: int | None
+    most_edges: int | None
+    best_edges_per_minute: float | None
+    best_rating: int | None
+    current_streak_days: int
+    best_streak_days: int
+
+
+class TrainingAnalytics(WireModel):
+    overview: TrainingOverviewStats
+    trend: list[TrainingTrendPoint]
+    daily: list[TrainingDailyPoint]
+    interval_buckets: list[TrainingIntervalBucket]
+    records: TrainingRecords
 
 
 class TrainingOverviewStats(WireModel):
@@ -546,6 +619,14 @@ __all__ = [
     "EdgingEdge",
     "EdgingSessionSummary",
     "EdgingSession",
+    "TrainingTemplate",
+    "TrainingProgramStep",
+    "TrainingProgram",
+    "TrainingTrendPoint",
+    "TrainingDailyPoint",
+    "TrainingIntervalBucket",
+    "TrainingRecords",
+    "TrainingAnalytics",
     "TrainingOverviewStats",
     "EdgingSessionStats",
     "SessionUnitId",

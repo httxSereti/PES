@@ -32,6 +32,9 @@ class EdgingRepo:
         initiator_user_id: str | None,
         created_by: str,
         app_session_id: str | None = None,
+        program_id: str | None = None,
+        program_step: int | None = None,
+        mode: str = "manual",
         participant_ids: list[str] | None = None,
     ) -> EdgingSession:
         session = EdgingSession(
@@ -43,6 +46,9 @@ class EdgingRepo:
             initiator_user_id=initiator_user_id,
             created_by=created_by,
             app_session_id=app_session_id,
+            program_id=program_id,
+            program_step=program_step,
+            mode=mode,
             participant_ids=participant_ids or [],
         )
         async with self._db.session_maker() as db_session:

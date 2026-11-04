@@ -2,7 +2,7 @@
 // by apps/app/scripts/generate_ws_types.py — DO NOT EDIT.
 // Regenerate with: pnpm codegen:ws
 
-export const WS_SCHEMA_VERSION = 18;
+export const WS_SCHEMA_VERSION = 19;
 
 export enum ActionType {
     PROFILE = "PROFILE",
@@ -174,6 +174,7 @@ export interface TrainingSessionDraft {
     goals: TrainingGoalDraft[];
     auto_stop_on_goal: boolean;
     participant_ids?: string[] | null;
+    mode?: 'manual' | 'guided' | null;
 }
 
 export interface TrainingGoalDraft {
@@ -187,6 +188,7 @@ export interface TrainingUpdatePayload {
     goals?: TrainingGoalDraft[] | null;
     auto_stop_on_goal?: boolean | null;
     participant_ids?: string[] | null;
+    mode?: 'manual' | 'guided' | null;
     notes?: string | null;
     rating?: number | null;
 }
@@ -223,6 +225,39 @@ export interface TrainingDeleteEdgePayload {
 export interface TrainingEndPayload {
     session_id: string;
     status: 'succeeded' | 'cancelled';
+}
+
+export interface TrainingTemplateSavePayload {
+    template_id?: string | null;
+    name: string;
+    goals: TrainingGoalDraft[];
+    auto_stop_on_goal: boolean;
+    mode?: 'manual' | 'guided' | null;
+}
+
+export interface TrainingTemplateDeletePayload {
+    template_id: string;
+}
+
+export interface TrainingProgramSavePayload {
+    program_id?: string | null;
+    name: string;
+    description?: string | null;
+    steps: TrainingProgramStepDraft[];
+}
+
+export interface TrainingProgramStepDraft {
+    name: string;
+    goals: TrainingGoalDraft[];
+    auto_stop_on_goal: boolean;
+}
+
+export interface TrainingProgramDeletePayload {
+    program_id: string;
+}
+
+export interface TrainingProgramStartPayload {
+    program_id: string;
 }
 
 export interface HardwareMk2btUpdatePayload {
@@ -304,6 +339,9 @@ export interface EdgingSessionSummary {
     status: string;
     rating: number | null;
     app_session_id: string | null;
+    program_id: string | null;
+    program_step: number | null;
+    mode: string;
     paused_at: string | null;
     total_paused_seconds: number;
     created_at: string;
@@ -651,6 +689,75 @@ export interface EdgingSessionStats {
     edges_previous: number | null;
     edges_average: number | null;
     difficulty_counts: Record<string, number>;
+}
+
+export interface TrainingTemplate {
+    id: string;
+    name: string;
+    goals: EdgingGoal[];
+    auto_stop_on_goal: boolean;
+    mode: string;
+    created_by: string;
+    created_at: string;
+}
+
+export interface TrainingProgram {
+    id: string;
+    name: string;
+    description: string | null;
+    steps: TrainingProgramStep[];
+    created_by: string;
+    created_at: string;
+    completed_steps: number;
+    completed_step_indices: number[];
+    step_count: number;
+    next_step: number | null;
+}
+
+export interface TrainingProgramStep {
+    name: string;
+    goals: EdgingGoal[];
+    auto_stop_on_goal: boolean;
+}
+
+export interface TrainingAnalytics {
+    overview: TrainingOverviewStats;
+    trend: TrainingTrendPoint[];
+    daily: TrainingDailyPoint[];
+    interval_buckets: TrainingIntervalBucket[];
+    records: TrainingRecords;
+}
+
+export interface TrainingTrendPoint {
+    session_id: string;
+    name: string;
+    status: string;
+    ended_at: string;
+    duration_seconds: number | null;
+    edges: number;
+    edges_per_minute: number | null;
+    rating: number | null;
+}
+
+export interface TrainingDailyPoint {
+    date: string;
+    sessions: number;
+    edges: number;
+    duration_seconds: number;
+}
+
+export interface TrainingIntervalBucket {
+    label: string;
+    count: number;
+}
+
+export interface TrainingRecords {
+    longest_duration_seconds: number | null;
+    most_edges: number | null;
+    best_edges_per_minute: number | null;
+    best_rating: number | null;
+    current_streak_days: number;
+    best_streak_days: number;
 }
 
 export interface SessionInitPayload {
@@ -1004,6 +1111,54 @@ export interface TrainingEndCommand {
     payload: TrainingEndPayload;
 }
 
+export interface TrainingTemplatesCommand {
+    id?: string | null;
+    type: 'training:templates';
+    payload?: Record<string, unknown> | null;
+}
+
+export interface TrainingTemplateSaveCommand {
+    id?: string | null;
+    type: 'training:template_save';
+    payload: TrainingTemplateSavePayload;
+}
+
+export interface TrainingTemplateDeleteCommand {
+    id?: string | null;
+    type: 'training:template_delete';
+    payload: TrainingTemplateDeletePayload;
+}
+
+export interface TrainingProgramsCommand {
+    id?: string | null;
+    type: 'training:programs';
+    payload?: Record<string, unknown> | null;
+}
+
+export interface TrainingProgramSaveCommand {
+    id?: string | null;
+    type: 'training:program_save';
+    payload: TrainingProgramSavePayload;
+}
+
+export interface TrainingProgramDeleteCommand {
+    id?: string | null;
+    type: 'training:program_delete';
+    payload: TrainingProgramDeletePayload;
+}
+
+export interface TrainingProgramStartCommand {
+    id?: string | null;
+    type: 'training:program_start';
+    payload: TrainingProgramStartPayload;
+}
+
+export interface TrainingAnalyticsCommand {
+    id?: string | null;
+    type: 'training:analytics';
+    payload?: Record<string, unknown> | null;
+}
+
 export interface HardwareUpdateMk2btCommand {
     id?: string | null;
     type: 'hardware:update_mk2bt';
@@ -1289,6 +1444,24 @@ export interface TrainingSessionDetailMessage {
     payload: TrainingSessionDetail;
 }
 
+export interface TrainingTemplatesMessage {
+    id?: string | null;
+    type: 'training:templates';
+    payload: TrainingTemplate[];
+}
+
+export interface TrainingProgramsMessage {
+    id?: string | null;
+    type: 'training:programs';
+    payload: TrainingProgram[];
+}
+
+export interface TrainingAnalyticsMessage {
+    id?: string | null;
+    type: 'training:analytics';
+    payload: TrainingAnalytics;
+}
+
 export interface SessionInitMessage {
     id?: string | null;
     type: 'session:init';
@@ -1365,6 +1538,14 @@ export type WebSocketClientMessage =
     | TrainingResumeCommand
     | TrainingDeleteEdgeCommand
     | TrainingEndCommand
+    | TrainingTemplatesCommand
+    | TrainingTemplateSaveCommand
+    | TrainingTemplateDeleteCommand
+    | TrainingProgramsCommand
+    | TrainingProgramSaveCommand
+    | TrainingProgramDeleteCommand
+    | TrainingProgramStartCommand
+    | TrainingAnalyticsCommand
     | HardwareUpdateMk2btCommand
     | HardwareRescanMk2btCommand
     | HardwareUpdateBtSensorsCommand
@@ -1415,6 +1596,9 @@ export type WebSocketServerMessage =
     | TrainingOverviewMessage
     | TrainingSessionsMessage
     | TrainingSessionDetailMessage
+    | TrainingTemplatesMessage
+    | TrainingProgramsMessage
+    | TrainingAnalyticsMessage
     | SessionInitMessage
     | SessionUpdateMessage
     | SessionsHistoryMessage

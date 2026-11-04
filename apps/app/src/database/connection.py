@@ -80,6 +80,9 @@ class Database:
             if edging_session_columns:
                 edging_session_migrations = {
                     "app_session_id": "VARCHAR",
+                    "program_id": "VARCHAR",
+                    "program_step": "INTEGER",
+                    "mode": "VARCHAR DEFAULT 'manual'",
                     "participant_ids": "JSON",
                     "paused_at": "DATETIME",
                     "total_paused_seconds": "INTEGER DEFAULT 0",
@@ -102,6 +105,26 @@ class Database:
                         "ON training_edging_sessions (app_session_id)"
                     )
                 )
+                await conn.execute(
+                    text(
+                        "CREATE INDEX IF NOT EXISTS "
+                        "ix_training_edging_sessions_program_id "
+                        "ON training_edging_sessions (program_id)"
+                    )
+                )
+
+            result = await conn.execute(
+                text("PRAGMA table_info(training_edging_templates)")
+            )
+            template_columns = {row[1] for row in result.fetchall()}
+            if template_columns and "mode" not in template_columns:
+                await conn.execute(
+                    text(
+                        "ALTER TABLE training_edging_templates "
+                        "ADD COLUMN mode VARCHAR DEFAULT 'manual'"
+                    )
+                )
+                logger.info("[Database] Added training_edging_templates.mode")
 
             result = await conn.execute(
                 text("PRAGMA table_info(training_edging_edges)")

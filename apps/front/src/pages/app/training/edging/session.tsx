@@ -31,11 +31,13 @@ import { Input } from "@pes/ui/components/input";
 import { Textarea } from "@pes/ui/components/textarea";
 import {
   Ban,
+  Copy,
   Ellipsis,
   Flame,
   Pause,
   Pencil,
   Play,
+  Save,
   Trash2,
   Undo2,
   X,
@@ -50,6 +52,7 @@ import { formatDuration } from "@/lib/training";
 import { TrainingStatusBadge } from "@/components/common/training/training-status-badge";
 import { TrainingTimer } from "@/components/common/training/training-timer";
 import { GoalProgress } from "@/components/common/training/goal-progress";
+import { GuidedPhase } from "@/components/common/training/guided-phase";
 import { GoalsReachedBanner } from "@/components/common/training/goals-reached-banner";
 import { EdgeTimeline } from "@/components/common/training/edge-timeline";
 import { EdgeChart } from "@/components/common/training/edge-chart";
@@ -120,6 +123,8 @@ export default function EdgingSessionPage() {
   const [edgeNote, setEdgeNote] = useState("");
   const [editOpen, setEditOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
+  const [templateOpen, setTemplateOpen] = useState(false);
+  const [templateName, setTemplateName] = useState("");
 
   const load = useCallback(async () => {
     if (!id) return;
@@ -296,6 +301,48 @@ export default function EdgingSessionPage() {
     setDeleteOpen(false);
   }
 
+  async function handleDuplicate() {
+    try {
+      const result = await sendCommand("training:create", {
+        name: `${session.name} (copy)`.slice(0, 120),
+        goals: session.goals.map((goal) => ({
+          type: goal.type as "duration" | "edges",
+          value: goal.value,
+        })),
+        auto_stop_on_goal: session.auto_stop_on_goal,
+        participant_ids: session.participant_ids ?? [],
+        mode: session.mode === "guided" ? "guided" : "manual",
+      });
+      if (result.status !== "ok" || !result.session) {
+        setError(result.message ?? "Failed to duplicate the session");
+        return;
+      }
+      toast.success("Session duplicated", { position: "bottom-right" });
+      navigate(`/app/training/edging/${result.session.id}`);
+    } catch (err) {
+      setError(
+        err instanceof Error ? err.message : "Failed to duplicate the session",
+      );
+    }
+  }
+
+  async function handleSaveTemplate() {
+    const saved = await run(
+      () =>
+        sendCommand("training:template_save", {
+          name: templateName.trim() || session.name,
+          goals: session.goals.map((goal) => ({
+            type: goal.type as "duration" | "edges",
+            value: goal.value,
+          })),
+          auto_stop_on_goal: session.auto_stop_on_goal,
+          mode: session.mode === "guided" ? "guided" : "manual",
+        }),
+      "Template saved",
+    );
+    if (saved) setTemplateOpen(false);
+  }
+
   return (
     <div className="space-y-4 px-4 md:px-5">
       {error && <p className="text-sm text-destructive">{error}</p>}
@@ -336,9 +383,20 @@ export default function EdgingSessionPage() {
                 {participantCount === 1 ? " participant" : " participants"}
               </>
             )}
+            {session.program_id && (
+              <>
+                {" · "}
+                <Link
+                  to="/app/training/programs"
+                  className="text-violet-600 hover:underline dark:text-violet-400"
+                >
+                  program step {(session.program_step ?? 0) + 1}
+                </Link>
+              </>
+            )}
           </p>
         </div>
-        {((configured && canManage) || (isHost && !running)) && (
+        {(canManage || (isHost && !running)) && (
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button variant="outline" size="icon-sm">
@@ -352,6 +410,23 @@ export default function EdgingSessionPage() {
                   <Pencil size={13} />
                   Edit session
                 </DropdownMenuItem>
+              )}
+              {canManage && (
+                <>
+                  <DropdownMenuItem
+                    onSelect={() => {
+                      setTemplateName(session.name);
+                      setTemplateOpen(true);
+                    }}
+                  >
+                    <Save size={13} />
+                    Save as template
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onSelect={() => void handleDuplicate()}>
+                    <Copy size={13} />
+                    Duplicate session
+                  </DropdownMenuItem>
+                </>
               )}
               {isHost && !running && (
                 <DropdownMenuItem
@@ -369,6 +444,7 @@ export default function EdgingSessionPage() {
 
       {/* Goals */}
       <GoalProgress session={session} />
+      <GuidedPhase session={session} />
 
       {/* Live control panel */}
       {running && (
@@ -629,6 +705,7 @@ export default function EdgingSessionPage() {
                 value: goal.value,
               })),
               auto_stop_on_goal: session.auto_stop_on_goal,
+              mode: session.mode === "guided" ? "guided" : "manual",
             }}
             submitLabel="Save changes"
             onSubmit={async (fields) => {
@@ -644,6 +721,40 @@ export default function EdgingSessionPage() {
               await load();
             }}
           />
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={templateOpen} onOpenChange={setTemplateOpen}>
+        <DialogContent className="md:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Save as template</DialogTitle>
+            <DialogDescription>
+              Reuse these goals and auto-stop settings for future sessions.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3">
+            <Input
+              value={templateName}
+              onChange={(event) => setTemplateName(event.target.value)}
+              placeholder="Template name"
+              maxLength={120}
+            />
+            <div className="flex justify-end gap-2">
+              <Button
+                variant="outline"
+                onClick={() => setTemplateOpen(false)}
+              >
+                Cancel
+              </Button>
+              <Button
+                disabled={busy || !templateName.trim()}
+                onClick={() => void handleSaveTemplate()}
+              >
+                <Save size={14} />
+                Save template
+              </Button>
+            </div>
+          </div>
         </DialogContent>
       </Dialog>
 

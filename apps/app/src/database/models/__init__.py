@@ -7,6 +7,8 @@ from .user import UserModel
 from .magic_token import MagicTokenModel
 from .edging_session import EdgingSession
 from .edging_edge import EdgingEdge
+from .edging_template import EdgingTemplate
+from .edging_program import EdgingProgram
 from .app_session import AppSession
 
 __all__ = [
@@ -19,5 +21,7 @@ __all__ = [
     "MagicTokenModel",
     "EdgingSession",
     "EdgingEdge",
+    "EdgingTemplate",
+    "EdgingProgram",
     "AppSession",
 ]

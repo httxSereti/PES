@@ -33,7 +33,10 @@ from .models import (
     SessionHistoryDetail,
     SessionHistoryItem,
     StatusMessage,
+    TrainingAnalytics,
     TrainingOverviewStats,
+    TrainingProgram,
+    TrainingTemplate,
     TriggeredEvent,
     TriggerRule,
     TriggerRuleLabel,
@@ -466,6 +469,30 @@ class TrainingSessionDetailMessage(ServerMessage):
     payload: TrainingSessionDetail
 
 
+@server_message(audience=Permission.TRAINING_EDGING_READ)
+class TrainingTemplatesMessage(ServerMessage):
+    """Personal reply to `training:templates`."""
+
+    type: Literal["training:templates"] = "training:templates"
+    payload: list[TrainingTemplate]
+
+
+@server_message(audience=Permission.TRAINING_EDGING_READ)
+class TrainingProgramsMessage(ServerMessage):
+    """Personal reply to `training:programs`."""
+
+    type: Literal["training:programs"] = "training:programs"
+    payload: list[TrainingProgram]
+
+
+@server_message(audience=Permission.TRAINING_EDGING_READ)
+class TrainingAnalyticsMessage(ServerMessage):
+    """Personal reply to `training:analytics`."""
+
+    type: Literal["training:analytics"] = "training:analytics"
+    payload: TrainingAnalytics
+
+
 # ─────────────────────────────── Session ───────────────────────────────
 
 
@@ -581,6 +608,9 @@ __all__ = [
     "TrainingSessionsMessage",
     "TrainingSessionDetail",
     "TrainingSessionDetailMessage",
+    "TrainingTemplatesMessage",
+    "TrainingProgramsMessage",
+    "TrainingAnalyticsMessage",
     "SessionInitPayload",
     "SessionInitMessage",
     "SessionUpdateMessage",

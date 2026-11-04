@@ -21,6 +21,7 @@ async def handle_training_update(
             goals=[g.model_dump() for g in payload.goals] if payload.goals is not None else None,
             auto_stop_on_goal=payload.auto_stop_on_goal,
             participant_ids=payload.participant_ids,
+            mode=payload.mode,
             notes=payload.notes,
             rating=payload.rating,
         )

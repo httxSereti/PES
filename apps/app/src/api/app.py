@@ -96,6 +96,8 @@ async def lifespan(app: FastAPI):
     from database.models.user import UserModel  # noqa: F401
     from database.models.edging_session import EdgingSession  # noqa: F401
     from database.models.edging_edge import EdgingEdge  # noqa: F401
+    from database.models.edging_template import EdgingTemplate  # noqa: F401
+    from database.models.edging_program import EdgingProgram  # noqa: F401
     from database.models.app_session import AppSession  # noqa: F401
 
     async with db._engine.begin() as conn:

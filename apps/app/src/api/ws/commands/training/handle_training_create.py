@@ -20,6 +20,7 @@ async def handle_training_create(
             created_by=ctx.user.id,
             app_session_id=active_app_session_id(),
             participant_ids=msg.payload.participant_ids,
+            mode=msg.payload.mode,
         )
     except ValueError as e:
         return CommandResult(status="error", message=str(e))

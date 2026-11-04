@@ -7,15 +7,17 @@ WebSocket broadcasts.
 from __future__ import annotations
 
 import asyncio
-from datetime import datetime
+from collections import Counter
+from datetime import date, datetime, timedelta
 from typing import Optional
 
 import structlog
 from sqlalchemy.exc import IntegrityError
 
 from api.ws.websocket_notifier import ws_notifier
-from database.models import EdgingEdge, EdgingSession
+from database.models import EdgingEdge, EdgingProgram, EdgingSession, EdgingTemplate
 from database.repositories.edging_repo import EdgingRepo
+from database.repositories.training_repo import TrainingRepo
 from events.enums import TriggerableEvent
 from typings import EdgeDifficulty, EdgeOutcome, EdgingGoalType, Permission
 from utils import to_utc_iso
@@ -126,6 +128,7 @@ def _training_event_data(session: EdgingSession, **extra) -> dict:
         "duration_seconds": session_elapsed_seconds(session),
         "goals_met": goals_met(session),
         "auto_stop_on_goal": session.auto_stop_on_goal,
+        "mode": session.mode or "manual",
         **extra,
     }
 
@@ -307,6 +310,9 @@ def serialize_session_summary(
         "status": session.status,
         "rating": session.rating,
         "app_session_id": session.app_session_id,
+        "program_id": session.program_id,
+        "program_step": session.program_step,
+        "mode": session.mode or "manual",
         "paused_at": to_utc_iso(session.paused_at),
         "total_paused_seconds": session.total_paused_seconds or 0,
         "created_at": to_utc_iso(session.created_at),
@@ -612,11 +618,16 @@ async def create_edging_session(
     created_by: str,
     app_session_id: str | None = None,
     participant_ids: list[str] | None = None,
+    mode: str | None = None,
+    program_id: str | None = None,
+    program_step: int | None = None,
     repo: Optional[EdgingRepo] = None,
 ) -> dict:
     """Create (configure) a session. Hosts create for themselves; members
     create a request the Host can start later."""
     repo = repo or EdgingRepo()
+    if mode is not None and mode not in {"manual", "guided"}:
+        raise ValueError("Mode must be 'manual' or 'guided'")
     session = await repo.create_session(
         name=name,
         goals=_validate_goals(goals),
@@ -626,6 +637,9 @@ async def create_edging_session(
         created_by=created_by,
         app_session_id=app_session_id,
         participant_ids=_validate_participants(participant_ids, created_by),
+        mode=mode or "manual",
+        program_id=program_id,
+        program_step=program_step,
     )
     broadcast_session(session)
     return serialize_session(session)
@@ -640,6 +654,7 @@ async def update_edging_session(
     goals: Optional[list[dict]] = None,
     auto_stop_on_goal: Optional[bool] = None,
     participant_ids: Optional[list[str]] = None,
+    mode: Optional[str] = None,
     notes: Optional[str] = None,
     rating: Optional[int] = None,
     repo: Optional[EdgingRepo] = None,
@@ -658,6 +673,7 @@ async def update_edging_session(
         or goals is not None
         or auto_stop_on_goal is not None
         or participant_ids is not None
+        or mode is not None
     ):
         if session.status != "configured":
             raise ValueError(
@@ -673,6 +689,10 @@ async def update_edging_session(
             fields["participant_ids"] = _validate_participants(
                 participant_ids, session.created_by
             )
+        if mode is not None:
+            if mode not in {"manual", "guided"}:
+                raise ValueError("Mode must be 'manual' or 'guided'")
+            fields["mode"] = mode
 
     if notes is not None or rating is not None:
         if not is_host:
@@ -1199,3 +1219,368 @@ async def end_sessions_for_app_session(
             count=ended,
         )
     return ended
+
+
+# ───────── Templates, programs and analytics ─────────
+
+
+def serialize_template(template: EdgingTemplate) -> dict:
+    return {
+        "id": template.id,
+        "name": template.name,
+        "goals": [dict(goal) for goal in template.goals or []],
+        "auto_stop_on_goal": template.auto_stop_on_goal,
+        "mode": template.mode or "manual",
+        "created_by": template.created_by,
+        "created_at": to_utc_iso(template.created_at),
+    }
+
+
+def _validate_program_steps(steps: list[dict]) -> list[dict]:
+    if not steps:
+        raise ValueError("A program needs at least one step")
+    normalized: list[dict] = []
+    for step in steps:
+        name = str(step.get("name", "")).strip()
+        if not name:
+            raise ValueError("Every program step needs a name")
+        goals = _validate_goals(list(step.get("goals") or []))
+        if not goals:
+            raise ValueError("Every program step needs at least one goal")
+        normalized.append(
+            {
+                "name": name,
+                "goals": goals,
+                "auto_stop_on_goal": bool(step.get("auto_stop_on_goal", False)),
+            }
+        )
+    return normalized
+
+
+def serialize_program(
+    program: EdgingProgram, sessions: list[EdgingSession]
+) -> dict:
+    steps = list(program.steps or [])
+    completed = {
+        session.program_step
+        for session in sessions
+        if session.program_id == program.id
+        and session.program_step is not None
+        and session.status == "succeeded"
+    }
+    next_step = next(
+        (index for index in range(len(steps)) if index not in completed),
+        None,
+    )
+    return {
+        "id": program.id,
+        "name": program.name,
+        "description": program.description,
+        "steps": [
+            {
+                "name": step.get("name", ""),
+                "goals": [dict(goal) for goal in step.get("goals", [])],
+                "auto_stop_on_goal": bool(step.get("auto_stop_on_goal", False)),
+            }
+            for step in steps
+        ],
+        "created_by": program.created_by,
+        "created_at": to_utc_iso(program.created_at),
+        "completed_steps": len(completed),
+        "completed_step_indices": sorted(completed),
+        "step_count": len(steps),
+        "next_step": next_step,
+    }
+
+
+async def list_templates(
+    training_repo: Optional[TrainingRepo] = None,
+) -> list[dict]:
+    repo = training_repo or TrainingRepo()
+    return [serialize_template(template) for template in await repo.list_templates()]
+
+
+async def save_template(
+    *,
+    template_id: str | None,
+    name: str,
+    goals: list[dict],
+    auto_stop_on_goal: bool,
+    created_by: str,
+    mode: str | None = None,
+    training_repo: Optional[TrainingRepo] = None,
+) -> dict:
+    repo = training_repo or TrainingRepo()
+    normalized_goals = _validate_goals(goals)
+    normalized_mode = mode or "manual"
+    if normalized_mode not in {"manual", "guided"}:
+        raise ValueError("Mode must be 'manual' or 'guided'")
+    if template_id is None:
+        template = await repo.create_template(
+            name=name,
+            goals=normalized_goals,
+            auto_stop_on_goal=auto_stop_on_goal,
+            created_by=created_by,
+            mode=normalized_mode,
+        )
+    else:
+        template = await repo.update_template(
+            template_id,
+            name=name,
+            goals=normalized_goals,
+            auto_stop_on_goal=auto_stop_on_goal,
+            mode=normalized_mode,
+        )
+        if template is None:
+            raise ValueError("Template not found")
+    return serialize_template(template)
+
+
+async def delete_template(
+    template_id: str, training_repo: Optional[TrainingRepo] = None
+) -> bool:
+    repo = training_repo or TrainingRepo()
+    if not await repo.delete_template(template_id):
+        raise ValueError("Template not found")
+    return True
+
+
+async def list_programs(
+    training_repo: Optional[TrainingRepo] = None,
+    edging_repo: Optional[EdgingRepo] = None,
+) -> list[dict]:
+    repo = training_repo or TrainingRepo()
+    sessions = await (edging_repo or EdgingRepo()).list_sessions(limit=1000)
+    return [
+        serialize_program(program, sessions)
+        for program in await repo.list_programs()
+    ]
+
+
+async def save_program(
+    *,
+    program_id: str | None,
+    name: str,
+    description: str | None,
+    steps: list[dict],
+    created_by: str,
+    training_repo: Optional[TrainingRepo] = None,
+    edging_repo: Optional[EdgingRepo] = None,
+) -> dict:
+    repo = training_repo or TrainingRepo()
+    normalized_steps = _validate_program_steps(steps)
+    if program_id is None:
+        program = await repo.create_program(
+            name=name,
+            description=description,
+            steps=normalized_steps,
+            created_by=created_by,
+        )
+    else:
+        program = await repo.update_program(
+            program_id,
+            name=name,
+            description=description,
+            steps=normalized_steps,
+        )
+        if program is None:
+            raise ValueError("Program not found")
+    sessions = await (edging_repo or EdgingRepo()).list_sessions(limit=1000)
+    return serialize_program(program, sessions)
+
+
+async def delete_program(
+    program_id: str, training_repo: Optional[TrainingRepo] = None
+) -> bool:
+    repo = training_repo or TrainingRepo()
+    if not await repo.delete_program(program_id):
+        raise ValueError("Program not found")
+    return True
+
+
+async def start_program(
+    program_id: str,
+    *,
+    created_by: str,
+    is_host: bool,
+    app_session_id: str | None = None,
+    training_repo: Optional[TrainingRepo] = None,
+    edging_repo: Optional[EdgingRepo] = None,
+) -> dict:
+    repo = training_repo or TrainingRepo()
+    edging = edging_repo or EdgingRepo()
+    program = await repo.get_program(program_id)
+    if program is None:
+        raise ValueError("Program not found")
+
+    sessions = await edging.list_sessions(limit=1000)
+    completed = {
+        session.program_step
+        for session in sessions
+        if session.program_id == program.id
+        and session.program_step is not None
+        and session.status == "succeeded"
+    }
+    step_index = next(
+        (
+            index
+            for index in range(len(program.steps or []))
+            if index not in completed
+        ),
+        None,
+    )
+    if step_index is None:
+        raise ValueError("Program complete — every step is succeeded")
+    step = program.steps[step_index]
+    name = f"{program.name}: {step.get('name', f'Step {step_index + 1}')}"[:120]
+
+    return await create_edging_session(
+        name=name,
+        goals=list(step.get("goals") or []),
+        auto_stop_on_goal=bool(step.get("auto_stop_on_goal", False)),
+        is_host=is_host,
+        created_by=created_by,
+        app_session_id=app_session_id,
+        program_id=program.id,
+        program_step=step_index,
+        mode="manual",
+        repo=edging,
+    )
+
+
+def _interval_bucket(seconds: int) -> str:
+    if seconds < 30:
+        return "<30s"
+    if seconds < 60:
+        return "30-60s"
+    if seconds < 120:
+        return "1-2m"
+    if seconds < 300:
+        return "2-5m"
+    if seconds < 600:
+        return "5-10m"
+    return "10m+"
+
+
+_INTERVAL_BUCKET_ORDER = ["<30s", "30-60s", "1-2m", "2-5m", "5-10m", "10m+"]
+
+
+def _streak_stats(days: set[date]) -> tuple[int, int]:
+    if not days:
+        return 0, 0
+    ordered = sorted(days)
+    best = 1
+    current = 1
+    for previous, day in zip(ordered, ordered[1:]):
+        if (day - previous).days == 1:
+            current += 1
+            best = max(best, current)
+        else:
+            current = 1
+
+    anchor = datetime.utcnow().date()
+    if anchor not in days:
+        anchor -= timedelta(days=1)
+    current_streak = 0
+    while anchor in days:
+        current_streak += 1
+        anchor -= timedelta(days=1)
+    return current_streak, best
+
+
+async def get_analytics(
+    *,
+    viewer_id: str | None = None,
+    is_host: bool = False,
+    repo: Optional[EdgingRepo] = None,
+) -> dict:
+    repo = repo or EdgingRepo()
+    sessions = [
+        session
+        for session in await repo.list_sessions(limit=1000)
+        if can_access_session(session, viewer_id, is_host)
+    ]
+    ended = [s for s in sessions if s.status in _ENDED_STATUSES]
+
+    trend_sessions = sorted(
+        ended,
+        key=lambda s: s.ended_at or s.started_at or s.created_at,
+    )[-50:]
+    trend = [
+        {
+            "session_id": session.id,
+            "name": session.name,
+            "status": session.status,
+            "ended_at": to_utc_iso(
+                session.ended_at or session.started_at or session.created_at
+            ),
+            "duration_seconds": session_elapsed_seconds(session),
+            "edges": success_edge_count(session),
+            "edges_per_minute": _session_pace(session),
+            "rating": session.rating,
+        }
+        for session in trend_sessions
+    ]
+
+    today = datetime.utcnow().date()
+    daily_map: dict[date, dict] = {}
+    for session in ended:
+        moment = session.ended_at or session.started_at or session.created_at
+        day = moment.date()
+        if day < today - timedelta(days=29):
+            continue
+        entry = daily_map.setdefault(
+            day, {"sessions": 0, "edges": 0, "duration_seconds": 0}
+        )
+        entry["sessions"] += 1
+        entry["edges"] += success_edge_count(session)
+        entry["duration_seconds"] += session_elapsed_seconds(session) or 0
+
+    daily = []
+    for offset in range(29, -1, -1):
+        day = today - timedelta(days=offset)
+        entry = daily_map.get(
+            day, {"sessions": 0, "edges": 0, "duration_seconds": 0}
+        )
+        daily.append({"date": day.isoformat(), **entry})
+
+    interval_counts: Counter[str] = Counter()
+    for session in sessions:
+        for edge in session.edges:
+            if edge.interval_seconds is not None:
+                interval_counts[_interval_bucket(edge.interval_seconds)] += 1
+    interval_buckets = [
+        {"label": label, "count": interval_counts.get(label, 0)}
+        for label in _INTERVAL_BUCKET_ORDER
+    ]
+
+    durations = [
+        duration
+        for session in ended
+        if (duration := session_elapsed_seconds(session)) is not None
+    ]
+    edge_counts = [success_edge_count(session) for session in ended]
+    paces = [
+        pace for session in ended if (pace := _session_pace(session)) is not None
+    ]
+    ratings = [session.rating for session in ended if session.rating is not None]
+    days = {
+        (session.ended_at or session.started_at or session.created_at).date()
+        for session in ended
+    }
+    current_streak, best_streak = _streak_stats(days)
+
+    return {
+        "overview": compute_overview_stats(sessions),
+        "trend": trend,
+        "daily": daily,
+        "interval_buckets": interval_buckets,
+        "records": {
+            "longest_duration_seconds": max(durations) if durations else None,
+            "most_edges": max(edge_counts) if edge_counts else None,
+            "best_edges_per_minute": max(paces) if paces else None,
+            "best_rating": max(ratings) if ratings else None,
+            "current_streak_days": current_streak,
+            "best_streak_days": best_streak,
+        },
+    }

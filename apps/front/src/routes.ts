@@ -28,6 +28,8 @@ export default [
         route("training", "components/layout/training-layout.tsx", [
             index("pages/app/training/overview.tsx"),
             route("live", "pages/app/training/live.tsx"),
+            route("programs", "pages/app/training/programs.tsx"),
+            route("analytics", "pages/app/training/analytics.tsx"),
             route("edging", "pages/app/training/edging/index.tsx"),
             route("edging/new", "pages/app/training/edging/new.tsx"),
             route("edging/:id", "pages/app/training/edging/session.tsx"),

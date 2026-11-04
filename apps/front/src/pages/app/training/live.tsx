@@ -12,6 +12,7 @@ import { ArrowRight, Flame, Plus, Radio } from "lucide-react";
 import { useAppSelector } from "@/store/hooks";
 import { hasPermission } from "@/lib/permissions";
 import { GoalProgress } from "@/components/common/training/goal-progress";
+import { GuidedPhase } from "@/components/common/training/guided-phase";
 import { TrainingTimer } from "@/components/common/training/training-timer";
 import { EdgeTimeline } from "@/components/common/training/edge-timeline";
 import { TrainingStatusBadge } from "@/components/common/training/training-status-badge";
@@ -96,6 +97,7 @@ export default function TrainingLivePage() {
             </span>
           </div>
           <GoalProgress session={liveSession} />
+          <GuidedPhase session={liveSession} />
         </CardContent>
       </Card>
 

@@ -1,7 +1,14 @@
 import { useAppSelector } from "@/store/hooks";
 import { Link, Navigate, NavLink, Outlet } from "react-router";
 import { Button } from "@pes/ui/components/button";
-import { Flame, LayoutDashboard, Plus, Radio } from "lucide-react";
+import {
+  Flame,
+  LayoutDashboard,
+  ListChecks,
+  Plus,
+  Radio,
+  TrendingUp,
+} from "lucide-react";
 
 import { hasPermission } from "@/lib/permissions";
 import { Permission } from "@/types";
@@ -10,6 +17,8 @@ const TABS = [
   { to: "/app/training", label: "Overview", icon: LayoutDashboard, end: true },
   { to: "/app/training/live", label: "Live", icon: Radio, end: false },
   { to: "/app/training/edging", label: "Edging", icon: Flame, end: false },
+  { to: "/app/training/programs", label: "Programs", icon: ListChecks, end: false },
+  { to: "/app/training/analytics", label: "Analytics", icon: TrendingUp, end: false },
 ] as const;
 
 export default function TrainingLayout() {
@@ -63,7 +72,7 @@ export default function TrainingLayout() {
       </div>
 
       {/* Tab bar */}
-      <div className="px-5 border-b border-border mt-4 overflow-hidden">
+      <div className="px-5 border-b border-border mt-4 overflow-x-auto">
         <nav
           className="flex items-center gap-1 min-w-max"
           aria-label="Training navigation"

@@ -444,6 +444,7 @@ class TrainingSessionDraft(WireModel):
     goals: list[TrainingGoalDraft] = Field(min_length=1, max_length=10)
     auto_stop_on_goal: bool = False
     participant_ids: list[str] | None = Field(default=None, max_length=20)
+    mode: Literal["manual", "guided"] | None = None
 
 
 class TrainingCreateCommand(ClientMessage):
@@ -457,6 +458,7 @@ class TrainingUpdatePayload(WireModel):
     goals: list[TrainingGoalDraft] | None = None
     auto_stop_on_goal: bool | None = None
     participant_ids: list[str] | None = Field(default=None, max_length=20)
+    mode: Literal["manual", "guided"] | None = None
     notes: str | None = None
     rating: int | None = Field(default=None, ge=1, le=5)
 
@@ -534,6 +536,88 @@ class TrainingEndPayload(WireModel):
 class TrainingEndCommand(ClientMessage):
     type: Literal["training:end"] = "training:end"
     payload: TrainingEndPayload
+
+
+# ── Templates ──
+
+
+class TrainingTemplatesCommand(ClientMessage):
+    type: Literal["training:templates"] = "training:templates"
+    payload: dict[str, Any] | None = None
+
+
+class TrainingTemplateSavePayload(WireModel):
+    template_id: str | None = None
+    name: str = Field(min_length=1, max_length=120)
+    goals: list[TrainingGoalDraft] = Field(min_length=1, max_length=10)
+    auto_stop_on_goal: bool = False
+    mode: Literal["manual", "guided"] | None = None
+
+
+class TrainingTemplateSaveCommand(ClientMessage):
+    type: Literal["training:template_save"] = "training:template_save"
+    payload: TrainingTemplateSavePayload
+
+
+class TrainingTemplateDeletePayload(WireModel):
+    template_id: str
+
+
+class TrainingTemplateDeleteCommand(ClientMessage):
+    type: Literal["training:template_delete"] = "training:template_delete"
+    payload: TrainingTemplateDeletePayload
+
+
+# ── Programs ──
+
+
+class TrainingProgramsCommand(ClientMessage):
+    type: Literal["training:programs"] = "training:programs"
+    payload: dict[str, Any] | None = None
+
+
+class TrainingProgramStepDraft(WireModel):
+    name: str = Field(min_length=1, max_length=120)
+    goals: list[TrainingGoalDraft] = Field(min_length=1, max_length=10)
+    auto_stop_on_goal: bool = False
+
+
+class TrainingProgramSavePayload(WireModel):
+    program_id: str | None = None
+    name: str = Field(min_length=1, max_length=120)
+    description: str | None = None
+    steps: list[TrainingProgramStepDraft] = Field(min_length=1, max_length=30)
+
+
+class TrainingProgramSaveCommand(ClientMessage):
+    type: Literal["training:program_save"] = "training:program_save"
+    payload: TrainingProgramSavePayload
+
+
+class TrainingProgramDeletePayload(WireModel):
+    program_id: str
+
+
+class TrainingProgramDeleteCommand(ClientMessage):
+    type: Literal["training:program_delete"] = "training:program_delete"
+    payload: TrainingProgramDeletePayload
+
+
+class TrainingProgramStartPayload(WireModel):
+    program_id: str
+
+
+class TrainingProgramStartCommand(ClientMessage):
+    type: Literal["training:program_start"] = "training:program_start"
+    payload: TrainingProgramStartPayload
+
+
+# ── Analytics ──
+
+
+class TrainingAnalyticsCommand(ClientMessage):
+    type: Literal["training:analytics"] = "training:analytics"
+    payload: dict[str, Any] | None = None
 
 
 # ─────────────────────────────── Hardware ───────────────────────────────
@@ -676,6 +760,20 @@ __all__ = [
     "TrainingDeleteEdgeCommand",
     "TrainingEndPayload",
     "TrainingEndCommand",
+    "TrainingTemplatesCommand",
+    "TrainingTemplateSavePayload",
+    "TrainingTemplateSaveCommand",
+    "TrainingTemplateDeletePayload",
+    "TrainingTemplateDeleteCommand",
+    "TrainingProgramsCommand",
+    "TrainingProgramStepDraft",
+    "TrainingProgramSavePayload",
+    "TrainingProgramSaveCommand",
+    "TrainingProgramDeletePayload",
+    "TrainingProgramDeleteCommand",
+    "TrainingProgramStartPayload",
+    "TrainingProgramStartCommand",
+    "TrainingAnalyticsCommand",
     "HardwareMk2btUpdatePayload",
     "HardwareUpdateMk2btCommand",
     "HardwareMk2btRescanPayload",

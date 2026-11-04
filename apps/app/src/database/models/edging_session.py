@@ -38,6 +38,13 @@ class EdgingSession(Base):
     app_session_id: Mapped[Optional[str]] = mapped_column(
         String, nullable=True, index=True
     )
+    # Optional program/step this session was created from.
+    program_id: Mapped[Optional[str]] = mapped_column(
+        String, nullable=True, index=True
+    )
+    program_step: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    # manual = free session, guided = phase prompts driven by the goals.
+    mode: Mapped[str] = mapped_column(String, default="manual")
     # Extra users allowed to see/control the session (creator is implicit).
     participant_ids: Mapped[List] = mapped_column(JSON, default=list)
     status: Mapped[str] = mapped_column(String, default="configured", index=True)

@@ -16,7 +16,7 @@ import {
   SelectValue,
 } from "@pes/ui/components/select";
 import { Switch } from "@pes/ui/components/switch";
-import { Plus, SquareCheck, Trash2 } from "lucide-react";
+import { Compass, Plus, SquareCheck, Trash2 } from "lucide-react";
 import { Controller, useFieldArray, useForm } from "react-hook-form";
 import { z } from "zod";
 
@@ -40,6 +40,7 @@ export const sessionFormSchema = z.object({
     .min(1, "At least one goal is required.")
     .max(10, "Too many goals."),
   auto_stop_on_goal: z.boolean(),
+  mode: z.enum(["manual", "guided"]),
 });
 
 export type SessionFormValues = z.output<typeof sessionFormSchema>;
@@ -57,19 +58,25 @@ export function toSessionFields(
           : Math.round(goal.value),
     })),
     auto_stop_on_goal: values.auto_stop_on_goal,
+    mode: values.mode,
   };
 }
 
 export function fromSessionFields(
   fields: Partial<TrainingSessionFields> | undefined,
 ): SessionFormValues {
+  const goals =
+    fields?.goals && fields.goals.length > 0
+      ? fields.goals
+      : [{ type: "duration" as const, value: 600 }];
   return {
     name: fields?.name ?? "",
-    goals: (fields?.goals ?? []).map((goal) => ({
+    goals: goals.map((goal) => ({
       type: goal.type,
       value: goal.type === "duration" ? goal.value / 60 : goal.value,
     })),
     auto_stop_on_goal: fields?.auto_stop_on_goal ?? false,
+    mode: fields?.mode ?? "manual",
   };
 }
 
@@ -257,6 +264,53 @@ export function SessionForm({
               id="form-training-session-auto-stop"
               checked={field.value}
               onCheckedChange={field.onChange}
+            />
+          </Field>
+        )}
+      />
+
+      <Controller
+        name="mode"
+        control={form.control}
+        render={({ field }) => (
+          <Field
+            orientation="horizontal"
+            className={`items-center justify-between rounded-lg border px-3 py-2.5 transition-colors ${
+              field.value === "guided"
+                ? "border-violet-500/20 bg-violet-500/5"
+                : "border-border/30 bg-transparent"
+            }`}
+          >
+            <div className="flex items-center gap-2">
+              <Compass
+                size={12}
+                className={
+                  field.value === "guided"
+                    ? "text-violet-500"
+                    : "text-muted-foreground/30"
+                }
+              />
+              <div className="flex flex-col">
+                <span
+                  className={`font-mono text-[11px] ${
+                    field.value === "guided"
+                      ? "text-violet-600 dark:text-violet-300"
+                      : "text-muted-foreground/40"
+                  }`}
+                >
+                  Guided mode
+                </span>
+                <span className="text-[10px] text-muted-foreground/50">
+                  Shows phase prompts (warm-up, build, edge control, cooldown).
+                </span>
+              </div>
+            </div>
+            <Switch
+              id="form-training-session-guided"
+              checked={field.value === "guided"}
+              onCheckedChange={(checked) =>
+                field.onChange(checked ? "guided" : "manual")
+              }
             />
           </Field>
         )}
