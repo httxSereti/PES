@@ -1,4 +1,4 @@
-import type { DragEvent } from "react";
+import { useEffect, useState, type DragEvent } from "react";
 import type { Control } from "react-hook-form";
 import { Controller, useWatch } from "react-hook-form";
 import {
@@ -20,8 +20,10 @@ import { Input } from "@pes/ui/components/input";
 import { Separator } from "@pes/ui/components/separator";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@pes/ui/components/select";
 
+import { useWebSocket, useWebSocketEvent } from "@/hooks/useWebSocket";
 import { useAppSelector } from "@/store/hooks";
 import { profilesSelectors } from "@/store/slices/profilesSlice";
+import type { TrainingProgram, TrainingTemplate } from "@/types";
 import { ActionType } from "@/types/events.types";
 import { useActionCatalog } from "./action-groups";
 import { ActionIcon } from "./action-visuals";
@@ -61,6 +63,10 @@ export default function TriggerRuleActionFields({
     const profiles = useAppSelector(profilesSelectors.selectAll);
     const { actions } = useActionCatalog();
     const watchedOperation = useWatch({ control, name: `actions.${index}.operation` });
+    const watchedTrainingTarget = useWatch({
+        control,
+        name: `actions.${index}.target_type`,
+    });
     const action = actions[actionType];
 
     return (
@@ -543,41 +549,290 @@ export default function TriggerRuleActionFields({
                             </div>
                         )}
 
-                        {/* ── Common scheduling ── */}
-                        <Controller
-                            name={`actions.${index}.duration`}
-                            control={control}
-                            render={({ field, fieldState }) => (
-                                <Field data-invalid={fieldState.invalid}>
-                                    <FieldLabel htmlFor={`trigger-action-${index}-duration`}>Duration</FieldLabel>
-                                    <FieldDescription>Seconds · ∞ means no expiry</FieldDescription>
-                                    <DurationInput
-                                        id={`trigger-action-${index}-duration`}
-                                        value={field.value}
-                                        onChange={field.onChange}
-                                        invalid={fieldState.invalid}
-                                    />
-                                    {fieldState.invalid && <FieldError errors={[fieldState.error]} />}
-                                </Field>
-                            )}
-                        />
-                        <Controller
-                            name={`actions.${index}.cumulative`}
-                            control={control}
-                            render={({ field }) => (
-                                <SwitchRow
-                                    icon={Layers}
-                                    label="Cumulative"
-                                    description="Runs concurrently instead of waiting its turn"
-                                    checked={field.value}
-                                    onCheckedChange={field.onChange}
-                                    className="border-t"
+                        {actionType === ActionType.TRAINING_START && (
+                            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                                <Controller
+                                    name={`actions.${index}.target_type`}
+                                    control={control}
+                                    render={({ field }) => (
+                                        <Field>
+                                            <FieldLabel>Source</FieldLabel>
+                                            <Select value={field.value} onValueChange={field.onChange}>
+                                                <SelectTrigger>
+                                                    <SelectValue />
+                                                </SelectTrigger>
+                                                <SelectContent position="item-aligned">
+                                                    <SelectItem value="template">Template</SelectItem>
+                                                    <SelectItem value="program">Program</SelectItem>
+                                                </SelectContent>
+                                            </Select>
+                                        </Field>
+                                    )}
                                 />
-                            )}
-                        />
+                                <Controller
+                                    name={`actions.${index}.target_id`}
+                                    control={control}
+                                    render={({ field, fieldState }) => (
+                                        <Field data-invalid={fieldState.invalid}>
+                                            <FieldLabel>
+                                                {watchedTrainingTarget === "program" ? "Program" : "Template"}
+                                            </FieldLabel>
+                                            <TrainingTargetPicker
+                                                kind={watchedTrainingTarget === "program" ? "program" : "template"}
+                                                value={field.value}
+                                                onChange={field.onChange}
+                                                invalid={fieldState.invalid}
+                                            />
+                                            {fieldState.invalid && <FieldError errors={[fieldState.error]} />}
+                                        </Field>
+                                    )}
+                                />
+                            </div>
+                        )}
+
+                        {actionType === ActionType.TRAINING_NEXT_PROGRAM_STEP && (
+                            <Controller
+                                name={`actions.${index}.program_id`}
+                                control={control}
+                                render={({ field, fieldState }) => (
+                                    <Field data-invalid={fieldState.invalid}>
+                                        <FieldLabel>Program</FieldLabel>
+                                        <FieldDescription>
+                                            Starts the next uncompleted step of this program
+                                        </FieldDescription>
+                                        <TrainingTargetPicker
+                                            kind="program"
+                                            value={field.value}
+                                            onChange={field.onChange}
+                                            invalid={fieldState.invalid}
+                                        />
+                                        {fieldState.invalid && <FieldError errors={[fieldState.error]} />}
+                                    </Field>
+                                )}
+                            />
+                        )}
+
+                        {actionType === ActionType.TRAINING_END && (
+                            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                                <Controller
+                                    name={`actions.${index}.status`}
+                                    control={control}
+                                    render={({ field }) => (
+                                        <Field>
+                                            <FieldLabel>End status</FieldLabel>
+                                            <Select value={field.value} onValueChange={field.onChange}>
+                                                <SelectTrigger>
+                                                    <SelectValue />
+                                                </SelectTrigger>
+                                                <SelectContent position="item-aligned">
+                                                    <SelectItem value="succeeded">Succeeded</SelectItem>
+                                                    <SelectItem value="cancelled">Cancelled</SelectItem>
+                                                    <SelectItem value="failed">Failed</SelectItem>
+                                                </SelectContent>
+                                            </Select>
+                                        </Field>
+                                    )}
+                                />
+                                <Controller
+                                    name={`actions.${index}.session_id`}
+                                    control={control}
+                                    render={({ field }) => (
+                                        <Field>
+                                            <FieldLabel>Session id</FieldLabel>
+                                            <FieldDescription>Empty = running session</FieldDescription>
+                                            <Input {...field} placeholder="Running session" autoComplete="off" />
+                                        </Field>
+                                    )}
+                                />
+                            </div>
+                        )}
+
+                        {(actionType === ActionType.TRAINING_PAUSE ||
+                            actionType === ActionType.TRAINING_RESUME ||
+                            actionType === ActionType.TRAINING_STOP_AND_NEUTRALIZE) && (
+                            <Controller
+                                name={`actions.${index}.session_id`}
+                                control={control}
+                                render={({ field }) => (
+                                    <Field>
+                                        <FieldLabel>Session id</FieldLabel>
+                                        <FieldDescription>Empty = running session</FieldDescription>
+                                        <Input {...field} placeholder="Running session" autoComplete="off" />
+                                    </Field>
+                                )}
+                            />
+                        )}
+
+                        {actionType === ActionType.TRAINING_RECORD_EDGE && (
+                            <>
+                                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                                    <Controller
+                                        name={`actions.${index}.difficulty`}
+                                        control={control}
+                                        render={({ field }) => (
+                                            <Field>
+                                                <FieldLabel>Difficulty</FieldLabel>
+                                                <Select value={field.value} onValueChange={field.onChange}>
+                                                    <SelectTrigger>
+                                                        <SelectValue />
+                                                    </SelectTrigger>
+                                                    <SelectContent position="item-aligned">
+                                                        <SelectItem value="easy">Easy</SelectItem>
+                                                        <SelectItem value="normal">Normal</SelectItem>
+                                                        <SelectItem value="hard">Hard</SelectItem>
+                                                        <SelectItem value="extreme">Extreme</SelectItem>
+                                                    </SelectContent>
+                                                </Select>
+                                            </Field>
+                                        )}
+                                    />
+                                    <Controller
+                                        name={`actions.${index}.outcome`}
+                                        control={control}
+                                        render={({ field }) => (
+                                            <Field>
+                                                <FieldLabel>Outcome</FieldLabel>
+                                                <Select value={field.value} onValueChange={field.onChange}>
+                                                    <SelectTrigger>
+                                                        <SelectValue />
+                                                    </SelectTrigger>
+                                                    <SelectContent position="item-aligned">
+                                                        <SelectItem value="success">Success</SelectItem>
+                                                        <SelectItem value="fail">Fail</SelectItem>
+                                                    </SelectContent>
+                                                </Select>
+                                            </Field>
+                                        )}
+                                    />
+                                </div>
+                                <Controller
+                                    name={`actions.${index}.note`}
+                                    control={control}
+                                    render={({ field }) => (
+                                        <Field>
+                                            <FieldLabel>Note</FieldLabel>
+                                            <Input {...field} placeholder="Optional note" autoComplete="off" />
+                                        </Field>
+                                    )}
+                                />
+                                <Controller
+                                    name={`actions.${index}.session_id`}
+                                    control={control}
+                                    render={({ field }) => (
+                                        <Field>
+                                            <FieldLabel>Session id</FieldLabel>
+                                            <FieldDescription>Empty = running session</FieldDescription>
+                                            <Input {...field} placeholder="Running session" autoComplete="off" />
+                                        </Field>
+                                    )}
+                                />
+                                <p className="text-[11px] text-muted-foreground/60">
+                                    Reserved for automation. Ignored when the triggering event already comes
+                                    from the training module, to prevent feedback loops.
+                                </p>
+                            </>
+                        )}
+
+                        {actionType === ActionType.TRAINING_STOP_AND_NEUTRALIZE && (
+                            <p className="text-[11px] text-muted-foreground/60">
+                                Fails the running session, cancels the action queue, stops ramps and
+                                zeroes every output. Use it as a safety action on failure.
+                            </p>
+                        )}
+
+                        {/* ── Common scheduling ── */}
+                        {action?.oneShot ? (
+                            <p className="text-[11px] text-muted-foreground/60">
+                                Runs once immediately; duration and queue mode do not apply.
+                            </p>
+                        ) : (
+                            <>
+                                <Controller
+                                    name={`actions.${index}.duration`}
+                                    control={control}
+                                    render={({ field, fieldState }) => (
+                                        <Field data-invalid={fieldState.invalid}>
+                                            <FieldLabel htmlFor={`trigger-action-${index}-duration`}>Duration</FieldLabel>
+                                            <FieldDescription>Seconds · ∞ means no expiry</FieldDescription>
+                                            <DurationInput
+                                                id={`trigger-action-${index}-duration`}
+                                                value={field.value}
+                                                onChange={field.onChange}
+                                                invalid={fieldState.invalid}
+                                            />
+                                            {fieldState.invalid && <FieldError errors={[fieldState.error]} />}
+                                        </Field>
+                                    )}
+                                />
+                                <Controller
+                                    name={`actions.${index}.cumulative`}
+                                    control={control}
+                                    render={({ field }) => (
+                                        <SwitchRow
+                                            icon={Layers}
+                                            label="Cumulative"
+                                            description="Runs concurrently instead of waiting its turn"
+                                            checked={field.value}
+                                            onCheckedChange={field.onChange}
+                                            className="border-t"
+                                        />
+                                    )}
+                                />
+                            </>
+                        )}
                     </FieldGroup>
                 </div>
             )}
         </div>
+    );
+}
+
+/** Template/program picker backed by the Training WS catalog replies. */
+function TrainingTargetPicker({
+    kind,
+    value,
+    onChange,
+    invalid,
+}: {
+    kind: "template" | "program";
+    value: string;
+    onChange: (value: string) => void;
+    invalid?: boolean;
+}) {
+    const { sendCommand } = useWebSocket();
+    const [templates, setTemplates] = useState<TrainingTemplate[]>([]);
+    const [programs, setPrograms] = useState<TrainingProgram[]>([]);
+
+    useEffect(() => {
+        if (kind === "template") {
+            void sendCommand("training:templates").catch(() => undefined);
+        } else {
+            void sendCommand("training:programs").catch(() => undefined);
+        }
+    }, [kind, sendCommand]);
+
+    useWebSocketEvent("training:templates", (payload) => setTemplates(payload));
+    useWebSocketEvent("training:programs", (payload) => setPrograms(payload));
+
+    const entries: { id: string; name: string }[] =
+        kind === "template" ? templates : programs;
+    const missing = Boolean(value) && !entries.some((entry) => entry.id === value);
+
+    return (
+        <Select value={value || undefined} onValueChange={onChange}>
+            <SelectTrigger aria-invalid={invalid}>
+                <SelectValue
+                    placeholder={kind === "template" ? "Choose a template" : "Choose a program"}
+                />
+            </SelectTrigger>
+            <SelectContent position="item-aligned">
+                {missing && <SelectItem value={value}>{value}</SelectItem>}
+                {entries.map((entry) => (
+                    <SelectItem key={entry.id} value={entry.id}>
+                        {entry.name}
+                    </SelectItem>
+                ))}
+            </SelectContent>
+        </Select>
     );
 }

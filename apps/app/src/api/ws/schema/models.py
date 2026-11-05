@@ -347,6 +347,8 @@ class IntegrationAction(WireModel):
     enabled: bool = True
     payload_schema: dict[str, str]
     reversible: bool
+    # True = applies immediately and does not stay in the queue for a duration
+    one_shot: bool = False
 
 
 class IntegrationSetting(WireModel):

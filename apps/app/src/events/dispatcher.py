@@ -425,12 +425,17 @@ class EventDispatcher:
                     chain_depth=chain_depth,
                 )
                 continue
+            definition = self._integrations.get_action(action_id)
+            one_shot = bool(definition and definition.one_shot)
             item = QueueItem(
                 id=generate_id(),
                 action_type=action.action_type,
                 payload=action.payload,
-                duration=action.duration,
-                cumulative=action.cumulative,
+                # A one-shot action must not block the rest of the rule for
+                # an arbitrary duration: run it once, concurrently, and let
+                # the queue finalize it on the next tick.
+                duration=0 if one_shot else action.duration,
+                cumulative=True if one_shot else action.cumulative,
                 priority=rule.priority,
                 status=QueueItemStatus.WAITING,
                 origin=origin,

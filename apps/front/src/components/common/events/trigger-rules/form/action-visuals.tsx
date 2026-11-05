@@ -1,14 +1,21 @@
 import {
     Activity,
+    CirclePlay,
     KeyRound,
     Layers,
     ListFilter,
     Lock,
     LockOpen,
+    Pause,
     Percent,
+    Play,
     Shield,
+    ShieldAlert,
+    SkipForward,
     SlidersHorizontal,
+    Square,
     Timer,
+    Zap,
     type LucideIcon,
 } from "lucide-react";
 
@@ -30,6 +37,13 @@ const ACTION_ICONS: Record<string, LucideIcon> = {
     [ActionType.PURYFI_ENTER_LOCK_PASSWORD]: KeyRound,
     [ActionType.PURYFI_EMERGENCY_UNLOCK]: LockOpen,
     [ActionType.PURYFI_UPDATE_WBLIST]: ListFilter,
+    [ActionType.TRAINING_START]: Play,
+    [ActionType.TRAINING_PAUSE]: Pause,
+    [ActionType.TRAINING_RESUME]: CirclePlay,
+    [ActionType.TRAINING_END]: Square,
+    [ActionType.TRAINING_NEXT_PROGRAM_STEP]: SkipForward,
+    [ActionType.TRAINING_RECORD_EDGE]: Zap,
+    [ActionType.TRAINING_STOP_AND_NEUTRALIZE]: ShieldAlert,
 };
 
 export function actionIcon(type: string): LucideIcon {

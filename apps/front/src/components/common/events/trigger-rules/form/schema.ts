@@ -8,6 +8,21 @@ const baseAction = z.object({
     cumulative: z.boolean(),
 });
 
+/** Actions that run once and are finalized immediately (no duration). */
+const ONE_SHOT_ACTIONS = new Set<ActionType>([
+    ActionType.TRAINING_START,
+    ActionType.TRAINING_PAUSE,
+    ActionType.TRAINING_RESUME,
+    ActionType.TRAINING_END,
+    ActionType.TRAINING_NEXT_PROGRAM_STEP,
+    ActionType.TRAINING_RECORD_EDGE,
+    ActionType.TRAINING_STOP_AND_NEUTRALIZE,
+]);
+
+export function isOneShotAction(actionType: ActionType): boolean {
+    return ONE_SHOT_ACTIONS.has(actionType);
+}
+
 export const actionSchema = z.discriminatedUnion("action_type", [
     baseAction.extend({
         action_type: z.literal(ActionType.PROFILE),
@@ -64,6 +79,39 @@ export const actionSchema = z.discriminatedUnion("action_type", [
         entry_mode: z.enum(["text", "regex"]),
         value: z.string(),
     }),
+    baseAction.extend({
+        action_type: z.literal(ActionType.TRAINING_START),
+        target_type: z.enum(["template", "program"]),
+        target_id: z.string().min(1, "Choose a template or a program"),
+    }),
+    baseAction.extend({
+        action_type: z.literal(ActionType.TRAINING_PAUSE),
+        session_id: z.string(),
+    }),
+    baseAction.extend({
+        action_type: z.literal(ActionType.TRAINING_RESUME),
+        session_id: z.string(),
+    }),
+    baseAction.extend({
+        action_type: z.literal(ActionType.TRAINING_END),
+        status: z.enum(["succeeded", "cancelled", "failed"]),
+        session_id: z.string(),
+    }),
+    baseAction.extend({
+        action_type: z.literal(ActionType.TRAINING_NEXT_PROGRAM_STEP),
+        program_id: z.string().min(1, "Choose a program"),
+    }),
+    baseAction.extend({
+        action_type: z.literal(ActionType.TRAINING_RECORD_EDGE),
+        difficulty: z.enum(["easy", "normal", "hard", "extreme"]),
+        outcome: z.enum(["success", "fail"]),
+        note: z.string(),
+        session_id: z.string(),
+    }),
+    baseAction.extend({
+        action_type: z.literal(ActionType.TRAINING_STOP_AND_NEUTRALIZE),
+        session_id: z.string(),
+    }),
 ]);
 
 export const formSchema = z.object({
@@ -82,6 +130,8 @@ export type ActionValues = z.infer<typeof actionSchema>;
 /** Default payload when adding or switching to an action type. */
 export function defaultAction(action_type: ActionType): ActionValues {
     const base = { duration: -1, cumulative: false };
+    // One-shot actions never stay in the queue: zero duration + cumulative.
+    const oneShot = { duration: 0, cumulative: true };
     switch (action_type) {
         case ActionType.PROFILE:
             return { ...base, action_type, profile: "", level_pct: 100 };
@@ -103,13 +153,36 @@ export function defaultAction(action_type: ActionType): ActionValues {
             return { ...base, action_type };
         case ActionType.PURYFI_UPDATE_WBLIST:
             return { ...base, action_type, operation: "add", list: "blacklist", entry_mode: "text", value: "" };
+        case ActionType.TRAINING_START:
+            return { ...oneShot, action_type, target_type: "template", target_id: "" };
+        case ActionType.TRAINING_PAUSE:
+            return { ...oneShot, action_type, session_id: "" };
+        case ActionType.TRAINING_RESUME:
+            return { ...oneShot, action_type, session_id: "" };
+        case ActionType.TRAINING_END:
+            return { ...oneShot, action_type, status: "cancelled", session_id: "" };
+        case ActionType.TRAINING_NEXT_PROGRAM_STEP:
+            return { ...oneShot, action_type, program_id: "" };
+        case ActionType.TRAINING_RECORD_EDGE:
+            return {
+                ...oneShot,
+                action_type,
+                difficulty: "normal",
+                outcome: "success",
+                note: "",
+                session_id: "",
+            };
+        case ActionType.TRAINING_STOP_AND_NEUTRALIZE:
+            return { ...oneShot, action_type, session_id: "" };
     }
 }
 
 /** Map a persisted action's payload back onto the form's per-type fields. */
 export function actionToFormValues(action: TriggerAction): ActionValues {
     const p = action.payload ?? {};
-    const base = { duration: action.duration ?? -1, cumulative: action.cumulative ?? false };
+    const base = isOneShotAction(action.action_type)
+        ? { duration: 0, cumulative: true }
+        : { duration: action.duration ?? -1, cumulative: action.cumulative ?? false };
     switch (action.action_type) {
         case ActionType.PROFILE:
             return {
@@ -168,6 +241,66 @@ export function actionToFormValues(action: TriggerAction): ActionValues {
                 value: String(p["value"] ?? ""),
             };
         }
+        case ActionType.TRAINING_START:
+            return {
+                ...base,
+                action_type: ActionType.TRAINING_START,
+                target_type: p["program_id"] ? "program" : "template",
+                target_id: String(p["program_id"] ?? p["template_id"] ?? ""),
+            };
+        case ActionType.TRAINING_PAUSE:
+            return {
+                ...base,
+                action_type: ActionType.TRAINING_PAUSE,
+                session_id: String(p["session_id"] ?? ""),
+            };
+        case ActionType.TRAINING_RESUME:
+            return {
+                ...base,
+                action_type: ActionType.TRAINING_RESUME,
+                session_id: String(p["session_id"] ?? ""),
+            };
+        case ActionType.TRAINING_END: {
+            const status = String(p["status"] ?? "cancelled");
+            return {
+                ...base,
+                action_type: ActionType.TRAINING_END,
+                status:
+                    status === "succeeded" || status === "failed"
+                        ? status
+                        : "cancelled",
+                session_id: String(p["session_id"] ?? ""),
+            };
+        }
+        case ActionType.TRAINING_NEXT_PROGRAM_STEP:
+            return {
+                ...base,
+                action_type: ActionType.TRAINING_NEXT_PROGRAM_STEP,
+                program_id: String(p["program_id"] ?? ""),
+            };
+        case ActionType.TRAINING_RECORD_EDGE: {
+            const difficulty = String(p["difficulty"] ?? "normal");
+            const outcome = String(p["outcome"] ?? "success");
+            return {
+                ...base,
+                action_type: ActionType.TRAINING_RECORD_EDGE,
+                difficulty:
+                    difficulty === "easy" ||
+                    difficulty === "hard" ||
+                    difficulty === "extreme"
+                        ? difficulty
+                        : "normal",
+                outcome: outcome === "fail" ? "fail" : "success",
+                note: String(p["note"] ?? ""),
+                session_id: String(p["session_id"] ?? ""),
+            };
+        }
+        case ActionType.TRAINING_STOP_AND_NEUTRALIZE:
+            return {
+                ...base,
+                action_type: ActionType.TRAINING_STOP_AND_NEUTRALIZE,
+                session_id: String(p["session_id"] ?? ""),
+            };
         default:
             return defaultAction(ActionType.LEVEL);
     }
@@ -199,6 +332,20 @@ export function actionSummary(action: ActionValues): string {
             return "Uses saved credentials";
         case ActionType.PURYFI_UPDATE_WBLIST:
             return `${action.operation} · ${action.list}${action.value ? ` · ${action.value}` : ""}`;
+        case ActionType.TRAINING_START:
+            return action.target_id ? `${action.target_type} · ${action.target_id}` : "Not configured";
+        case ActionType.TRAINING_PAUSE:
+            return "Pause the running session";
+        case ActionType.TRAINING_RESUME:
+            return "Resume the running session";
+        case ActionType.TRAINING_END:
+            return `End as ${action.status}`;
+        case ActionType.TRAINING_NEXT_PROGRAM_STEP:
+            return action.program_id || "Not configured";
+        case ActionType.TRAINING_RECORD_EDGE:
+            return `${action.difficulty} · ${action.outcome}`;
+        case ActionType.TRAINING_STOP_AND_NEUTRALIZE:
+            return "Fail + neutralize every output";
         default:
             return "Configure action";
     }
@@ -261,6 +408,32 @@ export function toActionBody(action: ActionValues, sort_order: number) {
                 entry_mode: action.entry_mode,
                 value: action.value,
             };
+            break;
+        case ActionType.TRAINING_START:
+            payload =
+                action.target_type === "program"
+                    ? { program_id: action.target_id }
+                    : { template_id: action.target_id };
+            break;
+        case ActionType.TRAINING_PAUSE:
+        case ActionType.TRAINING_RESUME:
+        case ActionType.TRAINING_STOP_AND_NEUTRALIZE:
+            payload = action.session_id ? { session_id: action.session_id } : {};
+            break;
+        case ActionType.TRAINING_END:
+            payload = { status: action.status };
+            if (action.session_id) payload["session_id"] = action.session_id;
+            break;
+        case ActionType.TRAINING_NEXT_PROGRAM_STEP:
+            payload = { program_id: action.program_id };
+            break;
+        case ActionType.TRAINING_RECORD_EDGE:
+            payload = {
+                difficulty: action.difficulty,
+                outcome: action.outcome,
+                note: action.note,
+            };
+            if (action.session_id) payload["session_id"] = action.session_id;
             break;
     }
     return { action_type, payload, duration, cumulative, sort_order };

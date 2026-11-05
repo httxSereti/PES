@@ -334,6 +334,7 @@ class IntegrationRegistry:
                     "enabled": self.is_action_toggled(action.id),
                     "payload_schema": action.payload_schema,
                     "reversible": action.reversible,
+                    "one_shot": action.one_shot,
                 }
                 for action in integration.actions()
             ],

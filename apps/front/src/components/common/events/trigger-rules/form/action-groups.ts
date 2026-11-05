@@ -13,6 +13,7 @@ export interface ActionCatalogEntry {
     group: string;
     enabled: boolean;
     reversible: boolean;
+    oneShot: boolean;
     payloadSchema: Record<string, string>;
 }
 
@@ -28,6 +29,7 @@ export interface ActionCatalog {
 }
 
 const CORE_SOURCE = { integrationId: "units", integrationName: "Core" };
+const TRAINING_SOURCE = { integrationId: "training", integrationName: "Training" };
 
 const FALLBACK_ACTIONS: Record<string, Omit<ActionCatalogEntry, "id">> = {
     [ActionType.PROFILE]: {
@@ -37,6 +39,7 @@ const FALLBACK_ACTIONS: Record<string, Omit<ActionCatalogEntry, "id">> = {
         group: "Intensity",
         enabled: true,
         reversible: true,
+        oneShot: false,
         payloadSchema: {
             profile: "Profile name (A-J or X for random)",
             level_pct: "Level percentage (0-150)",
@@ -49,6 +52,7 @@ const FALLBACK_ACTIONS: Record<string, Omit<ActionCatalogEntry, "id">> = {
         group: "Intensity",
         enabled: true,
         reversible: false,
+        oneShot: false,
         payloadSchema: {
             units: "Unit ids, e.g. 123, 12RM",
             channels: "Channels, e.g. AB, ABRM",
@@ -62,6 +66,7 @@ const FALLBACK_ACTIONS: Record<string, Omit<ActionCatalogEntry, "id">> = {
         group: "Intensity",
         enabled: true,
         reversible: false,
+        oneShot: false,
         payloadSchema: {
             target: "Usage name or 'all'",
             pct: "Percentage to add or remove",
@@ -76,6 +81,7 @@ const FALLBACK_ACTIONS: Record<string, Omit<ActionCatalogEntry, "id">> = {
         group: "Lock",
         enabled: true,
         reversible: false,
+        oneShot: false,
         payloadSchema: {
             duration_minutes: "Minutes to add or remove",
             only_max: "Update max only, not current time",
@@ -89,6 +95,7 @@ const FALLBACK_ACTIONS: Record<string, Omit<ActionCatalogEntry, "id">> = {
         group: "State",
         enabled: true,
         reversible: false,
+        oneShot: false,
         payloadSchema: { enabled: "Boolean" },
     },
     [ActionType.PURYFI_SET_LOCK]: {
@@ -99,6 +106,7 @@ const FALLBACK_ACTIONS: Record<string, Omit<ActionCatalogEntry, "id">> = {
         group: "Lock",
         enabled: true,
         reversible: false,
+        oneShot: false,
         payloadSchema: {
             timer_minutes: "Timer in minutes (0 = none)",
         },
@@ -111,6 +119,7 @@ const FALLBACK_ACTIONS: Record<string, Omit<ActionCatalogEntry, "id">> = {
         group: "Lock",
         enabled: true,
         reversible: false,
+        oneShot: false,
         payloadSchema: { value: "Minutes expression, e.g. +10" },
     },
     [ActionType.PURYFI_ENTER_LOCK_PASSWORD]: {
@@ -121,6 +130,7 @@ const FALLBACK_ACTIONS: Record<string, Omit<ActionCatalogEntry, "id">> = {
         group: "Lock",
         enabled: true,
         reversible: false,
+        oneShot: false,
         payloadSchema: {},
     },
     [ActionType.PURYFI_EMERGENCY_UNLOCK]: {
@@ -131,6 +141,7 @@ const FALLBACK_ACTIONS: Record<string, Omit<ActionCatalogEntry, "id">> = {
         group: "Lock",
         enabled: true,
         reversible: false,
+        oneShot: false,
         payloadSchema: {},
     },
     [ActionType.PURYFI_UPDATE_WBLIST]: {
@@ -141,12 +152,93 @@ const FALLBACK_ACTIONS: Record<string, Omit<ActionCatalogEntry, "id">> = {
         group: "Lists",
         enabled: true,
         reversible: false,
+        oneShot: false,
         payloadSchema: {
             operation: "add, remove or set_mode",
             list: "Whitelist or blacklist",
             entry_mode: "Text or regex",
             value: "URL, domain or pattern",
         },
+    },
+    [ActionType.TRAINING_START]: {
+        label: "Start training session",
+        description: "Create and start an edging session from a template or program.",
+        ...TRAINING_SOURCE,
+        group: "Session",
+        enabled: true,
+        reversible: false,
+        oneShot: true,
+        payloadSchema: {
+            template_id: "Template id (or program_id)",
+            program_id: "Program id (or template_id)",
+        },
+    },
+    [ActionType.TRAINING_PAUSE]: {
+        label: "Pause training session",
+        description: "Pause the running training session.",
+        ...TRAINING_SOURCE,
+        group: "Session",
+        enabled: true,
+        reversible: false,
+        oneShot: true,
+        payloadSchema: { session_id: "Optional session id" },
+    },
+    [ActionType.TRAINING_RESUME]: {
+        label: "Resume training session",
+        description: "Resume the paused running training session.",
+        ...TRAINING_SOURCE,
+        group: "Session",
+        enabled: true,
+        reversible: false,
+        oneShot: true,
+        payloadSchema: { session_id: "Optional session id" },
+    },
+    [ActionType.TRAINING_END]: {
+        label: "End training session",
+        description: "End the running session as succeeded, cancelled or failed.",
+        ...TRAINING_SOURCE,
+        group: "Session",
+        enabled: true,
+        reversible: false,
+        oneShot: true,
+        payloadSchema: {
+            status: "succeeded, cancelled or failed",
+            session_id: "Optional session id",
+        },
+    },
+    [ActionType.TRAINING_NEXT_PROGRAM_STEP]: {
+        label: "Start next program step",
+        description: "Start the next uncompleted step of a training program.",
+        ...TRAINING_SOURCE,
+        group: "Program",
+        enabled: true,
+        reversible: false,
+        oneShot: true,
+        payloadSchema: { program_id: "Program id" },
+    },
+    [ActionType.TRAINING_RECORD_EDGE]: {
+        label: "Record system edge",
+        description: "Record an edge as the system actor (automation only).",
+        ...TRAINING_SOURCE,
+        group: "Edges",
+        enabled: true,
+        reversible: false,
+        oneShot: true,
+        payloadSchema: {
+            difficulty: "easy, normal, hard or extreme",
+            outcome: "success or fail",
+            note: "Optional note",
+        },
+    },
+    [ActionType.TRAINING_STOP_AND_NEUTRALIZE]: {
+        label: "Stop training and neutralize",
+        description: "Fail the session, clear the queue and zero every output.",
+        ...TRAINING_SOURCE,
+        group: "Safety",
+        enabled: true,
+        reversible: false,
+        oneShot: true,
+        payloadSchema: { session_id: "Optional session id" },
     },
 };
 
@@ -161,6 +253,7 @@ export function fallbackAction(id: string): ActionCatalogEntry {
         group: fallback?.group ?? "",
         enabled: true,
         reversible: fallback?.reversible ?? false,
+        oneShot: fallback?.oneShot ?? false,
         payloadSchema: fallback?.payloadSchema ?? {},
     };
 }
@@ -187,6 +280,7 @@ export function useActionCatalog(): ActionCatalog {
                     group: action.group || fallback.group,
                     enabled: action.enabled !== false,
                     reversible: action.reversible,
+                    oneShot: action.one_shot ?? fallback.oneShot,
                     payloadSchema: action.payload_schema ?? {},
                 };
             }

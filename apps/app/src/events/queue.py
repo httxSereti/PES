@@ -238,9 +238,19 @@ class ActionQueue:
 
         Used by ``neutralize_all``: callers zero outputs immediately after this,
         so a late apply completion must not reverse the hardware back on.
+
+        An action may itself call ``neutralize_all`` (e.g. the training
+        STOP_AND_NEUTRALIZE action). The current apply task is then already
+        being cancelled by association, and awaiting it from inside itself
+        would deadlock: skip it here and let it unwind normally.
         """
+        current = asyncio.current_task()
         with self._lock:
-            tasks = [task for task in self._tasks if not task.done()]
+            tasks = [
+                task
+                for task in self._tasks
+                if not task.done() and task is not current
+            ]
         for task in tasks:
             task.cancel()
         if tasks:

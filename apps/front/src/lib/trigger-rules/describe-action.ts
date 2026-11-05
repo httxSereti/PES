@@ -64,7 +64,9 @@ export function actionTone(actionType: string): ActionTone {
         case ActionType.CHASTER_TIME_UPDATE:
             return "sky";
         default:
-            return actionType.startsWith("PURYFI_") ? "pink" : "slate";
+            if (actionType.startsWith("PURYFI_")) return "pink";
+            if (actionType.startsWith("TRAINING_")) return "sky";
+            return "slate";
     }
 }
 
@@ -76,7 +78,9 @@ export function describeAction(action: ActionLike): DescribedAction {
     const payload = action.payload ?? {};
     const base = {
         type: action.action_type,
-        duration: formatActionDuration(num(action.duration, -1)),
+        duration: action.action_type.startsWith("TRAINING_")
+            ? "instant"
+            : formatActionDuration(num(action.duration, -1)),
         mode: action.cumulative ? ("cumulative" as const) : ("waits" as const),
         tone: actionTone(action.action_type),
     };
@@ -185,6 +189,64 @@ export function describeAction(action: ActionLike): DescribedAction {
                 detail: `PuryFi ${list} · ${text(payload.entry_mode, "text")} entry`,
             };
         }
+
+        case ActionType.TRAINING_START: {
+            const templateId = text(payload.template_id, "");
+            const programId = text(payload.program_id, "");
+            const target = programId ? `program ${programId}` : `template ${templateId}`;
+            return {
+                ...base,
+                title: `Start training · ${target}`,
+                detail: `Create and start an edging session from ${target}`,
+            };
+        }
+
+        case ActionType.TRAINING_PAUSE:
+            return {
+                ...base,
+                title: "Pause training session",
+                detail: "Pause the running edging session",
+            };
+
+        case ActionType.TRAINING_RESUME:
+            return {
+                ...base,
+                title: "Resume training session",
+                detail: "Resume the paused edging session",
+            };
+
+        case ActionType.TRAINING_END: {
+            const status = text(payload.status, "cancelled");
+            return {
+                ...base,
+                title: `End training · ${status}`,
+                detail: `End the running edging session as ${status}`,
+            };
+        }
+
+        case ActionType.TRAINING_NEXT_PROGRAM_STEP:
+            return {
+                ...base,
+                title: `Next program step · ${text(payload.program_id)}`,
+                detail: "Create and start the next uncompleted program step",
+            };
+
+        case ActionType.TRAINING_RECORD_EDGE: {
+            const difficulty = text(payload.difficulty, "normal");
+            const outcome = text(payload.outcome, "success");
+            return {
+                ...base,
+                title: `Record ${difficulty} edge · ${outcome}`,
+                detail: `Record a system ${outcome} edge at ${difficulty} difficulty`,
+            };
+        }
+
+        case ActionType.TRAINING_STOP_AND_NEUTRALIZE:
+            return {
+                ...base,
+                title: "Stop training · neutralize",
+                detail: "Fail the running session, clear the queue and zero every output",
+            };
 
         default:
             return {

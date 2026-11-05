@@ -86,6 +86,9 @@ class ActionDef:
     # legacy per-rule password). Key-name redaction is applied as a fallback.
     secret_fields: tuple[str, ...] = ()
     reversible: bool = False
+    # One-shot actions apply once and are finalized on the next queue tick
+    # instead of staying RUNNING for their (meaningless) duration.
+    one_shot: bool = False
     handler: ActionHandler | None = None
 
 

@@ -15,6 +15,13 @@ export enum ActionType {
     PURYFI_ENTER_LOCK_PASSWORD = "PURYFI_ENTER_LOCK_PASSWORD",
     PURYFI_EMERGENCY_UNLOCK = "PURYFI_EMERGENCY_UNLOCK",
     PURYFI_UPDATE_WBLIST = "PURYFI_UPDATE_WBLIST",
+    TRAINING_START = "TRAINING_START",
+    TRAINING_PAUSE = "TRAINING_PAUSE",
+    TRAINING_RESUME = "TRAINING_RESUME",
+    TRAINING_END = "TRAINING_END",
+    TRAINING_NEXT_PROGRAM_STEP = "TRAINING_NEXT_PROGRAM_STEP",
+    TRAINING_RECORD_EDGE = "TRAINING_RECORD_EDGE",
+    TRAINING_STOP_AND_NEUTRALIZE = "TRAINING_STOP_AND_NEUTRALIZE",
 }
 
 export enum RampMode {
@@ -485,6 +492,7 @@ export interface IntegrationAction {
     enabled: boolean;
     payload_schema: Record<string, string>;
     reversible: boolean;
+    one_shot: boolean;
 }
 
 export interface IntegrationSetting {

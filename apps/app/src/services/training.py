@@ -8,6 +8,9 @@ from __future__ import annotations
 
 import asyncio
 from collections import Counter
+from collections.abc import Iterator
+from contextlib import contextmanager
+from contextvars import ContextVar
 from datetime import date, datetime, timedelta
 from typing import Optional
 
@@ -33,6 +36,24 @@ _session_locks: dict[str, asyncio.Lock] = {}
 _start_lock = asyncio.Lock()
 # Session ids already announced as "goals reached" (avoid one event per edge).
 _goal_announced: set[str] = set()
+
+# When a training service call is made by a trigger action, every event it
+# emits is an echo of that action. Carrying the action's chain depth and the
+# training integration id lets the dispatcher skip re-entrant training actions
+# (the same protection Chaster/PuryFi use for their own echoes).
+_training_action_echo: ContextVar[tuple[int, str] | None] = ContextVar(
+    "training_action_echo", default=None
+)
+
+
+@contextmanager
+def training_action_event_context(depth: int) -> Iterator[None]:
+    """Tag training events emitted inside the block as local action echoes."""
+    token = _training_action_echo.set((max(0, depth), "training"))
+    try:
+        yield
+    finally:
+        _training_action_echo.reset(token)
 
 
 def _session_lock(session_id: str) -> asyncio.Lock:
@@ -129,6 +150,8 @@ def _training_event_data(session: EdgingSession, **extra) -> dict:
         "goals_met": goals_met(session),
         "auto_stop_on_goal": session.auto_stop_on_goal,
         "mode": session.mode or "manual",
+        "program_id": session.program_id,
+        "program_step": session.program_step,
         **extra,
     }
 
@@ -145,11 +168,14 @@ async def _dispatch_training_event(
         # Tests / early startup: no dispatcher yet.
         return
 
+    echo = _training_action_echo.get()
     try:
         await dispatcher.dispatch(
             event_type,
             event_data=_training_event_data(session, **extra),
             origin=f"training:{session.id}",
+            chain_depth=echo[0] if echo else 0,
+            source_integration_id=echo[1] if echo else None,
         )
     except Exception:
         logger.exception(
