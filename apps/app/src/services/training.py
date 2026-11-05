@@ -659,7 +659,7 @@ async def update_edging_session(
     rating: Optional[int] = None,
     repo: Optional[EdgingRepo] = None,
 ) -> dict:
-    """Update config fields (MANAGE) or notes/rating (HOST, ended sessions only)."""
+    """Rename (MANAGE), edit config before start, or notes/rating (HOST, ended)."""
     repo = repo or EdgingRepo()
     session = await repo.get_session(session_id)
     if session is None:
@@ -668,9 +668,14 @@ async def update_edging_session(
 
     fields: dict = {}
 
+    if name is not None:
+        cleaned_name = name.strip()
+        if not cleaned_name:
+            raise ValueError("Session name is required")
+        fields["name"] = cleaned_name
+
     if (
-        name is not None
-        or goals is not None
+        goals is not None
         or auto_stop_on_goal is not None
         or participant_ids is not None
         or mode is not None
@@ -679,8 +684,6 @@ async def update_edging_session(
             raise ValueError(
                 "Goals and auto-stop can only be changed before the session starts"
             )
-        if name is not None:
-            fields["name"] = name
         if goals is not None:
             fields["goals"] = _validate_goals(goals)
         if auto_stop_on_goal is not None:

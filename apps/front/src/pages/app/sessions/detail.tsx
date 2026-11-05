@@ -8,8 +8,16 @@ import {
   CardHeader,
   CardTitle,
 } from "@pes/ui/components/card";
-import { Archive, Dumbbell, Trash2 } from "lucide-react";
+import { Archive, Dumbbell, Pencil, Trash2 } from "lucide-react";
 import { toast } from "sonner";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@pes/ui/components/dialog";
+import { Input } from "@pes/ui/components/input";
 
 import { useWebSocket } from "@/hooks/useWebSocket";
 import { useAppSelector } from "@/store/hooks";
@@ -38,6 +46,8 @@ export default function SessionHistoryDetailPage() {
 
   const [error, setError] = useState<string | null>(null);
   const [deleteOpen, setDeleteOpen] = useState(false);
+  const [renameOpen, setRenameOpen] = useState(false);
+  const [renameName, setRenameName] = useState("");
 
   const load = useCallback(async () => {
     if (!id) return;
@@ -62,6 +72,32 @@ export default function SessionHistoryDetailPage() {
   }, [load]);
 
   const isHost = hasPermission(user, Permission.HOST);
+
+  async function handleRename() {
+    if (!detail) return;
+    const name = renameName.trim();
+    if (!name) {
+      setError("Session name is required");
+      return;
+    }
+    try {
+      const result = await sendCommand("sessions:rename", {
+        session_id: detail.session.id,
+        name,
+      });
+      if (result.status !== "ok") {
+        setError(result.message ?? "Failed to rename the session");
+        return;
+      }
+      toast.success("Session renamed", { position: "bottom-right" });
+      setRenameOpen(false);
+      await load();
+    } catch (err) {
+      setError(
+        err instanceof Error ? err.message : "Failed to rename the session",
+      );
+    }
+  }
 
   async function handleDelete() {
     if (!detail) return;
@@ -140,11 +176,25 @@ export default function SessionHistoryDetailPage() {
                 {session.sensor_ids.length}{" "}
                 {session.sensor_ids.length === 1 ? "sensor" : "sensors"}
               </span>
+              {isHost && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="mt-1 h-7 gap-1.5 text-muted-foreground/70 hover:text-violet-600 dark:hover:text-violet-400"
+                  onClick={() => {
+                    setRenameName(session.name);
+                    setRenameOpen(true);
+                  }}
+                >
+                  <Pencil size={13} />
+                  Rename session
+                </Button>
+              )}
               {isHost && session.status !== "running" && (
                 <Button
                   variant="ghost"
                   size="sm"
-                  className="mt-1 h-7 gap-1.5 text-muted-foreground/70 hover:text-destructive"
+                  className="h-7 gap-1.5 text-muted-foreground/70 hover:text-destructive"
                   onClick={() => setDeleteOpen(true)}
                 >
                   <Trash2 size={13} />
@@ -273,6 +323,37 @@ export default function SessionHistoryDetailPage() {
           </CardContent>
         </Card>
       )}
+
+      <Dialog open={renameOpen} onOpenChange={setRenameOpen}>
+        <DialogContent className="md:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Rename session</DialogTitle>
+            <DialogDescription>
+              Update the name shown in the session history and live views.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3">
+            <Input
+              value={renameName}
+              onChange={(event) => setRenameName(event.target.value)}
+              maxLength={120}
+              placeholder="Session name"
+              autoFocus
+            />
+            <div className="flex justify-end gap-2">
+              <Button variant="outline" onClick={() => setRenameOpen(false)}>
+                Cancel
+              </Button>
+              <Button
+                disabled={!renameName.trim()}
+                onClick={() => void handleRename()}
+              >
+                Save name
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       <ConfirmDeleteDialog
         open={deleteOpen}

@@ -272,6 +272,18 @@ class SessionsDeleteCommand(ClientMessage):
     payload: SessionDeletePayload
 
 
+class SessionRenamePayload(WireModel):
+    session_id: str
+    name: str = Field(min_length=1, max_length=120)
+
+
+class SessionsRenameCommand(ClientMessage):
+    """Rename one application session (Host only)."""
+
+    type: Literal["sessions:rename"] = "sessions:rename"
+    payload: SessionRenamePayload
+
+
 # ─────────────────────────────── Profiles ───────────────────────────────
 
 
@@ -719,6 +731,8 @@ __all__ = [
     "SessionsHistoryDetailCommand",
     "SessionDeletePayload",
     "SessionsDeleteCommand",
+    "SessionRenamePayload",
+    "SessionsRenameCommand",
     "ProfilesListCommand",
     "ProfileSavePayload",
     "ProfilesSaveCommand",

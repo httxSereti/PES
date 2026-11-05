@@ -205,6 +205,32 @@ async def end_session(repo: Optional[SessionRepo] = None) -> Optional[dict]:
 # ───────── History ─────────
 
 
+async def rename_session(
+    session_id: str, name: str, repo: Optional[SessionRepo] = None
+) -> dict:
+    """Rename an application session, including the live one."""
+    repo = repo or SessionRepo()
+    name = name.strip()
+    if not name:
+        raise ValueError("Session name is required")
+
+    session = await repo.get_session(session_id)
+    if session is None:
+        raise ValueError("Session not found")
+
+    updated = await repo.update_session(session_id, name=name)
+    if updated is None:
+        raise ValueError("Session not found")
+
+    serialized = serialize_session(updated)
+    active = store.get_active_session()
+    if active is not None and active.get("id") == session_id:
+        store.set_active_session(serialized)
+        broadcast_session(serialized)
+    logger.info("[Session] Renamed", session_id=session_id)
+    return serialized
+
+
 async def delete_session(session_id: str, repo: Optional[SessionRepo] = None) -> bool:
     """Delete one application session (history cleanup)."""
     repo = repo or SessionRepo()

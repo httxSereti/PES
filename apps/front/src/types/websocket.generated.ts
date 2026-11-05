@@ -2,7 +2,7 @@
 // by apps/app/scripts/generate_ws_types.py — DO NOT EDIT.
 // Regenerate with: pnpm codegen:ws
 
-export const WS_SCHEMA_VERSION = 19;
+export const WS_SCHEMA_VERSION = 20;
 
 export enum ActionType {
     PROFILE = "PROFILE",
@@ -109,6 +109,11 @@ export interface SessionHistoryDetailPayload {
 
 export interface SessionDeletePayload {
     session_id: string;
+}
+
+export interface SessionRenamePayload {
+    session_id: string;
+    name: string;
 }
 
 export interface ProfileSavePayload {
@@ -979,6 +984,12 @@ export interface SessionsDeleteCommand {
     payload: SessionDeletePayload;
 }
 
+export interface SessionsRenameCommand {
+    id?: string | null;
+    type: 'sessions:rename';
+    payload: SessionRenamePayload;
+}
+
 export interface ProfilesListCommand {
     id?: string | null;
     type: 'profiles:list';
@@ -1516,6 +1527,7 @@ export type WebSocketClientMessage =
     | SessionsHistoryCommand
     | SessionsHistoryDetailCommand
     | SessionsDeleteCommand
+    | SessionsRenameCommand
     | ProfilesListCommand
     | ProfilesSaveCommand
     | ProfilesApplyCommand

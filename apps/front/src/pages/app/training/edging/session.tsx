@@ -125,6 +125,8 @@ export default function EdgingSessionPage() {
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [templateOpen, setTemplateOpen] = useState(false);
   const [templateName, setTemplateName] = useState("");
+  const [renameOpen, setRenameOpen] = useState(false);
+  const [renameName, setRenameName] = useState("");
 
   const load = useCallback(async () => {
     if (!id) return;
@@ -326,6 +328,23 @@ export default function EdgingSessionPage() {
     }
   }
 
+  async function handleRename() {
+    const name = renameName.trim();
+    if (!name) {
+      setError("Session name is required");
+      return;
+    }
+    const saved = await run(
+      () =>
+        sendCommand("training:update", {
+          session_id: session.id,
+          name,
+        }),
+      "Session renamed",
+    );
+    if (saved) setRenameOpen(false);
+  }
+
   async function handleSaveTemplate() {
     const saved = await run(
       () =>
@@ -408,7 +427,18 @@ export default function EdgingSessionPage() {
               {configured && canManage && (
                 <DropdownMenuItem onSelect={() => setEditOpen(true)}>
                   <Pencil size={13} />
-                  Edit session
+                  Edit goals
+                </DropdownMenuItem>
+              )}
+              {canManage && (
+                <DropdownMenuItem
+                  onSelect={() => {
+                    setRenameName(session.name);
+                    setRenameOpen(true);
+                  }}
+                >
+                  <Pencil size={13} />
+                  Rename session
                 </DropdownMenuItem>
               )}
               {canManage && (
@@ -721,6 +751,37 @@ export default function EdgingSessionPage() {
               await load();
             }}
           />
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={renameOpen} onOpenChange={setRenameOpen}>
+        <DialogContent className="md:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Rename session</DialogTitle>
+            <DialogDescription>
+              The new name is shown in lists, notifications and events.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3">
+            <Input
+              value={renameName}
+              onChange={(event) => setRenameName(event.target.value)}
+              maxLength={120}
+              placeholder="Session name"
+              autoFocus
+            />
+            <div className="flex justify-end gap-2">
+              <Button variant="outline" onClick={() => setRenameOpen(false)}>
+                Cancel
+              </Button>
+              <Button
+                disabled={busy || !renameName.trim()}
+                onClick={() => void handleRename()}
+              >
+                Save name
+              </Button>
+            </div>
+          </div>
         </DialogContent>
       </Dialog>
 
