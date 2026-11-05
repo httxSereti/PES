@@ -21,6 +21,7 @@ from .models import (
     SensorPatch,
     SessionSensorId,
     SessionUnitId,
+    TrainingGuidedConfig,
     TrainingNotificationLevel,
 )
 
@@ -458,6 +459,7 @@ class TrainingSessionDraft(WireModel):
     auto_stop_on_goal: bool = False
     participant_ids: list[str] | None = Field(default=None, max_length=20)
     mode: Literal["manual", "guided"] | None = None
+    guided_config: TrainingGuidedConfig | None = None
     min_edge_interval_seconds: int = Field(default=0, ge=0, le=3600)
     notification_level: TrainingNotificationLevel | None = None
     allow_partner_edges: bool = False
@@ -475,6 +477,7 @@ class TrainingUpdatePayload(WireModel):
     auto_stop_on_goal: bool | None = None
     participant_ids: list[str] | None = Field(default=None, max_length=20)
     mode: Literal["manual", "guided"] | None = None
+    guided_config: TrainingGuidedConfig | None = None
     min_edge_interval_seconds: int | None = Field(default=None, ge=0, le=3600)
     notification_level: TrainingNotificationLevel | None = None
     allow_partner_edges: bool | None = None
@@ -571,6 +574,7 @@ class TrainingTemplateSavePayload(WireModel):
     goals: list[TrainingGoalDraft] = Field(min_length=1, max_length=10)
     auto_stop_on_goal: bool = False
     mode: Literal["manual", "guided"] | None = None
+    guided_config: TrainingGuidedConfig | None = None
 
 
 class TrainingTemplateSaveCommand(ClientMessage):

@@ -26,6 +26,12 @@ and finalizes them on the next queue tick. `TRAINING_RECORD_EDGE` is ignored on
 training-origin events, and every training event emitted by an action is tagged
 as a local echo so re-entrant `TRAINING_*` actions are skipped.
 
+Guided sessions can opt into hardware automation (`guided_config`): a profile
+is applied at start, stepped up per phase, lowered after each edge, and
+rewarded/punished on success/failure. The automation profile is a normal queue
+item, so `units:stop` and `neutralize_all()` always override it, and the level
+ceiling is capped at 100%.
+
 ### PuryFi (browser blocker)
 
 Unlike Chaster, PuryFi **connects to PES**: the integration opens a WebSocket

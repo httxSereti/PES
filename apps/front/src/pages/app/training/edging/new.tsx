@@ -84,6 +84,7 @@ export default function NewEdgingSessionPage() {
       })),
       auto_stop_on_goal: template.auto_stop_on_goal,
       mode: template.mode === "guided" ? "guided" : "manual",
+      guided_config: template.guided_config,
     });
     setFormKey((key) => key + 1);
   }
@@ -116,6 +117,7 @@ export default function NewEdgingSessionPage() {
         goals: fields.goals,
         auto_stop_on_goal: fields.auto_stop_on_goal,
         mode: fields.mode,
+        guided_config: fields.guided_config ?? null,
         min_edge_interval_seconds: fields.min_edge_interval_seconds,
         notification_level: fields.notification_level,
         allow_partner_edges: fields.allow_partner_edges,

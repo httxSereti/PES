@@ -111,6 +111,7 @@ class TrainingActionHandler:
                 created_by=_SYSTEM_ACTOR,
                 app_session_id=app_session_id,
                 mode=template.mode or "manual",
+                guided_config=template.guided_config,
             )
 
         await self._start_created_session(created)

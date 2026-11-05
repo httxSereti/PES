@@ -21,6 +21,11 @@ async def handle_training_create(
             app_session_id=active_app_session_id(),
             participant_ids=msg.payload.participant_ids,
             mode=msg.payload.mode,
+            guided_config=(
+                msg.payload.guided_config.model_dump()
+                if msg.payload.guided_config is not None
+                else None
+            ),
             min_edge_interval_seconds=msg.payload.min_edge_interval_seconds,
             notification_level=msg.payload.notification_level,
             allow_partner_edges=msg.payload.allow_partner_edges,

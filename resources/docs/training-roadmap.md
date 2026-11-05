@@ -6,13 +6,13 @@ mode guidé et analytics).
 
 ## Priorités
 
-| Priorité | Chantier | Impact | Risque / effort |
-| -------- | -------- | ------ | --------------- |
-| 1 | Conditions de règle | Très élevé | Moyen |
-| 2 | Actions `TRAINING_*` | Très élevé | Moyen, attention aux boucles |
-| 3 | Cooldown / intervalle minimum + préférences de notifications | Élevé | Faible |
-| 4 | Automatisation des phases guidées | Élevé | Élevé (hardware) |
-| 5 | Édition templates/programmes + export analytics | Moyen | Faible |
+| Priorité | Chantier                                                     | Impact     | Risque / effort              |
+| -------- | ------------------------------------------------------------ | ---------- | ---------------------------- |
+| 1        | Conditions de règle                                          | Très élevé | Moyen                        |
+| 2        | Actions `TRAINING_*`                                         | Très élevé | Moyen, attention aux boucles |
+| 3        | Cooldown / intervalle minimum + préférences de notifications | Élevé      | Faible                       |
+| 4        | Automatisation des phases guidées                            | Élevé      | Élevé (hardware)             |
+| 5        | Édition templates/programmes + export analytics              | Moyen      | Faible                       |
 
 ---
 
@@ -88,15 +88,30 @@ aussi bien dans la page de session que dans le kiosque.
 
 Prolongement du mode guidé actuel, qui est encore informatif.
 
-- [ ] Appliquer un profil au démarrage
-- [ ] Monter le niveau par paliers selon les phases
-- [ ] Baisser l'intensité après chaque edge
-- [ ] Cooldown automatique entre deux edges
-- [ ] Profil de récompense sur session réussie
-- [ ] Profil de punition ou neutralisation sur fail
-- [ ] Plafonds de sécurité stricts et actions réversibles
+- [x] Appliquer un profil au démarrage
+- [x] Monter le niveau par paliers selon les phases
+- [x] Baisser l'intensité après chaque edge
+- [x] Cooldown automatique entre deux edges
+- [x] Profil de récompense sur session réussie
+- [x] Profil de punition ou neutralisation sur fail
+- [x] Plafonds de sécurité stricts et actions réversibles
 
 Doit rester optionnel, encadré et compatible avec `neutralize_all()`.
+
+L'automatisation se configure par session (`guided_config`, activé uniquement en
+mode guidé) et est reprise par les templates. Le profil de démarrage est appliqué
+via la file d'actions (`ActionQueue`), avec un item à durée infinie : `units:stop`,
+`neutralize_all()` et l'annulation manuelle de la file le révoquent donc comme
+n'importe quelle action. Les paliers de phase réappliquent le profil au même
+propriétaire (les rampes précédentes sont arrêtées) et fusionnent les snapshots,
+si bien qu'une seule révocation restaure l'état matériel d'avant la session. Le
+plafond (`max_level_pct`, 0–100) est appliqué côté service, en plus des limites
+d'usage du Store. En cas d'échec, `neutralize_on_fail` (activé par défaut) passe
+par `neutralize_all()` ; sinon le profil de punition est appliqué. Une
+annulation restaure l'état précédent, tandis qu'une interruption (arrêt de
+l'application, redémarrage) reste gérée par les chemins de neutralisation
+existants. Si l'item d'automatisation disparaît (panic stop, arrêt d'unité),
+l'automatisation s'arrête au lieu de réappliquer quoi que ce soit.
 
 ---
 

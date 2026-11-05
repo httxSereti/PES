@@ -23,6 +23,14 @@ from database.models import EdgingEdge, EdgingProgram, EdgingSession, EdgingTemp
 from database.repositories.edging_repo import EdgingRepo
 from database.repositories.training_repo import TrainingRepo
 from events.enums import TriggerableEvent
+from services.training_guided import (
+    discard_guided_automation,
+    finish_guided_automation,
+    normalize_guided_config,
+    on_guided_edge,
+    start_guided_automation,
+    tick_guided_automation,
+)
 from typings import (
     EdgeDifficulty,
     EdgeOutcome,
@@ -157,6 +165,9 @@ def _training_event_data(session: EdgingSession, **extra) -> dict:
         "goals_met": goals_met(session),
         "auto_stop_on_goal": session.auto_stop_on_goal,
         "mode": session.mode or "manual",
+        "guided_automation": bool(
+            session.guided_config and session.guided_config.get("enabled")
+        ),
         "min_edge_interval_seconds": session.min_edge_interval_seconds or 0,
         "notification_level": session.notification_level or "all",
         "allow_partner_edges": bool(session.allow_partner_edges),
@@ -391,6 +402,9 @@ def serialize_session_summary(
         "program_id": session.program_id,
         "program_step": session.program_step,
         "mode": session.mode or "manual",
+        "guided_config": (
+            dict(session.guided_config) if session.guided_config else None
+        ),
         "min_edge_interval_seconds": session.min_edge_interval_seconds or 0,
         "notification_level": session.notification_level or "all",
         "allow_partner_edges": bool(session.allow_partner_edges),
@@ -642,6 +656,19 @@ def _validate_notification_level(level: str | None) -> str:
     return value
 
 
+def _validate_guided_settings(
+    mode: str | None, guided_config: dict | None
+) -> tuple[str, dict | None]:
+    """Normalize the mode/config pair; hardware automation needs guided mode."""
+    normalized_mode = mode or "manual"
+    if normalized_mode not in {"manual", "guided"}:
+        raise ValueError("Mode must be 'manual' or 'guided'")
+    normalized_config = normalize_guided_config(guided_config)
+    if normalized_config is not None and normalized_mode != "guided":
+        raise ValueError("Hardware automation requires guided mode")
+    return normalized_mode, normalized_config
+
+
 def _require_ended(session_status: str) -> None:
     if session_status not in _ENDED_STATUSES:
         raise ValueError("Only allowed once the session ended")
@@ -725,6 +752,7 @@ async def create_edging_session(
     app_session_id: str | None = None,
     participant_ids: list[str] | None = None,
     mode: str | None = None,
+    guided_config: dict | None = None,
     min_edge_interval_seconds: int | None = None,
     notification_level: str | None = None,
     allow_partner_edges: bool = False,
@@ -735,8 +763,9 @@ async def create_edging_session(
     """Create (configure) a session. Hosts create for themselves; members
     create a request the Host can start later."""
     repo = repo or EdgingRepo()
-    if mode is not None and mode not in {"manual", "guided"}:
-        raise ValueError("Mode must be 'manual' or 'guided'")
+    normalized_mode, normalized_config = _validate_guided_settings(
+        mode, guided_config
+    )
     session = await repo.create_session(
         name=name,
         goals=_validate_goals(goals),
@@ -746,7 +775,8 @@ async def create_edging_session(
         created_by=created_by,
         app_session_id=app_session_id,
         participant_ids=_validate_participants(participant_ids, created_by),
-        mode=mode or "manual",
+        mode=normalized_mode,
+        guided_config=normalized_config,
         min_edge_interval_seconds=_validate_min_interval(
             min_edge_interval_seconds
         ),
@@ -769,6 +799,7 @@ async def update_edging_session(
     auto_stop_on_goal: Optional[bool] = None,
     participant_ids: Optional[list[str]] = None,
     mode: Optional[str] = None,
+    guided_config: Optional[dict] = None,
     min_edge_interval_seconds: Optional[int] = None,
     notification_level: Optional[str] = None,
     allow_partner_edges: Optional[bool] = None,
@@ -796,6 +827,7 @@ async def update_edging_session(
         or auto_stop_on_goal is not None
         or participant_ids is not None
         or mode is not None
+        or guided_config is not None
     ):
         if session.status != "configured":
             raise ValueError(
@@ -809,10 +841,20 @@ async def update_edging_session(
             fields["participant_ids"] = _validate_participants(
                 participant_ids, session.created_by
             )
-        if mode is not None:
-            if mode not in {"manual", "guided"}:
-                raise ValueError("Mode must be 'manual' or 'guided'")
-            fields["mode"] = mode
+        if mode is not None or guided_config is not None:
+            next_mode = mode if mode is not None else (session.mode or "manual")
+            next_config = (
+                guided_config
+                if guided_config is not None
+                else session.guided_config
+            )
+            normalized_mode, normalized_config = _validate_guided_settings(
+                next_mode, next_config
+            )
+            fields["mode"] = normalized_mode
+            fields["guided_config"] = (
+                normalized_config if normalized_mode == "guided" else None
+            )
 
     if (
         min_edge_interval_seconds is not None
@@ -872,6 +914,7 @@ async def delete_edging_session(
         if not await repo.delete_session(session_id):
             raise ValueError("Session not found")
         _goal_announced.discard(session_id)
+        discard_guided_automation(session_id)
         broadcast_session_deleted(session)
         return True
 
@@ -910,6 +953,13 @@ async def start_edging_session(
             raise ValueError("Session is no longer configured")
         _goal_announced.discard(session_id)
         broadcast_session(updated)
+        try:
+            await start_guided_automation(updated)
+        except Exception:
+            logger.exception(
+                "[Training] Guided automation failed to start",
+                session_id=updated.id,
+            )
         _notify_training(
             updated,
             "started",
@@ -1054,6 +1104,22 @@ async def record_edging_edge(
             raise ValueError("Session not found")
 
         broadcast_session(updated)
+        if updated.status == "running" and outcome == EdgeOutcome.SUCCESS.value:
+            try:
+                await on_guided_edge(updated)
+            except Exception:
+                logger.exception(
+                    "[Training] Guided automation edge handling failed",
+                    session_id=updated.id,
+                )
+        elif updated.status in _ENDED_STATUSES:
+            try:
+                await finish_guided_automation(updated)
+            except Exception:
+                logger.exception(
+                    "[Training] Guided automation failed to finish",
+                    session_id=updated.id,
+                )
         await _dispatch_training_event(
             TriggerableEvent.TRAINING_EDGE_RECORDED.value,
             updated,
@@ -1236,6 +1302,13 @@ async def end_edging_session(
         if updated is None:
             raise ValueError("Session is not running")
         broadcast_session(updated)
+        try:
+            await finish_guided_automation(updated)
+        except Exception:
+            logger.exception(
+                "[Training] Guided automation failed to finish",
+                session_id=updated.id,
+            )
         if status == "succeeded":
             await _announce_goal_reached(updated, viewer_id)
         await _announce_session_ended(updated, viewer_id)
@@ -1253,6 +1326,19 @@ async def tick_running_sessions(repo: Optional[EdgingRepo] = None) -> None:
     session = await repo.get_running_session(load_edges=False)
     if session is None:
         return
+
+    if session.mode == "guided" and session.guided_config:
+        # Guided automation needs the edge history to derive the phase.
+        full = await repo.get_session(session.id)
+        if full is not None:
+            try:
+                await tick_guided_automation(full)
+            except Exception:
+                logger.exception(
+                    "[Training] Guided automation tick failed",
+                    session_id=full.id,
+                )
+            session = full
 
     if not session.auto_stop_on_goal:
         # Still announce a duration-only goal once, even when the Host keeps
@@ -1297,6 +1383,13 @@ async def tick_running_sessions(repo: Optional[EdgingRepo] = None) -> None:
         )
         if updated is not None:
             broadcast_session(updated)
+            try:
+                await finish_guided_automation(updated)
+            except Exception:
+                logger.exception(
+                    "[Training] Guided automation failed to finish",
+                    session_id=updated.id,
+                )
             await _announce_goal_reached(updated)
             await _announce_session_ended(updated)
             logger.info(
@@ -1328,6 +1421,7 @@ async def recover_orphan_sessions(repo: Optional[EdgingRepo] = None) -> int:
         )
         if updated is not None:
             _goal_announced.discard(session.id)
+            discard_guided_automation(session.id)
             broadcast_session(updated)
             recovered += 1
 
@@ -1360,6 +1454,9 @@ async def end_sessions_for_app_session(
                 **_finalize_pause_fields(current, now),
             )
             if updated is not None:
+                # The application session has already neutralized the
+                # hardware: forget automation without reversing a profile.
+                discard_guided_automation(updated.id)
                 broadcast_session(updated)
                 # Do not run trigger rules after the application session was
                 # neutralized: an action must not re-energize hardware.
@@ -1384,6 +1481,9 @@ def serialize_template(template: EdgingTemplate) -> dict:
         "goals": [dict(goal) for goal in template.goals or []],
         "auto_stop_on_goal": template.auto_stop_on_goal,
         "mode": template.mode or "manual",
+        "guided_config": (
+            dict(template.guided_config) if template.guided_config else None
+        ),
         "created_by": template.created_by,
         "created_at": to_utc_iso(template.created_at),
     }
@@ -1461,13 +1561,14 @@ async def save_template(
     auto_stop_on_goal: bool,
     created_by: str,
     mode: str | None = None,
+    guided_config: dict | None = None,
     training_repo: Optional[TrainingRepo] = None,
 ) -> dict:
     repo = training_repo or TrainingRepo()
     normalized_goals = _validate_goals(goals)
-    normalized_mode = mode or "manual"
-    if normalized_mode not in {"manual", "guided"}:
-        raise ValueError("Mode must be 'manual' or 'guided'")
+    normalized_mode, normalized_config = _validate_guided_settings(
+        mode, guided_config
+    )
     if template_id is None:
         template = await repo.create_template(
             name=name,
@@ -1475,6 +1576,7 @@ async def save_template(
             auto_stop_on_goal=auto_stop_on_goal,
             created_by=created_by,
             mode=normalized_mode,
+            guided_config=normalized_config,
         )
     else:
         template = await repo.update_template(
@@ -1483,6 +1585,7 @@ async def save_template(
             goals=normalized_goals,
             auto_stop_on_goal=auto_stop_on_goal,
             mode=normalized_mode,
+            guided_config=normalized_config,
         )
         if template is None:
             raise ValueError("Template not found")

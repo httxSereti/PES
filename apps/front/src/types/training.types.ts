@@ -1,4 +1,5 @@
 import type {
+    TrainingGuidedConfig,
     TrainingInitPayload,
     TrainingOverviewPayload,
 } from './websocket.generated';
@@ -10,6 +11,7 @@ export type {
     TrainingOverviewStats,
     EdgingSessionStats,
     EdgingSessionSummary,
+    TrainingGuidedConfig,
 } from './websocket.generated';
 
 /** Reply to `training:index`: module stats + the 5 most recent sessions. */
@@ -32,6 +34,7 @@ export interface TrainingSessionFields {
     goals: { type: 'duration' | 'edges'; value: number }[];
     auto_stop_on_goal: boolean;
     mode: 'manual' | 'guided';
+    guided_config?: TrainingGuidedConfig | null;
     min_edge_interval_seconds: number;
     notification_level: TrainingNotificationLevel;
     allow_partner_edges: boolean;

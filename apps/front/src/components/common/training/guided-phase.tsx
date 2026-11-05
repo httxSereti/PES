@@ -71,7 +71,23 @@ export function GuidedPhase({ session }: GuidedPhaseProps) {
         ? session.edge_count / edgesTarget
         : 0;
   const clamped = Math.max(0, Math.min(1, progress));
-  const phase = PHASES.find((entry) => clamped < entry.until) ?? PHASES[0]!;
+  const phaseIndex = Math.max(
+    0,
+    PHASES.findIndex((entry) => clamped < entry.until),
+  );
+  const phase = PHASES[phaseIndex] ?? PHASES[0]!;
+  const automation = session.guided_config?.enabled
+    ? session.guided_config
+    : null;
+  const automationLevel =
+    automation === null
+      ? null
+      : phaseIndex >= 4
+        ? automation.start_level_pct
+        : Math.min(
+            automation.max_level_pct,
+            automation.start_level_pct + automation.phase_step_pct * phaseIndex,
+          );
 
   return (
     <div className="flex flex-col gap-2.5 rounded-lg border border-violet-500/25 bg-violet-500/5 p-3.5">
@@ -84,6 +100,16 @@ export function GuidedPhase({ session }: GuidedPhaseProps) {
           {Math.round(clamped * 100)}%
         </span>
       </div>
+      {automation && (
+        <div className="flex flex-wrap items-center gap-1.5 font-mono text-[10px] text-amber-600 dark:text-amber-300">
+          <span className="rounded border border-amber-500/25 bg-amber-500/10 px-1.5 py-0.5">
+            Automation · {automation.profile ?? "—"}
+          </span>
+          <span className="tabular-nums">
+            target {automationLevel}% · ceiling {automation.max_level_pct}%
+          </span>
+        </div>
+      )}
       <p className="text-[11px] text-muted-foreground">{phase.detail}</p>
       <Progress
         value={Math.round(clamped * 100)}

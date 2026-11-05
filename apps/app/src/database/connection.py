@@ -83,6 +83,7 @@ class Database:
                     "program_id": "VARCHAR",
                     "program_step": "INTEGER",
                     "mode": "VARCHAR DEFAULT 'manual'",
+                    "guided_config": "JSON",
                     "min_edge_interval_seconds": "INTEGER DEFAULT 0",
                     "notification_level": "VARCHAR DEFAULT 'all'",
                     "allow_partner_edges": "BOOLEAN DEFAULT 0",
@@ -120,14 +121,22 @@ class Database:
                 text("PRAGMA table_info(training_edging_templates)")
             )
             template_columns = {row[1] for row in result.fetchall()}
-            if template_columns and "mode" not in template_columns:
-                await conn.execute(
-                    text(
-                        "ALTER TABLE training_edging_templates "
-                        "ADD COLUMN mode VARCHAR DEFAULT 'manual'"
-                    )
-                )
-                logger.info("[Database] Added training_edging_templates.mode")
+            if template_columns:
+                template_migrations = {
+                    "mode": "VARCHAR DEFAULT 'manual'",
+                    "guided_config": "JSON",
+                }
+                for column, sql_type in template_migrations.items():
+                    if column not in template_columns:
+                        await conn.execute(
+                            text(
+                                "ALTER TABLE training_edging_templates "
+                                f"ADD COLUMN {column} {sql_type}"
+                            )
+                        )
+                        logger.info(
+                            f"[Database] Added training_edging_templates.{column}"
+                        )
 
             result = await conn.execute(
                 text("PRAGMA table_info(training_edging_edges)")

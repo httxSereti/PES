@@ -187,6 +187,7 @@ export interface TrainingSessionDraft {
     auto_stop_on_goal: boolean;
     participant_ids?: string[] | null;
     mode?: 'manual' | 'guided' | null;
+    guided_config?: TrainingGuidedConfig | null;
     min_edge_interval_seconds: number;
     notification_level?: 'all' | 'edges' | 'failures' | 'summary' | 'none' | null;
     allow_partner_edges: boolean;
@@ -197,6 +198,22 @@ export interface TrainingGoalDraft {
     value: number;
 }
 
+export interface TrainingGuidedConfig {
+    enabled: boolean;
+    profile?: string | null;
+    start_level_pct: number;
+    phase_step_pct: number;
+    max_level_pct: number;
+    edge_drop_pct: number;
+    edge_cooldown_seconds: number;
+    restore_after_cooldown: boolean;
+    reward_profile?: string | null;
+    reward_level_pct: number;
+    fail_profile?: string | null;
+    fail_level_pct: number;
+    neutralize_on_fail: boolean;
+}
+
 export interface TrainingUpdatePayload {
     session_id: string;
     name?: string | null;
@@ -204,6 +221,7 @@ export interface TrainingUpdatePayload {
     auto_stop_on_goal?: boolean | null;
     participant_ids?: string[] | null;
     mode?: 'manual' | 'guided' | null;
+    guided_config?: TrainingGuidedConfig | null;
     min_edge_interval_seconds?: number | null;
     notification_level?: 'all' | 'edges' | 'failures' | 'summary' | 'none' | null;
     allow_partner_edges?: boolean | null;
@@ -251,6 +269,7 @@ export interface TrainingTemplateSavePayload {
     goals: TrainingGoalDraft[];
     auto_stop_on_goal: boolean;
     mode?: 'manual' | 'guided' | null;
+    guided_config?: TrainingGuidedConfig | null;
 }
 
 export interface TrainingTemplateDeletePayload {
@@ -360,6 +379,7 @@ export interface EdgingSessionSummary {
     program_id: string | null;
     program_step: number | null;
     mode: string;
+    guided_config: TrainingGuidedConfig | null;
     min_edge_interval_seconds: number;
     notification_level: 'all' | 'edges' | 'failures' | 'summary' | 'none';
     allow_partner_edges: boolean;
@@ -720,6 +740,7 @@ export interface TrainingTemplate {
     goals: EdgingGoal[];
     auto_stop_on_goal: boolean;
     mode: string;
+    guided_config: TrainingGuidedConfig | null;
     created_by: string;
     created_at: string;
 }

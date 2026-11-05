@@ -390,6 +390,28 @@ class EdgingGoal(WireModel):
     value: int
 
 
+class TrainingGuidedConfig(WireModel):
+    """Optional hardware automation for a guided edging session.
+
+    Every level is a profile level percentage capped by ``max_level_pct``
+    (itself capped at 100). The config is only active in guided mode.
+    """
+
+    enabled: bool = False
+    profile: str | None = None
+    start_level_pct: int = Field(default=60, ge=0, le=100)
+    phase_step_pct: int = Field(default=0, ge=0, le=30)
+    max_level_pct: int = Field(default=80, ge=0, le=100)
+    edge_drop_pct: int = Field(default=0, ge=0, le=50)
+    edge_cooldown_seconds: int = Field(default=0, ge=0, le=3600)
+    restore_after_cooldown: bool = True
+    reward_profile: str | None = None
+    reward_level_pct: int = Field(default=80, ge=0, le=100)
+    fail_profile: str | None = None
+    fail_level_pct: int = Field(default=40, ge=0, le=100)
+    neutralize_on_fail: bool = True
+
+
 class EdgingEdge(WireModel):
     id: str
     session_id: str
@@ -422,6 +444,7 @@ class EdgingSessionSummary(WireModel):
     program_id: str | None
     program_step: int | None
     mode: str
+    guided_config: TrainingGuidedConfig | None
     # Minimum seconds between two successful edges (0 disables the cooldown).
     min_edge_interval_seconds: int
     notification_level: TrainingNotificationLevel
@@ -455,6 +478,7 @@ class TrainingTemplate(WireModel):
     goals: list[EdgingGoal]
     auto_stop_on_goal: bool
     mode: str
+    guided_config: TrainingGuidedConfig | None
     created_by: str
     created_at: datetime
 

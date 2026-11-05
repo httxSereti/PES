@@ -403,6 +403,7 @@ export default function EdgingSessionPage() {
         auto_stop_on_goal: session.auto_stop_on_goal,
         participant_ids: session.participant_ids ?? [],
         mode: session.mode === "guided" ? "guided" : "manual",
+        guided_config: session.guided_config,
         min_edge_interval_seconds: session.min_edge_interval_seconds,
         notification_level: session.notification_level,
         allow_partner_edges: session.allow_partner_edges,
@@ -448,6 +449,7 @@ export default function EdgingSessionPage() {
           })),
           auto_stop_on_goal: session.auto_stop_on_goal,
           mode: session.mode === "guided" ? "guided" : "manual",
+          guided_config: session.guided_config,
         }),
       "Template saved",
     );
@@ -899,6 +901,7 @@ export default function EdgingSessionPage() {
               })),
               auto_stop_on_goal: session.auto_stop_on_goal,
               mode: session.mode === "guided" ? "guided" : "manual",
+              guided_config: session.guided_config,
               min_edge_interval_seconds: session.min_edge_interval_seconds,
               notification_level: session.notification_level,
               allow_partner_edges: session.allow_partner_edges,

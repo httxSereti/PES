@@ -45,6 +45,9 @@ class EdgingSession(Base):
     program_step: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     # manual = free session, guided = phase prompts driven by the goals.
     mode: Mapped[str] = mapped_column(String, default="manual")
+    # Optional hardware automation for guided sessions (profiles, phase levels,
+    # edge drop, reward/fail profile). Normalized by services.training_guided.
+    guided_config: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)
     # Minimum seconds between two successful edges (0 disables the cooldown).
     min_edge_interval_seconds: Mapped[int] = mapped_column(Integer, default=0)
     # all / edges / failures / summary / none (see EdgingNotificationLevel).

@@ -19,6 +19,11 @@ async def handle_training_template_save(
             auto_stop_on_goal=payload.auto_stop_on_goal,
             created_by=ctx.user.id,
             mode=payload.mode,
+            guided_config=(
+                payload.guided_config.model_dump()
+                if payload.guided_config is not None
+                else None
+            ),
         )
         templates = await list_templates()
     except ValueError as e:

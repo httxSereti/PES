@@ -9,6 +9,7 @@ import { TrainingCooldown } from "./training-cooldown";
 import { TrainingEdgeButtons } from "./training-edge-buttons";
 import { GoalProgress } from "./goal-progress";
 import { GoalsReachedBanner } from "./goals-reached-banner";
+import { GuidedPhase } from "./guided-phase";
 
 interface TrainingKioskProps {
     session: EdgingSessionSummary;
@@ -105,8 +106,9 @@ export function TrainingKiosk({
                 </div>
             </div>
 
-            <div className="mt-4">
+            <div className="mt-4 space-y-3">
                 <GoalProgress session={session} />
+                <GuidedPhase session={session} />
             </div>
 
             <div className="flex flex-1 flex-col items-center justify-center py-6">

@@ -81,6 +81,40 @@ class ActionQueue:
             logger.info(f"[Queue] Enqueued {len(items)} items")
             self._notify_update()
 
+    def adopt(self, item: QueueItem, snapshot_data: dict | None) -> None:
+        """
+        Register an item that was applied outside the tick.
+
+        Used by the guided training automation, which needs an immediate
+        profile change but still wants the item to be visible in the queue and
+        reversed by ``cancel()``, ``cancel_for_unit()`` or ``neutralize_all()``.
+        The caller is responsible for calling ``executor.apply()`` first.
+        """
+        now = time.monotonic()
+        with self._lock:
+            existing = next(
+                (queued for queued in self._items if queued.id == item.id), None
+            )
+            if existing is not None:
+                existing.snapshot_data = snapshot_data
+                existing.status = QueueItemStatus.RUNNING
+                existing.expires_monotonic = None
+            else:
+                item.status = QueueItemStatus.RUNNING
+                item.started_at = datetime.now()
+                item.elapsed = 0
+                item.started_monotonic = now
+                item.expires_monotonic = None
+                item.snapshot_data = snapshot_data
+                self._items.append(item)
+                self._items.sort(key=lambda x: (-x.priority, x.created_at))
+        self._notify_update()
+
+    @property
+    def executor(self) -> ActionExecutor:
+        """Executor used by guided automation for immediate applies."""
+        return self._executor
+
     async def tick(self) -> None:
         """
         Process one tick of the queue (called every second).

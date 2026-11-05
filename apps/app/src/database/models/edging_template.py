@@ -10,7 +10,7 @@ from database.base import Base
 
 
 class EdgingTemplate(Base):
-    """Reusable session preset (name + goals + auto-stop)."""
+    """Reusable session preset: name, goals, mode and optional automation."""
 
     __tablename__ = "training_edging_templates"
 
@@ -19,5 +19,6 @@ class EdgingTemplate(Base):
     goals: Mapped[List] = mapped_column(JSON, default=list)
     auto_stop_on_goal: Mapped[bool] = mapped_column(Boolean, default=False)
     mode: Mapped[str] = mapped_column(String, default="manual")
+    guided_config: Mapped[dict | None] = mapped_column(JSON, nullable=True)
     created_by: Mapped[str] = mapped_column(String)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)

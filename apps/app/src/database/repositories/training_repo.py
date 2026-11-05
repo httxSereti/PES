@@ -27,6 +27,7 @@ class TrainingRepo:
         auto_stop_on_goal: bool,
         created_by: str,
         mode: str = "manual",
+        guided_config: dict | None = None,
     ) -> EdgingTemplate:
         template = EdgingTemplate(
             id=generate_id(),
@@ -34,6 +35,7 @@ class TrainingRepo:
             goals=goals,
             auto_stop_on_goal=auto_stop_on_goal,
             mode=mode,
+            guided_config=guided_config,
             created_by=created_by,
         )
         async with self._db.session_maker() as db_session:

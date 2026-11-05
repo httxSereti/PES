@@ -1,5 +1,10 @@
+import { useState } from "react";
 import type { TrainingSessionFields } from "@/types";
 import { NOTIFICATION_LEVEL_OPTIONS } from "@/lib/training";
+import {
+  GuidedAutomationFields,
+  guidedConfigFrom,
+} from "./guided-automation-fields";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Button } from "@pes/ui/components/button";
 import {
@@ -69,6 +74,7 @@ export type SessionFormValues = z.output<typeof sessionFormSchema>;
 
 export function toSessionFields(
   values: SessionFormValues,
+  guidedConfig: ReturnType<typeof guidedConfigFrom>,
 ): TrainingSessionFields {
   return {
     name: values.name,
@@ -81,6 +87,10 @@ export function toSessionFields(
     })),
     auto_stop_on_goal: values.auto_stop_on_goal,
     mode: values.mode,
+    guided_config:
+      values.mode === "guided"
+        ? guidedConfig
+        : { ...guidedConfig, enabled: false },
     min_edge_interval_seconds: values.min_edge_interval_seconds,
     notification_level: values.notification_level,
     allow_partner_edges: values.allow_partner_edges,
@@ -135,10 +145,15 @@ export function SessionForm({
     name: "goals",
   });
 
+  const [guidedConfig, setGuidedConfig] = useState(() =>
+    guidedConfigFrom(initial?.guided_config),
+  );
+  const guidedMode = form.watch("mode") === "guided";
+
   const isSubmitting = form.formState.isSubmitting;
 
   async function handleSubmit(values: SessionFormValues) {
-    await onSubmit(toSessionFields(values));
+    await onSubmit(toSessionFields(values, guidedConfig));
   }
 
   return (
@@ -343,6 +358,13 @@ export function SessionForm({
           </Field>
         )}
       />
+
+      {guidedMode && (
+        <GuidedAutomationFields
+          value={guidedConfig}
+          onChange={setGuidedConfig}
+        />
+      )}
 
       <Controller
         name="min_edge_interval_seconds"
