@@ -45,6 +45,10 @@ class EdgingSession(Base):
     program_step: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     # manual = free session, guided = phase prompts driven by the goals.
     mode: Mapped[str] = mapped_column(String, default="manual")
+    # Minimum seconds between two successful edges (0 disables the cooldown).
+    min_edge_interval_seconds: Mapped[int] = mapped_column(Integer, default=0)
+    # all / edges / failures / summary / none (see EdgingNotificationLevel).
+    notification_level: Mapped[str] = mapped_column(String, default="all")
     # Extra users allowed to see/control the session (creator is implicit).
     participant_ids: Mapped[List] = mapped_column(JSON, default=list)
     status: Mapped[str] = mapped_column(String, default="configured", index=True)

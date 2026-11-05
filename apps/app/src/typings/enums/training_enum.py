@@ -42,3 +42,13 @@ class EdgingInitiator(Enum):
     SELF = "self"
     MEMBER = "member"
     SYSTEM = "system"
+
+
+class EdgingNotificationLevel(Enum):
+    """How many training notifications a session sends to its recipients."""
+
+    ALL = "all"  # every lifecycle event, including pause/resume
+    EDGES = "edges"  # edges, goals and the final outcome
+    FAILURES = "failures"  # failed sessions only
+    SUMMARY = "summary"  # only the end-of-session message
+    NONE = "none"

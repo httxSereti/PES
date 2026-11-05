@@ -116,6 +116,8 @@ export default function NewEdgingSessionPage() {
         goals: fields.goals,
         auto_stop_on_goal: fields.auto_stop_on_goal,
         mode: fields.mode,
+        min_edge_interval_seconds: fields.min_edge_interval_seconds,
+        notification_level: fields.notification_level,
       });
       if (result.status !== "ok" || !result.session) {
         setError(result.message ?? "Failed to create the session");

@@ -380,6 +380,10 @@ class IntegrationCatalogEntry(WireModel):
 
 # ─────────────────────────────── Training ───────────────────────────────
 
+TrainingNotificationLevel = Literal[
+    "all", "edges", "failures", "summary", "none"
+]
+
 
 class EdgingGoal(WireModel):
     type: str
@@ -418,6 +422,9 @@ class EdgingSessionSummary(WireModel):
     program_id: str | None
     program_step: int | None
     mode: str
+    # Minimum seconds between two successful edges (0 disables the cooldown).
+    min_edge_interval_seconds: int
+    notification_level: TrainingNotificationLevel
     paused_at: datetime | None
     total_paused_seconds: int
     created_at: datetime
@@ -428,6 +435,8 @@ class EdgingSessionSummary(WireModel):
     edge_count: int
     duration_seconds: int | None
     goals_met: bool
+    # Timestamp of the latest successful edge (client-side cooldown countdown).
+    last_edge_at: datetime | None
 
 
 class EdgingSession(EdgingSessionSummary):

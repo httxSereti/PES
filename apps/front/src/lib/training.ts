@@ -2,7 +2,20 @@ import type {
     EdgeDifficulty,
     EdgeOutcome,
     EdgingSessionSummary,
+    TrainingNotificationLevel,
 } from '@/types';
+
+/** Labels shared by the session form and the live session settings. */
+export const NOTIFICATION_LEVEL_OPTIONS: {
+    value: TrainingNotificationLevel;
+    label: string;
+}[] = [
+    { value: 'all', label: 'Everything (edges, pauses, outcomes)' },
+    { value: 'edges', label: 'Edges and final outcome' },
+    { value: 'failures', label: 'Failures only' },
+    { value: 'summary', label: 'End-of-session summary only' },
+    { value: 'none', label: 'No notifications' },
+];
 
 /** "83" -> "1:23", "3725" -> "1:02:05" */
 export function formatDuration(totalSeconds: number | null | undefined): string {
@@ -49,6 +62,29 @@ export function sessionElapsedSeconds(
     }
     const raw = Math.max(0, Math.floor((end - start) / 1000));
     return Math.max(0, raw - (session.total_paused_seconds ?? 0));
+}
+
+/**
+ * Seconds before the next successful edge is allowed.
+ * Derived from the last successful edge and the configured minimum interval.
+ */
+export function edgeCooldownRemaining(
+    session: Pick<
+        EdgingSessionSummary,
+        "last_edge_at" | "min_edge_interval_seconds"
+    >,
+    nowMs: number = Date.now(),
+): number {
+    const interval = session.min_edge_interval_seconds ?? 0;
+    if (interval <= 0 || !session.last_edge_at) return 0;
+
+    const lastEdge = new Date(session.last_edge_at).getTime();
+    if (Number.isNaN(lastEdge)) return 0;
+
+    return Math.max(
+        0,
+        Math.ceil((lastEdge + interval * 1000 - nowMs) / 1000),
+    );
 }
 
 /** True when every configured goal is reached at `nowMs`. */

@@ -20,9 +20,11 @@ import {
 } from "lucide-react";
 
 import { useWebSocket } from "@/hooks/useWebSocket";
+import { useEdgeCooldown } from "@/hooks/useEdgeCooldown";
 import { useAppSelector } from "@/store/hooks";
 import { formatDuration } from "@/lib/training";
 import { formatDateTime } from "@/lib/format-date";
+import { TrainingCooldown } from "@/components/common/training/training-cooldown";
 import { TrainingStatusBadge } from "@/components/common/training/training-status-badge";
 import type { EdgingSessionSummary } from "@/types";
 
@@ -43,6 +45,7 @@ function goalTotal(session: EdgingSessionSummary, type: "duration" | "edges") {
 
 /** Compact "live now" banner shown on the overview when a session is running. */
 function LiveSessionCard({ session }: { session: EdgingSessionSummary }) {
+  const cooldownRemaining = useEdgeCooldown(session);
   const durationTarget = goalTotal(session, "duration");
   const edgesTarget = goalTotal(session, "edges");
 
@@ -91,6 +94,10 @@ function LiveSessionCard({ session }: { session: EdgingSessionSummary }) {
                 </span>
               </span>
             )}
+            <TrainingCooldown
+              remaining={cooldownRemaining}
+              intervalSeconds={session.min_edge_interval_seconds}
+            />
           </div>
 
           <span className="ml-auto flex items-center gap-1 text-xs text-violet-600 hover:underline dark:text-violet-400">

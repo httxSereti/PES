@@ -22,6 +22,8 @@ async def handle_training_update(
             auto_stop_on_goal=payload.auto_stop_on_goal,
             participant_ids=payload.participant_ids,
             mode=payload.mode,
+            min_edge_interval_seconds=payload.min_edge_interval_seconds,
+            notification_level=payload.notification_level,
             notes=payload.notes,
             rating=payload.rating,
         )

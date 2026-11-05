@@ -8,5 +8,6 @@ from .training_enum import (
     EdgeDifficulty,
     EdgeOutcome,
     EdgingInitiator,
+    EdgingNotificationLevel,
 )
 from .session_enum import SessionType, SessionStatus

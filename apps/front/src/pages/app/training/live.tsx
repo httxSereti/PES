@@ -10,9 +10,11 @@ import {
 import { ArrowRight, Flame, Plus, Radio } from "lucide-react";
 
 import { useAppSelector } from "@/store/hooks";
+import { useEdgeCooldown } from "@/hooks/useEdgeCooldown";
 import { hasPermission } from "@/lib/permissions";
 import { GoalProgress } from "@/components/common/training/goal-progress";
 import { GuidedPhase } from "@/components/common/training/guided-phase";
+import { TrainingCooldown } from "@/components/common/training/training-cooldown";
 import { TrainingTimer } from "@/components/common/training/training-timer";
 import { EdgeTimeline } from "@/components/common/training/edge-timeline";
 import { TrainingStatusBadge } from "@/components/common/training/training-status-badge";
@@ -27,6 +29,7 @@ export default function TrainingLivePage() {
   const liveEdges = useAppSelector((state) => state.training.liveEdges);
   const user = useAppSelector((state) => state.auth.user);
   const canManage = hasPermission(user, Permission.TRAINING_EDGING_MANAGE);
+  const cooldownRemaining = useEdgeCooldown(liveSession);
 
   if (!liveSession) {
     return (
@@ -90,11 +93,17 @@ export default function TrainingLivePage() {
               totalPausedSeconds={liveSession.total_paused_seconds}
               className="text-5xl font-bold tracking-tight text-violet-600 dark:text-violet-400"
             />
-            <span className="flex items-center gap-1.5 rounded-md border border-border/60 bg-muted/30 px-2.5 py-1.5 text-xs text-muted-foreground">
-              <Flame size={12} className="text-violet-500" />
-              {liveSession.edge_count} successful edge
-              {liveSession.edge_count === 1 ? "" : "s"}
-            </span>
+            <div className="flex flex-wrap items-center gap-2">
+              <TrainingCooldown
+                remaining={cooldownRemaining}
+                intervalSeconds={liveSession.min_edge_interval_seconds}
+              />
+              <span className="flex items-center gap-1.5 rounded-md border border-border/60 bg-muted/30 px-2.5 py-1.5 text-xs text-muted-foreground">
+                <Flame size={12} className="text-violet-500" />
+                {liveSession.edge_count} successful edge
+                {liveSession.edge_count === 1 ? "" : "s"}
+              </span>
+            </div>
           </div>
           <GoalProgress session={liveSession} />
           <GuidedPhase session={liveSession} />

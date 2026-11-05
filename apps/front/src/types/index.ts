@@ -49,6 +49,7 @@ export type {
     TrainingSessionDetail,
     TrainingLiveSnapshot,
     TrainingSessionFields,
+    TrainingNotificationLevel,
     TrainingOverviewStats,
     EdgingSessionStats,
     EdgeDifficulty,

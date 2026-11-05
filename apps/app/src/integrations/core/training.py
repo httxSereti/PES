@@ -21,6 +21,8 @@ _SESSION_FIELDS = {
     "goals_met": "whether every goal is currently reached",
     "auto_stop_on_goal": "whether the session stops automatically on success",
     "mode": "manual or guided",
+    "min_edge_interval_seconds": "configured cooldown between successful edges",
+    "notification_level": "all, edges, failures, summary or none",
     "program_id": "program id when the session belongs to a program",
     "program_step": "zero-based program step index",
 }

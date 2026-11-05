@@ -7,6 +7,7 @@ WebSocket broadcasts.
 from __future__ import annotations
 
 import asyncio
+import math
 from collections import Counter
 from collections.abc import Iterator
 from contextlib import contextmanager
@@ -22,7 +23,13 @@ from database.models import EdgingEdge, EdgingProgram, EdgingSession, EdgingTemp
 from database.repositories.edging_repo import EdgingRepo
 from database.repositories.training_repo import TrainingRepo
 from events.enums import TriggerableEvent
-from typings import EdgeDifficulty, EdgeOutcome, EdgingGoalType, Permission
+from typings import (
+    EdgeDifficulty,
+    EdgeOutcome,
+    EdgingGoalType,
+    EdgingNotificationLevel,
+    Permission,
+)
 from utils import to_utc_iso
 
 logger = structlog.get_logger("pes")
@@ -150,6 +157,8 @@ def _training_event_data(session: EdgingSession, **extra) -> dict:
         "goals_met": goals_met(session),
         "auto_stop_on_goal": session.auto_stop_on_goal,
         "mode": session.mode or "manual",
+        "min_edge_interval_seconds": session.min_edge_interval_seconds or 0,
+        "notification_level": session.notification_level or "all",
         "program_id": session.program_id,
         "program_step": session.program_step,
         **extra,
@@ -185,6 +194,25 @@ async def _dispatch_training_event(
         )
 
 
+def _notification_allowed(
+    session: EdgingSession, kind: str, status: str | None
+) -> bool:
+    """Apply the session's notification level to a notification kind."""
+    level = session.notification_level or EdgingNotificationLevel.ALL.value
+    if level == EdgingNotificationLevel.NONE.value:
+        return False
+    if level == EdgingNotificationLevel.ALL.value:
+        return True
+    if level == EdgingNotificationLevel.EDGES.value:
+        return kind in {"edge", "goal_reached", "ended"}
+    if level == EdgingNotificationLevel.FAILURES.value:
+        return kind == "ended" and status == "failed"
+    if level == EdgingNotificationLevel.SUMMARY.value:
+        return kind == "ended"
+    # Unknown persisted value: keep the historical behavior.
+    return True
+
+
 def _notify_training(
     session: EdgingSession,
     kind: str,
@@ -193,6 +221,8 @@ def _notify_training(
     actor_user_id: str | None = None,
     status: str | None = None,
 ) -> None:
+    if not _notification_allowed(session, kind, status):
+        return
     recipients = _session_recipients(session)
     if actor_user_id:
         recipients.discard(actor_user_id)
@@ -289,6 +319,26 @@ def success_edge_count(session: EdgingSession) -> int:
     return sum(1 for e in session.edges if e.outcome == SUCCESS_EDGE_OUTCOME)
 
 
+def last_success_edge_at(session: EdgingSession) -> Optional[datetime]:
+    """Timestamp of the latest successful edge, used by the cooldown."""
+    for edge in reversed(session.edges or []):
+        if edge.outcome == SUCCESS_EDGE_OUTCOME:
+            return edge.recorded_at
+    return None
+
+
+def edge_cooldown_remaining(
+    session: EdgingSession, now: Optional[datetime] = None
+) -> int:
+    """Seconds before the next successful edge is allowed (0 = ready)."""
+    interval = int(session.min_edge_interval_seconds or 0)
+    last_edge_at = last_success_edge_at(session)
+    if interval <= 0 or last_edge_at is None:
+        return 0
+    elapsed = ((now or datetime.utcnow()) - last_edge_at).total_seconds()
+    return max(0, math.ceil(interval - elapsed))
+
+
 def goals_met(session: EdgingSession, now: Optional[datetime] = None) -> bool:
     """True when *every* configured goal is reached."""
     if not session.goals:
@@ -339,8 +389,11 @@ def serialize_session_summary(
         "program_id": session.program_id,
         "program_step": session.program_step,
         "mode": session.mode or "manual",
+        "min_edge_interval_seconds": session.min_edge_interval_seconds or 0,
+        "notification_level": session.notification_level or "all",
         "paused_at": to_utc_iso(session.paused_at),
         "total_paused_seconds": session.total_paused_seconds or 0,
+        "last_edge_at": to_utc_iso(last_success_edge_at(session)),
         "created_at": to_utc_iso(session.created_at),
         "started_at": to_utc_iso(session.started_at),
         "ended_at": to_utc_iso(session.ended_at),
@@ -562,6 +615,20 @@ def _validate_goals(goals: list[dict]) -> list[dict]:
     return normalized
 
 
+def _validate_min_interval(seconds: int | None) -> int:
+    value = int(seconds or 0)
+    if value < 0 or value > 3600:
+        raise ValueError("Minimum edge interval must be between 0 and 3600 seconds")
+    return value
+
+
+def _validate_notification_level(level: str | None) -> str:
+    value = level or EdgingNotificationLevel.ALL.value
+    if value not in {item.value for item in EdgingNotificationLevel}:
+        raise ValueError(f"Unknown notification level: {value}")
+    return value
+
+
 def _require_ended(session_status: str) -> None:
     if session_status not in _ENDED_STATUSES:
         raise ValueError("Only allowed once the session ended")
@@ -645,6 +712,8 @@ async def create_edging_session(
     app_session_id: str | None = None,
     participant_ids: list[str] | None = None,
     mode: str | None = None,
+    min_edge_interval_seconds: int | None = None,
+    notification_level: str | None = None,
     program_id: str | None = None,
     program_step: int | None = None,
     repo: Optional[EdgingRepo] = None,
@@ -664,6 +733,10 @@ async def create_edging_session(
         app_session_id=app_session_id,
         participant_ids=_validate_participants(participant_ids, created_by),
         mode=mode or "manual",
+        min_edge_interval_seconds=_validate_min_interval(
+            min_edge_interval_seconds
+        ),
+        notification_level=_validate_notification_level(notification_level),
         program_id=program_id,
         program_step=program_step,
     )
@@ -681,6 +754,8 @@ async def update_edging_session(
     auto_stop_on_goal: Optional[bool] = None,
     participant_ids: Optional[list[str]] = None,
     mode: Optional[str] = None,
+    min_edge_interval_seconds: Optional[int] = None,
+    notification_level: Optional[str] = None,
     notes: Optional[str] = None,
     rating: Optional[int] = None,
     repo: Optional[EdgingRepo] = None,
@@ -722,6 +797,21 @@ async def update_edging_session(
             if mode not in {"manual", "guided"}:
                 raise ValueError("Mode must be 'manual' or 'guided'")
             fields["mode"] = mode
+
+    if min_edge_interval_seconds is not None or notification_level is not None:
+        if session.status not in {"configured", "running"}:
+            raise ValueError(
+                "Cooldown and notifications can only be changed before the "
+                "session ends"
+            )
+        if min_edge_interval_seconds is not None:
+            fields["min_edge_interval_seconds"] = _validate_min_interval(
+                min_edge_interval_seconds
+            )
+        if notification_level is not None:
+            fields["notification_level"] = _validate_notification_level(
+                notification_level
+            )
 
     if notes is not None or rating is not None:
         if not is_host:
@@ -856,6 +946,15 @@ async def record_edging_edge(
 
         was_met = goals_met(session)
         now = datetime.utcnow()
+        # A failed edge is a safety signal and must never be blocked by the
+        # cooldown; successful edges wait for the configured interval.
+        if outcome == EdgeOutcome.SUCCESS.value:
+            remaining = edge_cooldown_remaining(session, now)
+            if remaining > 0:
+                raise ValueError(
+                    f"Cooldown active — wait {remaining}s before the next edge"
+                )
+
         previous = session.edges[-1] if session.edges else None
         reference = previous.recorded_at if previous else session.started_at
         interval_seconds = (

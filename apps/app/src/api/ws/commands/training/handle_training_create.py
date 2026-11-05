@@ -21,6 +21,8 @@ async def handle_training_create(
             app_session_id=active_app_session_id(),
             participant_ids=msg.payload.participant_ids,
             mode=msg.payload.mode,
+            min_edge_interval_seconds=msg.payload.min_edge_interval_seconds,
+            notification_level=msg.payload.notification_level,
         )
     except ValueError as e:
         return CommandResult(status="error", message=str(e))

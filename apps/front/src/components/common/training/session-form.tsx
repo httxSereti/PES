@@ -1,4 +1,5 @@
 import type { TrainingSessionFields } from "@/types";
+import { NOTIFICATION_LEVEL_OPTIONS } from "@/lib/training";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Button } from "@pes/ui/components/button";
 import {
@@ -16,7 +17,14 @@ import {
   SelectValue,
 } from "@pes/ui/components/select";
 import { Switch } from "@pes/ui/components/switch";
-import { Compass, Plus, SquareCheck, Trash2 } from "lucide-react";
+import {
+  Bell,
+  Compass,
+  Plus,
+  SquareCheck,
+  Timer,
+  Trash2,
+} from "lucide-react";
 import { Controller, useFieldArray, useForm } from "react-hook-form";
 import { z } from "zod";
 
@@ -41,6 +49,18 @@ export const sessionFormSchema = z.object({
     .max(10, "Too many goals."),
   auto_stop_on_goal: z.boolean(),
   mode: z.enum(["manual", "guided"]),
+  min_edge_interval_seconds: z.coerce
+    .number({ message: "Must be a number." })
+    .int("Must be a whole number of seconds.")
+    .min(0, "Cannot be negative.")
+    .max(3600, "Maximum 1 hour."),
+  notification_level: z.enum([
+    "all",
+    "edges",
+    "failures",
+    "summary",
+    "none",
+  ]),
 });
 
 export type SessionFormValues = z.output<typeof sessionFormSchema>;
@@ -59,6 +79,8 @@ export function toSessionFields(
     })),
     auto_stop_on_goal: values.auto_stop_on_goal,
     mode: values.mode,
+    min_edge_interval_seconds: values.min_edge_interval_seconds,
+    notification_level: values.notification_level,
   };
 }
 
@@ -77,6 +99,8 @@ export function fromSessionFields(
     })),
     auto_stop_on_goal: fields?.auto_stop_on_goal ?? false,
     mode: fields?.mode ?? "manual",
+    min_edge_interval_seconds: fields?.min_edge_interval_seconds ?? 0,
+    notification_level: fields?.notification_level ?? "all",
   };
 }
 
@@ -312,6 +336,79 @@ export function SessionForm({
                 field.onChange(checked ? "guided" : "manual")
               }
             />
+          </Field>
+        )}
+      />
+
+      <Controller
+        name="min_edge_interval_seconds"
+        control={form.control}
+        render={({ field, fieldState }) => (
+          <Field
+            data-invalid={fieldState.invalid}
+            className="rounded-lg border border-border/30 px-3 py-2.5"
+          >
+            <div className="flex items-center gap-2">
+              <Timer size={12} className="text-muted-foreground/40" />
+              <div className="flex flex-1 flex-col">
+                <FieldLabel htmlFor="form-training-session-min-interval">
+                  Minimum interval between edges
+                </FieldLabel>
+                <span className="text-[10px] text-muted-foreground/50">
+                  Seconds to wait after a successful edge. 0 disables the
+                  cooldown.
+                </span>
+              </div>
+              <Input
+                {...field}
+                id="form-training-session-min-interval"
+                value={field.value as string | number | undefined}
+                type="number"
+                min={0}
+                max={3600}
+                step={5}
+                className="w-24"
+                aria-invalid={fieldState.invalid}
+                autoComplete="off"
+              />
+            </div>
+            {fieldState.invalid && <FieldError errors={[fieldState.error]} />}
+          </Field>
+        )}
+      />
+
+      <Controller
+        name="notification_level"
+        control={form.control}
+        render={({ field }) => (
+          <Field className="rounded-lg border border-border/30 px-3 py-2.5">
+            <div className="flex flex-wrap items-center gap-2">
+              <Bell size={12} className="text-muted-foreground/40" />
+              <div className="flex min-w-40 flex-1 flex-col">
+                <FieldLabel htmlFor="form-training-session-notifications">
+                  Notifications
+                </FieldLabel>
+                <span className="text-[10px] text-muted-foreground/50">
+                  What session recipients are notified about.
+                </span>
+              </div>
+              <Select value={field.value} onValueChange={field.onChange}>
+                <SelectTrigger
+                  id="form-training-session-notifications"
+                  className="w-full sm:w-64"
+                  aria-label="Training notification level"
+                >
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {NOTIFICATION_LEVEL_OPTIONS.map((level) => (
+                    <SelectItem key={level.value} value={level.value}>
+                      {level.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
           </Field>
         )}
       />

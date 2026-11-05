@@ -83,6 +83,8 @@ class Database:
                     "program_id": "VARCHAR",
                     "program_step": "INTEGER",
                     "mode": "VARCHAR DEFAULT 'manual'",
+                    "min_edge_interval_seconds": "INTEGER DEFAULT 0",
+                    "notification_level": "VARCHAR DEFAULT 'all'",
                     "participant_ids": "JSON",
                     "paused_at": "DATETIME",
                     "total_paused_seconds": "INTEGER DEFAULT 0",

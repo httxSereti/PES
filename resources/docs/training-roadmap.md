@@ -63,14 +63,18 @@ d'événements, car démarrer une session émet elle-même
 
 ## 3. UX de session
 
-- [ ] Cooldown timer entre deux edges, avec temps restant visible
-- [ ] Intervalle minimum configurable
+- [x] Cooldown timer entre deux edges, avec temps restant visible
+- [x] Intervalle minimum configurable
 - [ ] Historique des suppressions d'edges (audit de l'undo)
 - [ ] Tags sur les notes d'edge
 - [ ] Raccourcis clavier (1–4 pour les difficultés, espace pour pause)
 - [ ] Mode kiosque plein écran avec gros boutons
 - [ ] Contrôle partenaire : le membre peut enregistrer un edge, avec validation ou notification au Host
-- [ ] Préférences de notifications : edge par edge, fail uniquement, résumé, etc.
+- [x] Préférences de notifications : edge par edge, fail uniquement, résumé, etc.
+
+Le cooldown est configuré par session (0–3600 s) et bloque uniquement les edges
+réussis ; un fail reste toujours possible. Les notifications sont filtrées par
+session (`all`, `edges`, `failures`, `summary`, `none`) côté backend.
 
 ---
 

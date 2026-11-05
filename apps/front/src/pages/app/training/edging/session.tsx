@@ -28,6 +28,13 @@ import {
   TabsTrigger,
 } from "@pes/ui/components/tabs";
 import { Input } from "@pes/ui/components/input";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@pes/ui/components/select";
 import { Textarea } from "@pes/ui/components/textarea";
 import {
   Ban,
@@ -38,6 +45,7 @@ import {
   Pencil,
   Play,
   Save,
+  Settings2,
   Trash2,
   Undo2,
   X,
@@ -45,11 +53,13 @@ import {
 import { toast } from "sonner";
 
 import { useWebSocket } from "@/hooks/useWebSocket";
+import { useEdgeCooldown } from "@/hooks/useEdgeCooldown";
 import { useAppSelector } from "@/store/hooks";
 import { hasPermission } from "@/lib/permissions";
 import { formatDateTime } from "@/lib/format-date";
-import { formatDuration } from "@/lib/training";
+import { formatDuration, NOTIFICATION_LEVEL_OPTIONS } from "@/lib/training";
 import { TrainingStatusBadge } from "@/components/common/training/training-status-badge";
+import { TrainingCooldown } from "@/components/common/training/training-cooldown";
 import { TrainingTimer } from "@/components/common/training/training-timer";
 import { GoalProgress } from "@/components/common/training/goal-progress";
 import { GuidedPhase } from "@/components/common/training/guided-phase";
@@ -61,7 +71,11 @@ import { RatingStars } from "@/components/common/training/rating-stars";
 import { SessionForm } from "@/components/common/training/session-form";
 import { ConfirmDeleteDialog } from "@/components/common/dialogs/confirm-delete-dialog";
 import { Permission } from "@/types";
-import type { CommandResult, EdgeDifficulty } from "@/types";
+import type {
+  CommandResult,
+  EdgeDifficulty,
+  TrainingNotificationLevel,
+} from "@/types";
 
 export function meta() {
   return [{ title: "PES | Training - Edging Session" }];
@@ -115,6 +129,7 @@ export default function EdgingSessionPage() {
 
   const isHost = hasPermission(user, Permission.HOST);
   const canManage = hasPermission(user, Permission.TRAINING_EDGING_MANAGE);
+  const cooldownRemaining = useEdgeCooldown(detail?.session);
 
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -127,6 +142,10 @@ export default function EdgingSessionPage() {
   const [templateName, setTemplateName] = useState("");
   const [renameOpen, setRenameOpen] = useState(false);
   const [renameName, setRenameName] = useState("");
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [minIntervalInput, setMinIntervalInput] = useState("0");
+  const [notificationLevel, setNotificationLevel] =
+    useState<TrainingNotificationLevel>("all");
 
   const load = useCallback(async () => {
     if (!id) return;
@@ -205,6 +224,39 @@ export default function EdgingSessionPage() {
   const configured = session.status === "configured";
   const ended = !running && !configured;
   const participantCount = session.participant_ids?.length ?? 0;
+  const cooldownActive = cooldownRemaining > 0;
+
+  function openSettings() {
+    setMinIntervalInput(String(session.min_edge_interval_seconds ?? 0));
+    setNotificationLevel(session.notification_level ?? "all");
+    setSettingsOpen(true);
+  }
+
+  async function handleSaveSettings() {
+    const seconds = Number(minIntervalInput);
+    if (
+      !Number.isFinite(seconds) ||
+      !Number.isInteger(seconds) ||
+      seconds < 0 ||
+      seconds > 3600
+    ) {
+      setError(
+        "Minimum interval must be a whole number between 0 and 3600 seconds",
+      );
+      return;
+    }
+
+    const saved = await run(
+      () =>
+        sendCommand("training:update", {
+          session_id: session.id,
+          min_edge_interval_seconds: seconds,
+          notification_level: notificationLevel,
+        }),
+      "Session settings saved",
+    );
+    if (saved) setSettingsOpen(false);
+  }
 
   async function handleStart() {
     await run(
@@ -314,6 +366,8 @@ export default function EdgingSessionPage() {
         auto_stop_on_goal: session.auto_stop_on_goal,
         participant_ids: session.participant_ids ?? [],
         mode: session.mode === "guided" ? "guided" : "manual",
+        min_edge_interval_seconds: session.min_edge_interval_seconds,
+        notification_level: session.notification_level,
       });
       if (result.status !== "ok" || !result.session) {
         setError(result.message ?? "Failed to duplicate the session");
@@ -430,6 +484,12 @@ export default function EdgingSessionPage() {
                   Edit goals
                 </DropdownMenuItem>
               )}
+              {(configured || running) && canManage && (
+                <DropdownMenuItem onSelect={openSettings}>
+                  <Settings2 size={13} />
+                  Session settings
+                </DropdownMenuItem>
+              )}
               {canManage && (
                 <DropdownMenuItem
                   onSelect={() => {
@@ -509,8 +569,16 @@ export default function EdgingSessionPage() {
                   <p className="text-xs font-medium text-muted-foreground">
                     {session.paused_at
                       ? "Session paused — resume to record edges."
-                      : "Record an edge — how hard was it?"}
+                      : cooldownActive
+                        ? `Cooldown — next edge in ${formatDuration(cooldownRemaining)}.`
+                        : "Record an edge — how hard was it?"}
                   </p>
+                  {!session.paused_at && (
+                    <TrainingCooldown
+                      remaining={cooldownRemaining}
+                      intervalSeconds={session.min_edge_interval_seconds}
+                    />
+                  )}
                   <Input
                     value={edgeNote}
                     onChange={(event) => setEdgeNote(event.target.value)}
@@ -522,7 +590,11 @@ export default function EdgingSessionPage() {
                     {EDGE_BUTTONS.map((button) => (
                       <Button
                         key={button.difficulty}
-                        disabled={busy || Boolean(session.paused_at)}
+                        disabled={
+                          busy ||
+                          Boolean(session.paused_at) ||
+                          cooldownActive
+                        }
                         onClick={() => void handleEdge(button.difficulty)}
                         className={`${button.className} text-white`}
                       >
@@ -736,6 +808,8 @@ export default function EdgingSessionPage() {
               })),
               auto_stop_on_goal: session.auto_stop_on_goal,
               mode: session.mode === "guided" ? "guided" : "manual",
+              min_edge_interval_seconds: session.min_edge_interval_seconds,
+              notification_level: session.notification_level,
             }}
             submitLabel="Save changes"
             onSubmit={async (fields) => {
@@ -751,6 +825,71 @@ export default function EdgingSessionPage() {
               await load();
             }}
           />
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={settingsOpen} onOpenChange={setSettingsOpen}>
+        <DialogContent className="md:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Session settings</DialogTitle>
+            <DialogDescription>
+              The cooldown blocks successful edges too close to the previous
+              one. Notification preferences apply to every session recipient.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="space-y-1.5">
+              <p className="text-xs font-medium text-muted-foreground">
+                Minimum interval between edges (seconds)
+              </p>
+              <Input
+                type="number"
+                min={0}
+                max={3600}
+                step={5}
+                value={minIntervalInput}
+                onChange={(event) => setMinIntervalInput(event.target.value)}
+                autoComplete="off"
+              />
+              <p className="text-[10px] text-muted-foreground/60">
+                0 disables the cooldown. A failed edge is never blocked.
+              </p>
+            </div>
+            <div className="space-y-1.5">
+              <p className="text-xs font-medium text-muted-foreground">
+                Notifications
+              </p>
+              <Select
+                value={notificationLevel}
+                onValueChange={(value) =>
+                  setNotificationLevel(value as TrainingNotificationLevel)
+                }
+              >
+                <SelectTrigger aria-label="Training notification level">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {NOTIFICATION_LEVEL_OPTIONS.map((level) => (
+                    <SelectItem key={level.value} value={level.value}>
+                      {level.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="flex justify-end gap-2">
+              <Button
+                variant="outline"
+                onClick={() => setSettingsOpen(false)}
+              >
+                Cancel
+              </Button>
+              <Button disabled={busy} onClick={() => void handleSaveSettings()}>
+                <Save size={14} />
+                Save settings
+              </Button>
+            </div>
+          </div>
         </DialogContent>
       </Dialog>
 

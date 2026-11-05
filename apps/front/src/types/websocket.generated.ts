@@ -187,6 +187,8 @@ export interface TrainingSessionDraft {
     auto_stop_on_goal: boolean;
     participant_ids?: string[] | null;
     mode?: 'manual' | 'guided' | null;
+    min_edge_interval_seconds: number;
+    notification_level?: 'all' | 'edges' | 'failures' | 'summary' | 'none' | null;
 }
 
 export interface TrainingGoalDraft {
@@ -201,6 +203,8 @@ export interface TrainingUpdatePayload {
     auto_stop_on_goal?: boolean | null;
     participant_ids?: string[] | null;
     mode?: 'manual' | 'guided' | null;
+    min_edge_interval_seconds?: number | null;
+    notification_level?: 'all' | 'edges' | 'failures' | 'summary' | 'none' | null;
     notes?: string | null;
     rating?: number | null;
 }
@@ -354,6 +358,8 @@ export interface EdgingSessionSummary {
     program_id: string | null;
     program_step: number | null;
     mode: string;
+    min_edge_interval_seconds: number;
+    notification_level: 'all' | 'edges' | 'failures' | 'summary' | 'none';
     paused_at: string | null;
     total_paused_seconds: number;
     created_at: string;
@@ -362,6 +368,7 @@ export interface EdgingSessionSummary {
     edge_count: number;
     duration_seconds: number | null;
     goals_met: boolean;
+    last_edge_at: string | null;
 }
 
 export interface EdgingGoal {

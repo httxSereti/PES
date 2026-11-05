@@ -18,12 +18,22 @@ export type TrainingIndexResponse = TrainingOverviewPayload;
 /** Live session + edges (matches the `training:init` snapshot). */
 export type TrainingLiveSnapshot = TrainingInitPayload;
 
-/** Body of `training:create` / `training:update` (name + goals). */
+/** How many notifications a session sends to its recipients. */
+export type TrainingNotificationLevel =
+    | 'all'
+    | 'edges'
+    | 'failures'
+    | 'summary'
+    | 'none';
+
+/** Body of `training:create` / `training:update` (name + goals + settings). */
 export interface TrainingSessionFields {
     name: string;
     goals: { type: 'duration' | 'edges'; value: number }[];
     auto_stop_on_goal: boolean;
     mode: 'manual' | 'guided';
+    min_edge_interval_seconds: number;
+    notification_level: TrainingNotificationLevel;
     participant_ids?: string[];
 }
 
