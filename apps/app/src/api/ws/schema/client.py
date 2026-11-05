@@ -460,6 +460,7 @@ class TrainingSessionDraft(WireModel):
     mode: Literal["manual", "guided"] | None = None
     min_edge_interval_seconds: int = Field(default=0, ge=0, le=3600)
     notification_level: TrainingNotificationLevel | None = None
+    allow_partner_edges: bool = False
 
 
 class TrainingCreateCommand(ClientMessage):
@@ -476,6 +477,7 @@ class TrainingUpdatePayload(WireModel):
     mode: Literal["manual", "guided"] | None = None
     min_edge_interval_seconds: int | None = Field(default=None, ge=0, le=3600)
     notification_level: TrainingNotificationLevel | None = None
+    allow_partner_edges: bool | None = None
     notes: str | None = None
     rating: int | None = Field(default=None, ge=1, le=5)
 

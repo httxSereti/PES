@@ -37,6 +37,7 @@ class EdgingRepo:
         mode: str = "manual",
         min_edge_interval_seconds: int = 0,
         notification_level: str = "all",
+        allow_partner_edges: bool = False,
         participant_ids: list[str] | None = None,
     ) -> EdgingSession:
         session = EdgingSession(
@@ -53,6 +54,7 @@ class EdgingRepo:
             mode=mode,
             min_edge_interval_seconds=min_edge_interval_seconds,
             notification_level=notification_level,
+            allow_partner_edges=allow_partner_edges,
             participant_ids=participant_ids or [],
         )
         async with self._db.session_maker() as db_session:

@@ -17,6 +17,34 @@ export const NOTIFICATION_LEVEL_OPTIONS: {
     { value: 'none', label: 'No notifications' },
 ];
 
+/** Edge recording buttons, shared by the session page and the kiosk. */
+export const EDGE_BUTTONS: {
+    difficulty: EdgeDifficulty;
+    label: string;
+    className: string;
+}[] = [
+    {
+        difficulty: 'easy',
+        label: 'Easy',
+        className: 'bg-emerald-600 hover:bg-emerald-500',
+    },
+    {
+        difficulty: 'normal',
+        label: 'Normal',
+        className: 'bg-sky-600 hover:bg-sky-500',
+    },
+    {
+        difficulty: 'hard',
+        label: 'Hard',
+        className: 'bg-orange-600 hover:bg-orange-500',
+    },
+    {
+        difficulty: 'extreme',
+        label: 'Extreme',
+        className: 'bg-rose-600 hover:bg-rose-500',
+    },
+];
+
 /** "83" -> "1:23", "3725" -> "1:02:05" */
 export function formatDuration(totalSeconds: number | null | undefined): string {
     if (totalSeconds == null || Number.isNaN(totalSeconds)) return "—";

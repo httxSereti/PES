@@ -35,12 +35,13 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@pes/ui/components/select";
+import { Switch } from "@pes/ui/components/switch";
 import { Textarea } from "@pes/ui/components/textarea";
 import {
   Ban,
   Copy,
   Ellipsis,
-  Flame,
+  Maximize2,
   Pause,
   Pencil,
   Play,
@@ -60,6 +61,9 @@ import { formatDateTime } from "@/lib/format-date";
 import { formatDuration, NOTIFICATION_LEVEL_OPTIONS } from "@/lib/training";
 import { TrainingStatusBadge } from "@/components/common/training/training-status-badge";
 import { TrainingCooldown } from "@/components/common/training/training-cooldown";
+import { TrainingEdgeButtons } from "@/components/common/training/training-edge-buttons";
+import { TrainingKiosk } from "@/components/common/training/training-kiosk";
+import { TrainingShortcuts } from "@/components/common/training/training-shortcuts";
 import { TrainingTimer } from "@/components/common/training/training-timer";
 import { GoalProgress } from "@/components/common/training/goal-progress";
 import { GuidedPhase } from "@/components/common/training/guided-phase";
@@ -87,33 +91,6 @@ function newClientEdgeId(): string {
   }
   return `${Date.now()}-${Math.random().toString(36).slice(2)}`;
 }
-
-const EDGE_BUTTONS: {
-  difficulty: EdgeDifficulty;
-  label: string;
-  className: string;
-}[] = [
-  {
-    difficulty: "easy",
-    label: "Easy",
-    className: "bg-emerald-600 hover:bg-emerald-500",
-  },
-  {
-    difficulty: "normal",
-    label: "Normal",
-    className: "bg-sky-600 hover:bg-sky-500",
-  },
-  {
-    difficulty: "hard",
-    label: "Hard",
-    className: "bg-orange-600 hover:bg-orange-500",
-  },
-  {
-    difficulty: "extreme",
-    label: "Extreme",
-    className: "bg-rose-600 hover:bg-rose-500",
-  },
-];
 
 export default function EdgingSessionPage() {
   const { id } = useParams<{ id: string }>();
@@ -146,6 +123,8 @@ export default function EdgingSessionPage() {
   const [minIntervalInput, setMinIntervalInput] = useState("0");
   const [notificationLevel, setNotificationLevel] =
     useState<TrainingNotificationLevel>("all");
+  const [partnerControl, setPartnerControl] = useState(false);
+  const [kioskOpen, setKioskOpen] = useState(false);
 
   const load = useCallback(async () => {
     if (!id) return;
@@ -181,6 +160,30 @@ export default function EdgingSessionPage() {
       setNotes(detail.session.notes ?? "");
     }
   }, [detail, notesDirty]);
+
+  // Kiosk overlay: lock scrolling while open and sync with browser fullscreen.
+  useEffect(() => {
+    if (!kioskOpen) return;
+    if (detail?.session?.status !== "running") {
+      setKioskOpen(false);
+      return;
+    }
+
+    const handleFullscreenChange = () => {
+      if (!document.fullscreenElement) setKioskOpen(false);
+    };
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    document.addEventListener("fullscreenchange", handleFullscreenChange);
+
+    return () => {
+      document.removeEventListener("fullscreenchange", handleFullscreenChange);
+      document.body.style.overflow = previousOverflow;
+      if (document.fullscreenElement) {
+        void document.exitFullscreen().catch(() => undefined);
+      }
+    };
+  }, [kioskOpen, detail?.session?.status]);
 
   async function run(
     action: () => Promise<CommandResult>,
@@ -225,11 +228,44 @@ export default function EdgingSessionPage() {
   const ended = !running && !configured;
   const participantCount = session.participant_ids?.length ?? 0;
   const cooldownActive = cooldownRemaining > 0;
+  const isParticipant =
+    user?.id === session.created_by ||
+    Boolean(user?.id && (session.participant_ids ?? []).includes(user.id));
+  const canRecordEdges =
+    isHost || (Boolean(session.allow_partner_edges) && isParticipant);
+  const anyDialogOpen =
+    editOpen || deleteOpen || templateOpen || renameOpen || settingsOpen;
+
+  const handleEdgeHotkey = (difficulty: EdgeDifficulty) => {
+    void handleEdge(difficulty);
+  };
+  const handlePauseHotkey = () => {
+    void (session.paused_at ? handleResume() : handlePause());
+  };
 
   function openSettings() {
     setMinIntervalInput(String(session.min_edge_interval_seconds ?? 0));
     setNotificationLevel(session.notification_level ?? "all");
+    setPartnerControl(Boolean(session.allow_partner_edges));
     setSettingsOpen(true);
+  }
+
+  async function openKiosk() {
+    setKioskOpen(true);
+    try {
+      if (!document.fullscreenElement) {
+        await document.documentElement.requestFullscreen?.();
+      }
+    } catch {
+      // Fullscreen can be denied by the browser; the overlay still works.
+    }
+  }
+
+  function closeKiosk() {
+    setKioskOpen(false);
+    if (document.fullscreenElement) {
+      void document.exitFullscreen().catch(() => undefined);
+    }
   }
 
   async function handleSaveSettings() {
@@ -252,6 +288,7 @@ export default function EdgingSessionPage() {
           session_id: session.id,
           min_edge_interval_seconds: seconds,
           notification_level: notificationLevel,
+          allow_partner_edges: partnerControl,
         }),
       "Session settings saved",
     );
@@ -368,6 +405,7 @@ export default function EdgingSessionPage() {
         mode: session.mode === "guided" ? "guided" : "manual",
         min_edge_interval_seconds: session.min_edge_interval_seconds,
         notification_level: session.notification_level,
+        allow_partner_edges: session.allow_partner_edges,
       });
       if (result.status !== "ok" || !result.session) {
         setError(result.message ?? "Failed to duplicate the session");
@@ -420,6 +458,16 @@ export default function EdgingSessionPage() {
     <div className="space-y-4 px-4 md:px-5">
       {error && <p className="text-sm text-destructive">{error}</p>}
 
+      <TrainingShortcuts
+        enabled={running && !anyDialogOpen}
+        canRecord={canRecordEdges && !cooldownActive}
+        canPause={isHost}
+        paused={Boolean(session.paused_at)}
+        busy={busy}
+        onEdge={handleEdgeHotkey}
+        onTogglePause={handlePauseHotkey}
+      />
+
       {/* Header */}
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex min-w-0 flex-col gap-1">
@@ -456,6 +504,7 @@ export default function EdgingSessionPage() {
                 {participantCount === 1 ? " participant" : " participants"}
               </>
             )}
+            {session.allow_partner_edges && <> · partner edge control</>}
             {session.program_id && (
               <>
                 {" · "}
@@ -469,67 +518,80 @@ export default function EdgingSessionPage() {
             )}
           </p>
         </div>
-        {(canManage || (isHost && !running)) && (
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button variant="outline" size="icon-sm">
-                <Ellipsis size={14} />
-                <span className="sr-only">Session actions</span>
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end">
-              {configured && canManage && (
-                <DropdownMenuItem onSelect={() => setEditOpen(true)}>
-                  <Pencil size={13} />
-                  Edit goals
-                </DropdownMenuItem>
-              )}
-              {(configured || running) && canManage && (
-                <DropdownMenuItem onSelect={openSettings}>
-                  <Settings2 size={13} />
-                  Session settings
-                </DropdownMenuItem>
-              )}
-              {canManage && (
-                <DropdownMenuItem
-                  onSelect={() => {
-                    setRenameName(session.name);
-                    setRenameOpen(true);
-                  }}
-                >
-                  <Pencil size={13} />
-                  Rename session
-                </DropdownMenuItem>
-              )}
-              {canManage && (
-                <>
+        <div className="flex items-center gap-2">
+          {running && canRecordEdges && (
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={busy}
+              onClick={() => void openKiosk()}
+            >
+              <Maximize2 size={14} />
+              Kiosk
+            </Button>
+          )}
+          {(canManage || (isHost && !running)) && (
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="outline" size="icon-sm">
+                  <Ellipsis size={14} />
+                  <span className="sr-only">Session actions</span>
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                {configured && canManage && (
+                  <DropdownMenuItem onSelect={() => setEditOpen(true)}>
+                    <Pencil size={13} />
+                    Edit goals
+                  </DropdownMenuItem>
+                )}
+                {(configured || running) && canManage && (
+                  <DropdownMenuItem onSelect={openSettings}>
+                    <Settings2 size={13} />
+                    Session settings
+                  </DropdownMenuItem>
+                )}
+                {canManage && (
                   <DropdownMenuItem
                     onSelect={() => {
-                      setTemplateName(session.name);
-                      setTemplateOpen(true);
+                      setRenameName(session.name);
+                      setRenameOpen(true);
                     }}
                   >
-                    <Save size={13} />
-                    Save as template
+                    <Pencil size={13} />
+                    Rename session
                   </DropdownMenuItem>
-                  <DropdownMenuItem onSelect={() => void handleDuplicate()}>
-                    <Copy size={13} />
-                    Duplicate session
+                )}
+                {canManage && (
+                  <>
+                    <DropdownMenuItem
+                      onSelect={() => {
+                        setTemplateName(session.name);
+                        setTemplateOpen(true);
+                      }}
+                    >
+                      <Save size={13} />
+                      Save as template
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onSelect={() => void handleDuplicate()}>
+                      <Copy size={13} />
+                      Duplicate session
+                    </DropdownMenuItem>
+                  </>
+                )}
+                {isHost && !running && (
+                  <DropdownMenuItem
+                    variant="destructive"
+                    onSelect={() => setDeleteOpen(true)}
+                  >
+                    <Trash2 size={13} />
+                    Delete session
                   </DropdownMenuItem>
-                </>
-              )}
-              {isHost && !running && (
-                <DropdownMenuItem
-                  variant="destructive"
-                  onSelect={() => setDeleteOpen(true)}
-                >
-                  <Trash2 size={13} />
-                  Delete session
-                </DropdownMenuItem>
-              )}
-            </DropdownMenuContent>
-          </DropdownMenu>
-        )}
+                )}
+              </DropdownMenuContent>
+            </DropdownMenu>
+          )}
+        </div>
       </div>
 
       {/* Goals */}
@@ -586,23 +648,15 @@ export default function EdgingSessionPage() {
                     maxLength={500}
                     disabled={busy || Boolean(session.paused_at)}
                   />
-                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-                    {EDGE_BUTTONS.map((button) => (
-                      <Button
-                        key={button.difficulty}
-                        disabled={
-                          busy ||
-                          Boolean(session.paused_at) ||
-                          cooldownActive
-                        }
-                        onClick={() => void handleEdge(button.difficulty)}
-                        className={`${button.className} text-white`}
-                      >
-                        <Flame size={14} />
-                        {button.label}
-                      </Button>
-                    ))}
-                  </div>
+                  <TrainingEdgeButtons
+                    disabled={
+                      busy || Boolean(session.paused_at) || cooldownActive
+                    }
+                    onRecord={handleEdgeHotkey}
+                  />
+                  <p className="text-[10px] text-muted-foreground/60">
+                    Shortcuts: 1–4 record an edge · Space pause/resume
+                  </p>
                 </div>
 
                 {/* Session control */}
@@ -658,6 +712,43 @@ export default function EdgingSessionPage() {
                   </Button>
                 </div>
               </>
+            ) : canRecordEdges ? (
+              <div className="space-y-3">
+                <div className="space-y-2">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <p className="text-xs font-medium text-muted-foreground">
+                      {session.paused_at
+                        ? "Session paused — wait for the Host to resume."
+                        : cooldownActive
+                          ? `Cooldown — next edge in ${formatDuration(cooldownRemaining)}.`
+                          : "Partner control — record an edge."}
+                    </p>
+                    {!session.paused_at && (
+                      <TrainingCooldown
+                        remaining={cooldownRemaining}
+                        intervalSeconds={session.min_edge_interval_seconds}
+                      />
+                    )}
+                  </div>
+                  <Input
+                    value={edgeNote}
+                    onChange={(event) => setEdgeNote(event.target.value)}
+                    placeholder="Optional note for the next edge"
+                    maxLength={500}
+                    disabled={busy || Boolean(session.paused_at)}
+                  />
+                  <TrainingEdgeButtons
+                    disabled={
+                      busy || Boolean(session.paused_at) || cooldownActive
+                    }
+                    onRecord={handleEdgeHotkey}
+                  />
+                </div>
+                <p className="text-[11px] text-muted-foreground/70">
+                  Your edges are recorded immediately and the Host is notified.
+                  Pause and failure stay Host-only.
+                </p>
+              </div>
             ) : (
               <p className="text-xs text-muted-foreground">
                 The Host is running this session — sit tight.
@@ -810,6 +901,7 @@ export default function EdgingSessionPage() {
               mode: session.mode === "guided" ? "guided" : "manual",
               min_edge_interval_seconds: session.min_edge_interval_seconds,
               notification_level: session.notification_level,
+              allow_partner_edges: session.allow_partner_edges,
             }}
             submitLabel="Save changes"
             onSubmit={async (fields) => {
@@ -876,6 +968,19 @@ export default function EdgingSessionPage() {
                   ))}
                 </SelectContent>
               </Select>
+            </div>
+            <div className="flex items-center justify-between gap-3 rounded-lg border border-border/60 px-3 py-2.5">
+              <div className="flex flex-col">
+                <span className="text-xs font-medium">Partner edge control</span>
+                <span className="text-[10px] text-muted-foreground/60">
+                  Participants can record successful edges. The Host is
+                  notified.
+                </span>
+              </div>
+              <Switch
+                checked={partnerControl}
+                onCheckedChange={setPartnerControl}
+              />
             </div>
             <div className="flex justify-end gap-2">
               <Button
@@ -965,6 +1070,22 @@ export default function EdgingSessionPage() {
         busy={busy}
         onConfirm={() => void handleDelete()}
       />
+
+      {kioskOpen && running && (
+        <TrainingKiosk
+          session={session}
+          isHost={isHost}
+          canRecord={canRecordEdges}
+          busy={busy}
+          cooldownRemaining={cooldownRemaining}
+          onRecord={handleEdgeHotkey}
+          onPause={() => void handlePause()}
+          onResume={() => void handleResume()}
+          onFail={() => void handleFail()}
+          onEndSuccess={() => void handleEnd("succeeded")}
+          onExit={closeKiosk}
+        />
+      )}
     </div>
   );
 }

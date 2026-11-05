@@ -24,6 +24,7 @@ import {
   SquareCheck,
   Timer,
   Trash2,
+  Users,
 } from "lucide-react";
 import { Controller, useFieldArray, useForm } from "react-hook-form";
 import { z } from "zod";
@@ -61,6 +62,7 @@ export const sessionFormSchema = z.object({
     "summary",
     "none",
   ]),
+  allow_partner_edges: z.boolean(),
 });
 
 export type SessionFormValues = z.output<typeof sessionFormSchema>;
@@ -81,6 +83,7 @@ export function toSessionFields(
     mode: values.mode,
     min_edge_interval_seconds: values.min_edge_interval_seconds,
     notification_level: values.notification_level,
+    allow_partner_edges: values.allow_partner_edges,
   };
 }
 
@@ -101,6 +104,7 @@ export function fromSessionFields(
     mode: fields?.mode ?? "manual",
     min_edge_interval_seconds: fields?.min_edge_interval_seconds ?? 0,
     notification_level: fields?.notification_level ?? "all",
+    allow_partner_edges: fields?.allow_partner_edges ?? false,
   };
 }
 
@@ -409,6 +413,50 @@ export function SessionForm({
                 </SelectContent>
               </Select>
             </div>
+          </Field>
+        )}
+      />
+
+      <Controller
+        name="allow_partner_edges"
+        control={form.control}
+        render={({ field }) => (
+          <Field
+            orientation="horizontal"
+            className={`items-center justify-between rounded-lg border px-3 py-2.5 transition-colors ${
+              field.value
+                ? "border-sky-500/20 bg-sky-500/5"
+                : "border-border/30 bg-transparent"
+            }`}
+          >
+            <div className="flex items-center gap-2">
+              <Users
+                size={12}
+                className={
+                  field.value ? "text-sky-500" : "text-muted-foreground/30"
+                }
+              />
+              <div className="flex flex-col">
+                <span
+                  className={`font-mono text-[11px] ${
+                    field.value
+                      ? "text-sky-600 dark:text-sky-300"
+                      : "text-muted-foreground/40"
+                  }`}
+                >
+                  Partner edge control
+                </span>
+                <span className="text-[10px] text-muted-foreground/50">
+                  Participants can record successful edges. The Host is
+                  notified.
+                </span>
+              </div>
+            </div>
+            <Switch
+              id="form-training-session-partner-edges"
+              checked={field.value}
+              onCheckedChange={field.onChange}
+            />
           </Field>
         )}
       />

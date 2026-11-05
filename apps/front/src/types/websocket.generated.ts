@@ -189,6 +189,7 @@ export interface TrainingSessionDraft {
     mode?: 'manual' | 'guided' | null;
     min_edge_interval_seconds: number;
     notification_level?: 'all' | 'edges' | 'failures' | 'summary' | 'none' | null;
+    allow_partner_edges: boolean;
 }
 
 export interface TrainingGoalDraft {
@@ -205,6 +206,7 @@ export interface TrainingUpdatePayload {
     mode?: 'manual' | 'guided' | null;
     min_edge_interval_seconds?: number | null;
     notification_level?: 'all' | 'edges' | 'failures' | 'summary' | 'none' | null;
+    allow_partner_edges?: boolean | null;
     notes?: string | null;
     rating?: number | null;
 }
@@ -360,6 +362,7 @@ export interface EdgingSessionSummary {
     mode: string;
     min_edge_interval_seconds: number;
     notification_level: 'all' | 'edges' | 'failures' | 'summary' | 'none';
+    allow_partner_edges: boolean;
     paused_at: string | null;
     total_paused_seconds: number;
     created_at: string;

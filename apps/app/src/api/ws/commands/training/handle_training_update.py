@@ -24,6 +24,7 @@ async def handle_training_update(
             mode=payload.mode,
             min_edge_interval_seconds=payload.min_edge_interval_seconds,
             notification_level=payload.notification_level,
+            allow_partner_edges=payload.allow_partner_edges,
             notes=payload.notes,
             rating=payload.rating,
         )

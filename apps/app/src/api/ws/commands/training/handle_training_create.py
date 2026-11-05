@@ -23,6 +23,7 @@ async def handle_training_create(
             mode=msg.payload.mode,
             min_edge_interval_seconds=msg.payload.min_edge_interval_seconds,
             notification_level=msg.payload.notification_level,
+            allow_partner_edges=msg.payload.allow_partner_edges,
         )
     except ValueError as e:
         return CommandResult(status="error", message=str(e))

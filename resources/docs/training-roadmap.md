@@ -67,14 +67,20 @@ d'événements, car démarrer une session émet elle-même
 - [x] Intervalle minimum configurable
 - [ ] Historique des suppressions d'edges (audit de l'undo)
 - [ ] Tags sur les notes d'edge
-- [ ] Raccourcis clavier (1–4 pour les difficultés, espace pour pause)
-- [ ] Mode kiosque plein écran avec gros boutons
-- [ ] Contrôle partenaire : le membre peut enregistrer un edge, avec validation ou notification au Host
+- [x] Raccourcis clavier (1–4 pour les difficultés, espace pour pause)
+- [x] Mode kiosque plein écran avec gros boutons
+- [x] Contrôle partenaire : le membre peut enregistrer un edge, avec validation ou notification au Host
 - [x] Préférences de notifications : edge par edge, fail uniquement, résumé, etc.
 
 Le cooldown est configuré par session (0–3600 s) et bloque uniquement les edges
 réussis ; un fail reste toujours possible. Les notifications sont filtrées par
 session (`all`, `edges`, `failures`, `summary`, `none`) côté backend.
+
+Le contrôle partenaire s'active par session : les participants peuvent alors
+enregistrer des edges réussis (notifiés au Host). Les échecs, la pause et la fin
+de session restent réservés au Host. Le mode kiosque ajoute un affichage plein
+écran avec de gros boutons, et les raccourcis `1`–`4` / `Espace` fonctionnent
+aussi bien dans la page de session que dans le kiosque.
 
 ---
 

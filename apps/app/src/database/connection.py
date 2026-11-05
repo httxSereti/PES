@@ -85,6 +85,7 @@ class Database:
                     "mode": "VARCHAR DEFAULT 'manual'",
                     "min_edge_interval_seconds": "INTEGER DEFAULT 0",
                     "notification_level": "VARCHAR DEFAULT 'all'",
+                    "allow_partner_edges": "BOOLEAN DEFAULT 0",
                     "participant_ids": "JSON",
                     "paused_at": "DATETIME",
                     "total_paused_seconds": "INTEGER DEFAULT 0",

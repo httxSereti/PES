@@ -34,6 +34,7 @@ export interface TrainingSessionFields {
     mode: 'manual' | 'guided';
     min_edge_interval_seconds: number;
     notification_level: TrainingNotificationLevel;
+    allow_partner_edges: boolean;
     participant_ids?: string[];
 }
 

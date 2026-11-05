@@ -118,6 +118,7 @@ export default function NewEdgingSessionPage() {
         mode: fields.mode,
         min_edge_interval_seconds: fields.min_edge_interval_seconds,
         notification_level: fields.notification_level,
+        allow_partner_edges: fields.allow_partner_edges,
       });
       if (result.status !== "ok" || !result.session) {
         setError(result.message ?? "Failed to create the session");

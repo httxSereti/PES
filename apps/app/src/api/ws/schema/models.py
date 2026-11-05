@@ -425,6 +425,7 @@ class EdgingSessionSummary(WireModel):
     # Minimum seconds between two successful edges (0 disables the cooldown).
     min_edge_interval_seconds: int
     notification_level: TrainingNotificationLevel
+    allow_partner_edges: bool
     paused_at: datetime | None
     total_paused_seconds: int
     created_at: datetime

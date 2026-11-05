@@ -23,6 +23,7 @@ _SESSION_FIELDS = {
     "mode": "manual or guided",
     "min_edge_interval_seconds": "configured cooldown between successful edges",
     "notification_level": "all, edges, failures, summary or none",
+    "allow_partner_edges": "whether participants may record successful edges",
     "program_id": "program id when the session belongs to a program",
     "program_step": "zero-based program step index",
 }

@@ -159,6 +159,7 @@ def _training_event_data(session: EdgingSession, **extra) -> dict:
         "mode": session.mode or "manual",
         "min_edge_interval_seconds": session.min_edge_interval_seconds or 0,
         "notification_level": session.notification_level or "all",
+        "allow_partner_edges": bool(session.allow_partner_edges),
         "program_id": session.program_id,
         "program_step": session.program_step,
         **extra,
@@ -220,8 +221,9 @@ def _notify_training(
     *,
     actor_user_id: str | None = None,
     status: str | None = None,
+    force: bool = False,
 ) -> None:
-    if not _notification_allowed(session, kind, status):
+    if not force and not _notification_allowed(session, kind, status):
         return
     recipients = _session_recipients(session)
     if actor_user_id:
@@ -391,6 +393,7 @@ def serialize_session_summary(
         "mode": session.mode or "manual",
         "min_edge_interval_seconds": session.min_edge_interval_seconds or 0,
         "notification_level": session.notification_level or "all",
+        "allow_partner_edges": bool(session.allow_partner_edges),
         "paused_at": to_utc_iso(session.paused_at),
         "total_paused_seconds": session.total_paused_seconds or 0,
         "last_edge_at": to_utc_iso(last_success_edge_at(session)),
@@ -415,6 +418,16 @@ def serialize_session(session: EdgingSession, now: Optional[datetime] = None) ->
         }
     )
     return payload
+
+
+def _edge_record_result(
+    edge: EdgingEdge, session: EdgingSession, *, is_host: bool
+) -> dict:
+    """Edge reply; non-Hosts never receive the Host-authored notes."""
+    payload = serialize_session(session)
+    if not is_host:
+        payload["notes"] = None
+    return {"edge": serialize_edge(edge), "session": payload}
 
 
 # ───────── Stats ─────────
@@ -714,6 +727,7 @@ async def create_edging_session(
     mode: str | None = None,
     min_edge_interval_seconds: int | None = None,
     notification_level: str | None = None,
+    allow_partner_edges: bool = False,
     program_id: str | None = None,
     program_step: int | None = None,
     repo: Optional[EdgingRepo] = None,
@@ -737,6 +751,7 @@ async def create_edging_session(
             min_edge_interval_seconds
         ),
         notification_level=_validate_notification_level(notification_level),
+        allow_partner_edges=allow_partner_edges,
         program_id=program_id,
         program_step=program_step,
     )
@@ -756,6 +771,7 @@ async def update_edging_session(
     mode: Optional[str] = None,
     min_edge_interval_seconds: Optional[int] = None,
     notification_level: Optional[str] = None,
+    allow_partner_edges: Optional[bool] = None,
     notes: Optional[str] = None,
     rating: Optional[int] = None,
     repo: Optional[EdgingRepo] = None,
@@ -798,11 +814,15 @@ async def update_edging_session(
                 raise ValueError("Mode must be 'manual' or 'guided'")
             fields["mode"] = mode
 
-    if min_edge_interval_seconds is not None or notification_level is not None:
+    if (
+        min_edge_interval_seconds is not None
+        or notification_level is not None
+        or allow_partner_edges is not None
+    ):
         if session.status not in {"configured", "running"}:
             raise ValueError(
-                "Cooldown and notifications can only be changed before the "
-                "session ends"
+                "Cooldown, notifications and partner control can only be "
+                "changed before the session ends"
             )
         if min_edge_interval_seconds is not None:
             fields["min_edge_interval_seconds"] = _validate_min_interval(
@@ -812,6 +832,8 @@ async def update_edging_session(
             fields["notification_level"] = _validate_notification_level(
                 notification_level
             )
+        if allow_partner_edges is not None:
+            fields["allow_partner_edges"] = bool(allow_partner_edges)
 
     if notes is not None or rating is not None:
         if not is_host:
@@ -934,15 +956,22 @@ async def record_edging_edge(
                 session_id, client_edge_id
             )
             if existing is not None:
-                return {
-                    "edge": serialize_edge(existing),
-                    "session": serialize_session(session),
-                }
+                return _edge_record_result(existing, session, is_host=is_host)
 
         if session.status != "running":
             raise ValueError("Session is not running")
         if session.paused_at is not None:
             raise ValueError("Session is paused — resume it before recording an edge")
+
+        # Partner control: participants may report successful edges when the
+        # Host enabled it. Failures and pause/end controls stay Host-only.
+        if not is_host:
+            if outcome == EdgeOutcome.FAIL.value:
+                raise ValueError("Host only: failed edges")
+            if not session.allow_partner_edges:
+                raise ValueError(
+                    "Partner edge recording is disabled for this session"
+                )
 
         was_met = goals_met(session)
         now = datetime.utcnow()
@@ -990,10 +1019,7 @@ async def record_edging_edge(
             )
             if existing is None:
                 raise
-            return {
-                "edge": serialize_edge(existing),
-                "session": serialize_session(session),
-            }
+            return _edge_record_result(existing, session, is_host=is_host)
         if edge is None:
             raise ValueError("Session is not running")
         broadcast_edge(edge, session)
@@ -1036,17 +1062,19 @@ async def record_edging_edge(
             interval_seconds=interval_seconds,
             source=source,
         )
+        if source == "member":
+            edge_notification = f"partner recorded an edge ({difficulty})"
+        elif outcome == EdgeOutcome.FAIL.value:
+            edge_notification = "edge failed"
+        else:
+            edge_notification = f"edge recorded ({difficulty})"
         _notify_training(
             updated,
             "edge",
-            f"{updated.name}: "
-            + (
-                "edge failed"
-                if outcome == EdgeOutcome.FAIL.value
-                else f"edge recorded ({difficulty})"
-            ),
+            f"{updated.name}: {edge_notification}",
             actor_user_id=recorded_by,
             status=updated.status,
+            force=source == "member",
         )
         if (
             outcome != EdgeOutcome.FAIL.value
@@ -1057,10 +1085,7 @@ async def record_edging_edge(
         if updated.status in _ENDED_STATUSES:
             await _announce_session_ended(updated, recorded_by)
 
-        return {
-            "edge": serialize_edge(edge),
-            "session": serialize_session(updated),
-        }
+        return _edge_record_result(edge, updated, is_host=is_host)
 
 
 async def delete_edging_edge(
