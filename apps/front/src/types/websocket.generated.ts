@@ -22,6 +22,16 @@ export enum ActionType {
     TRAINING_NEXT_PROGRAM_STEP = "TRAINING_NEXT_PROGRAM_STEP",
     TRAINING_RECORD_EDGE = "TRAINING_RECORD_EDGE",
     TRAINING_STOP_AND_NEUTRALIZE = "TRAINING_STOP_AND_NEUTRALIZE",
+    LOVENSE_SET = "LOVENSE_SET",
+    LOVENSE_PULSE = "LOVENSE_PULSE",
+    LOVENSE_STOP = "LOVENSE_STOP",
+    LOVENSE_PATTERN_PLAY = "LOVENSE_PATTERN_PLAY",
+    LOVENSE_PATTERN_STOP = "LOVENSE_PATTERN_STOP",
+    LOVENSE_RANDOM_PATTERN = "LOVENSE_RANDOM_PATTERN",
+    LOVENSE_SCAN = "LOVENSE_SCAN",
+    LOVENSE_SET_CAP = "LOVENSE_SET_CAP",
+    LOVENSE_ASSIGN = "LOVENSE_ASSIGN",
+    LOVENSE_RECONNECT = "LOVENSE_RECONNECT",
 }
 
 export enum RampMode {
@@ -333,6 +343,112 @@ export interface IntegrationUpdatePayload {
     actions?: Record<string, boolean> | null;
 }
 
+export interface LovenseSetPayload {
+    targets: LovenseTarget;
+    output: string;
+    feature: number | string;
+    value: number;
+    mode: 'absolute' | 'relative' | 'percent';
+    ramp_ms: number;
+    force: boolean;
+}
+
+export interface LovenseTarget {
+    device_ids: string[];
+    tags: string[];
+    node_ids: string[];
+    all: boolean;
+}
+
+export interface LovenseStopPayload {
+    targets: LovenseTarget;
+    output?: string | null;
+}
+
+export interface LovensePulsePayload {
+    targets: LovenseTarget;
+    output: string;
+    value: number;
+    attack_ms: number;
+    hold_ms: number;
+    release_ms: number;
+}
+
+export interface LovenseScanPayload {
+    node_id: string;
+    seconds?: number | null;
+}
+
+export interface LovenseNodeSavePayload {
+    node_id?: string | null;
+    name: string;
+    kind: 'direct' | 'relay';
+    url?: string | null;
+    enabled: boolean;
+}
+
+export interface LovenseNodeIdPayload {
+    node_id: string;
+}
+
+export interface LovenseDeviceUpdatePayload {
+    device_id: string;
+    alias?: string | null;
+    tags?: string[] | null;
+    max_intensity_pct?: number | null;
+    control_policy?: string | null;
+}
+
+export interface LovenseBatteryPayload {
+    device_ids: string[];
+}
+
+export interface LovenseIdentifyPayload {
+    device_id: string;
+}
+
+export interface LovensePatternSavePayload {
+    pattern_id?: string | null;
+    name: string;
+    definition: Record<string, unknown>;
+    description?: string | null;
+    visibility: string;
+    tags: string[];
+}
+
+export interface LovensePatternIdPayload {
+    pattern_id: string;
+}
+
+export interface LovensePatternDuplicatePayload {
+    pattern_id: string;
+    name: string;
+}
+
+export interface LovensePatternPlayPayload {
+    pattern_id?: string | null;
+    pattern_name?: string | null;
+    targets: LovenseTarget;
+    duration: number;
+    loop: boolean;
+    loop_count: number;
+    scale_pct: number;
+    replace: boolean;
+    fade_in_ms?: number | null;
+    fade_out_ms?: number | null;
+    sync_offset_ms: number;
+}
+
+export interface LovensePatternStopPayload {
+    run_id?: string | null;
+    pattern_id?: string | null;
+    all: boolean;
+}
+
+export interface LovensePatternImportPayload {
+    document: Record<string, unknown>;
+}
+
 export interface ConnectedPayload {
     message: string;
     userId: string;
@@ -345,6 +461,10 @@ export interface CommandResult {
     rule?: TriggerRule | null;
     session?: EdgingSession | null;
     edge?: EdgingEdge | null;
+    node_id?: string | null;
+    token?: string | null;
+    run_id?: string | null;
+    pattern_id?: string | null;
 }
 
 export interface TriggerRule {
@@ -863,6 +983,136 @@ export interface SessionDeletedPayload {
     id: string;
 }
 
+export interface LovenseSnapshot {
+    nodes: LovenseNodeInfo[];
+    devices: LovenseDeviceInfo[];
+    runs: LovenseRunInfo[];
+    patterns: LovensePatternSummary[];
+    health: LovenseHealth;
+    intiface?: LovenseIntifaceStatus | null;
+    settings: LovensePublicSettings;
+}
+
+export interface LovenseNodeInfo {
+    id: string;
+    name: string;
+    kind: string;
+    url?: string | null;
+    status: string;
+    latency_ms?: number | null;
+    scanning: boolean;
+    last_error?: string | null;
+    token_prefix?: string | null;
+    devices: number;
+}
+
+export interface LovenseDeviceInfo {
+    id: string;
+    node_id: string;
+    device_index: number;
+    name: string;
+    alias?: string | null;
+    display_name: string;
+    tags: string[];
+    features: LovenseFeature[];
+    battery_pct?: number | null;
+    rssi?: number | null;
+    max_intensity_pct: number;
+    control_policy: string;
+    owner_user_id?: string | null;
+    enabled: boolean;
+    online: boolean;
+    outputs: LovenseOutputValue[];
+}
+
+export interface LovenseFeature {
+    index: number;
+    description: string;
+    outputs: Record<string, LovenseFeatureOutput>;
+    inputs: Record<string, Record<string, unknown>>;
+}
+
+export interface LovenseFeatureOutput {
+    min: number;
+    max: number;
+    duration?: number[] | null;
+}
+
+export interface LovenseOutputValue {
+    feature_index: number;
+    output: string;
+    value: number;
+}
+
+export interface LovenseRunInfo {
+    id: string;
+    pattern_id?: string | null;
+    pattern_name: string;
+    status: string;
+    targets: Record<string, unknown>;
+    options: Record<string, unknown>;
+    origin: string;
+    created_by: string;
+    queue_item_id?: string | null;
+    elapsed_s: number;
+    loops: number;
+    error?: string | null;
+}
+
+export interface LovensePatternSummary {
+    id: string;
+    name: string;
+    description: string;
+    author_id: string;
+    visibility: string;
+    tags: string[];
+    built_in: boolean;
+    duration_ms: number;
+    updated_at?: string | null;
+}
+
+export interface LovenseHealth {
+    status: string;
+    nodes: number;
+    nodes_online: number;
+    devices: number;
+    devices_online: number;
+    runs: number;
+    relay_enabled: boolean;
+    latency_ms?: number | null;
+    intiface?: LovenseIntifaceStatus | null;
+}
+
+export interface LovenseIntifaceStatus {
+    status: string;
+    running: boolean;
+    owned: boolean;
+    external: boolean;
+    port: number;
+    path?: string | null;
+    pid?: number | null;
+    last_error?: string | null;
+    log_path?: string | null;
+}
+
+export interface LovensePublicSettings {
+    max_intensity_pct: number;
+    pattern_tick_hz: number;
+    manual_hold_seconds: number;
+    relay_enabled: boolean;
+}
+
+export interface LovensePatternDeleted {
+    id: string;
+}
+
+export interface LovenseError {
+    scope: string;
+    message: string;
+    node_id?: string | null;
+    device_id?: string | null;
+}
+
 export interface RampStartPayload extends RampTarget {
     timer: number;
     step: number;
@@ -926,6 +1176,10 @@ export interface SessionHistoryItem extends Session {
     duration_seconds: number | null;
     edging_session_count: number;
     event_count: number;
+}
+
+export interface LovensePatternDetail extends LovensePatternSummary {
+    definition: Record<string, unknown>;
 }
 
 export interface PingCommand {
@@ -1275,6 +1529,162 @@ export interface IntegrationsUpdateCommand {
     payload: IntegrationUpdatePayload;
 }
 
+export interface LovenseSetCommand {
+    id?: string | null;
+    type: 'lovense:set';
+    payload: LovenseSetPayload;
+}
+
+export interface LovenseStopCommand {
+    id?: string | null;
+    type: 'lovense:stop';
+    payload: LovenseStopPayload;
+}
+
+export interface LovenseStopAllCommand {
+    id?: string | null;
+    type: 'lovense:stop_all';
+    payload?: Record<string, unknown> | null;
+}
+
+export interface LovensePulseCommand {
+    id?: string | null;
+    type: 'lovense:pulse';
+    payload: LovensePulsePayload;
+}
+
+export interface LovenseScanCommand {
+    id?: string | null;
+    type: 'lovense:scan';
+    payload: LovenseScanPayload;
+}
+
+export interface LovenseNodeSaveCommand {
+    id?: string | null;
+    type: 'lovense:node_save';
+    payload: LovenseNodeSavePayload;
+}
+
+export interface LovenseNodeDeleteCommand {
+    id?: string | null;
+    type: 'lovense:node_delete';
+    payload: LovenseNodeIdPayload;
+}
+
+export interface LovenseNodeReconnectCommand {
+    id?: string | null;
+    type: 'lovense:node_reconnect';
+    payload: LovenseNodeIdPayload;
+}
+
+export interface LovenseNodeTokenCommand {
+    id?: string | null;
+    type: 'lovense:node_token';
+    payload: LovenseNodeIdPayload;
+}
+
+export interface LovenseDeviceUpdateCommand {
+    id?: string | null;
+    type: 'lovense:device_update';
+    payload: LovenseDeviceUpdatePayload;
+}
+
+export interface LovenseDeviceDeleteCommand {
+    id?: string | null;
+    type: 'lovense:device_delete';
+    payload: LovenseDeviceUpdatePayload;
+}
+
+export interface LovenseBatteryCommand {
+    id?: string | null;
+    type: 'lovense:battery';
+    payload: LovenseBatteryPayload;
+}
+
+export interface LovenseIdentifyCommand {
+    id?: string | null;
+    type: 'lovense:identify';
+    payload: LovenseIdentifyPayload;
+}
+
+export interface LovensePatternSaveCommand {
+    id?: string | null;
+    type: 'lovense:pattern_save';
+    payload: LovensePatternSavePayload;
+}
+
+export interface LovensePatternDeleteCommand {
+    id?: string | null;
+    type: 'lovense:pattern_delete';
+    payload: LovensePatternIdPayload;
+}
+
+export interface LovensePatternDetailCommand {
+    id?: string | null;
+    type: 'lovense:pattern_detail';
+    payload: LovensePatternIdPayload;
+}
+
+export interface LovensePatternDuplicateCommand {
+    id?: string | null;
+    type: 'lovense:pattern_duplicate';
+    payload: LovensePatternDuplicatePayload;
+}
+
+export interface LovensePatternPlayCommand {
+    id?: string | null;
+    type: 'lovense:pattern_play';
+    payload: LovensePatternPlayPayload;
+}
+
+export interface LovensePatternStopCommand {
+    id?: string | null;
+    type: 'lovense:pattern_stop';
+    payload: LovensePatternStopPayload;
+}
+
+export interface LovensePatternExportCommand {
+    id?: string | null;
+    type: 'lovense:pattern_export';
+    payload: LovensePatternIdPayload;
+}
+
+export interface LovensePatternImportCommand {
+    id?: string | null;
+    type: 'lovense:pattern_import';
+    payload: LovensePatternImportPayload;
+}
+
+export interface LovensePatternListCommand {
+    id?: string | null;
+    type: 'lovense:pattern_list';
+    payload?: Record<string, unknown> | null;
+}
+
+export interface LovenseHealthCommand {
+    id?: string | null;
+    type: 'lovense:health';
+    payload?: Record<string, unknown> | null;
+}
+
+export interface LovenseIntifaceStartCommand {
+    id?: string | null;
+    type: 'lovense:intiface_start';
+    payload?: Record<string, unknown> | null;
+}
+
+export interface LovenseIntifaceStopCommand {
+    id?: string | null;
+    type: 'lovense:intiface_stop';
+    payload?: Record<string, unknown> | null;
+}
+
+export interface LovenseIntifaceRestartCommand {
+    id?: string | null;
+    type: 'lovense:intiface_restart';
+    payload?: Record<string, unknown> | null;
+}
+
 export interface ConnectedMessage {
     id?: string | null;
     type: 'connected';
@@ -1584,6 +1994,78 @@ export interface SessionsDeletedMessage {
     payload: SessionDeletedPayload;
 }
 
+export interface LovenseInitMessage {
+    id?: string | null;
+    type: 'lovense:init';
+    payload: LovenseSnapshot;
+}
+
+export interface LovenseNodesMessage {
+    id?: string | null;
+    type: 'lovense:nodes';
+    payload: LovenseNodeInfo[];
+}
+
+export interface LovenseDevicesMessage {
+    id?: string | null;
+    type: 'lovense:devices';
+    payload: LovenseDeviceInfo[];
+}
+
+export interface LovenseDeviceMessage {
+    id?: string | null;
+    type: 'lovense:device';
+    payload: LovenseDeviceInfo;
+}
+
+export interface LovenseRunsMessage {
+    id?: string | null;
+    type: 'lovense:runs';
+    payload: LovenseRunInfo[];
+}
+
+export interface LovensePatternsMessage {
+    id?: string | null;
+    type: 'lovense:patterns';
+    payload: LovensePatternSummary[];
+}
+
+export interface LovensePatternSavedMessage {
+    id?: string | null;
+    type: 'lovense:pattern_saved';
+    payload: LovensePatternSummary;
+}
+
+export interface LovensePatternDetailMessage {
+    id?: string | null;
+    type: 'lovense:pattern_detail';
+    payload: LovensePatternDetail;
+}
+
+export interface LovensePatternDeletedMessage {
+    id?: string | null;
+    type: 'lovense:pattern_deleted';
+    payload: LovensePatternDeleted;
+}
+
+export interface LovenseErrorMessage {
+    id?: string | null;
+    type: 'lovense:error';
+    payload: LovenseError;
+}
+
+export interface LovenseHealthMessage {
+    id?: string | null;
+    type: 'lovense:health';
+    payload: LovenseHealth;
+}
+
+export interface LovenseIntifaceMessage {
+    id?: string | null;
+    type: 'lovense:intiface';
+    payload: LovenseIntifaceStatus;
+}
+
 export type Sensor = MotionSensor | SoundSensor;
 
 export type WebSocketClientMessage =
@@ -1644,7 +2126,33 @@ export type WebSocketClientMessage =
     | HardwareRescanMk2btCommand
     | HardwareUpdateBtSensorsCommand
     | HardwareRescanBtSensorsCommand
-    | IntegrationsUpdateCommand;
+    | IntegrationsUpdateCommand
+    | LovenseSetCommand
+    | LovenseStopCommand
+    | LovenseStopAllCommand
+    | LovensePulseCommand
+    | LovenseScanCommand
+    | LovenseNodeSaveCommand
+    | LovenseNodeDeleteCommand
+    | LovenseNodeReconnectCommand
+    | LovenseNodeTokenCommand
+    | LovenseDeviceUpdateCommand
+    | LovenseDeviceDeleteCommand
+    | LovenseBatteryCommand
+    | LovenseIdentifyCommand
+    | LovensePatternSaveCommand
+    | LovensePatternDeleteCommand
+    | LovensePatternDetailCommand
+    | LovensePatternDuplicateCommand
+    | LovensePatternPlayCommand
+    | LovensePatternStopCommand
+    | LovensePatternExportCommand
+    | LovensePatternImportCommand
+    | LovensePatternListCommand
+    | LovenseHealthCommand
+    | LovenseIntifaceStartCommand
+    | LovenseIntifaceStopCommand
+    | LovenseIntifaceRestartCommand;
 
 export type WebSocketServerMessage =
     | ConnectedMessage
@@ -1698,7 +2206,19 @@ export type WebSocketServerMessage =
     | SessionUpdateMessage
     | SessionsHistoryMessage
     | SessionsHistoryDetailMessage
-    | SessionsDeletedMessage;
+    | SessionsDeletedMessage
+    | LovenseInitMessage
+    | LovenseNodesMessage
+    | LovenseDevicesMessage
+    | LovenseDeviceMessage
+    | LovenseRunsMessage
+    | LovensePatternsMessage
+    | LovensePatternSavedMessage
+    | LovensePatternDetailMessage
+    | LovensePatternDeletedMessage
+    | LovenseErrorMessage
+    | LovenseHealthMessage
+    | LovenseIntifaceMessage;
 
 /** Messages the client receives (alias of WebSocketServerMessage). */
 export type WebSocketIncomingMessage = WebSocketServerMessage;

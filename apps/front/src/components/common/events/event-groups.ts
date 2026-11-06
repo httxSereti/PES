@@ -23,6 +23,7 @@ export interface EventCatalogEvent {
 
 const EVENT_ID_PREFIXES = new Set([
     "chaster",
+    "lovense",
     "puryfi",
     "sensor",
     "sensors",
@@ -84,6 +85,26 @@ export const FALLBACK_EVENT_GROUPS: Record<string, EventGroupDef> = {
             "training_session_succeeded",
             "training_session_failed",
             "training_session_cancelled",
+        ],
+    },
+    lovense: {
+        key: "lovense",
+        label: "Lovense",
+        types: [
+            "lovense_node_online",
+            "lovense_node_offline",
+            "lovense_device_connected",
+            "lovense_device_disconnected",
+            "lovense_battery_low",
+            "lovense_battery_charged",
+            "lovense_pattern_started",
+            "lovense_pattern_completed",
+            "lovense_pattern_stopped",
+            "lovense_output_limited",
+            "lovense_manual_released",
+            "lovense_scan_finished",
+            "lovense_device_error",
+            "lovense_node_latency_high",
         ],
     },
 };

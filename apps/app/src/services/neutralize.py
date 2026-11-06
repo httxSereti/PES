@@ -19,6 +19,8 @@ PROFILE action cannot leave a non-zero level behind.
 
 from __future__ import annotations
 
+import asyncio
+
 import structlog
 
 from api.ws.websocket_notifier import ws_notifier
@@ -48,6 +50,35 @@ def _reset_unit(unit: UnitDict) -> dict:
     return changes
 
 
+async def _emergency_stop_integrations(reason: str) -> None:
+    """
+    Give every integration a chance to release physical hardware.
+
+    Bounded so a dead network node cannot delay the panic stop: the local 2B
+    outputs below must be zeroed even if a remote toy is unreachable.
+    """
+    try:
+        from integrations import integration_registry
+    except Exception:  # pragma: no cover - defensive, import cycle safety
+        return
+
+    for integration in integration_registry.all():
+        try:
+            await asyncio.wait_for(
+                integration.emergency_stop(reason), timeout=3.0
+            )
+        except asyncio.TimeoutError:
+            logger.warning(
+                "[Neutralize] Integration stop timed out",
+                integration=integration.id,
+            )
+        except Exception:
+            logger.exception(
+                "[Neutralize] Integration stop failed",
+                integration=integration.id,
+            )
+
+
 async def neutralize_all(reason: str) -> None:
     """
     Cancel everything that can still drive a unit, then leave it at zero.
@@ -71,13 +102,16 @@ async def neutralize_all(reason: str) -> None:
         #    before zeroing so it cannot complete and re-apply after the stop.
         await queue.cancel_inflight()
 
-    # 4. Outputs: zero both channels and reset the multipliers on every unit.
+    # 4. External hardware (Lovense, ...): stop outputs before the local units.
+    await _emergency_stop_integrations(reason)
+
+    # 5. Outputs: zero both channels and reset the multipliers on every unit.
     for unit_str in BT_UNITS:
         unit = UnitDict(unit_str)
         changes = _reset_unit(unit)
         ws_notifier.notify("units:update", {"id": unit.value, "changes": changes})
 
-    # 5. Active profile: nothing is driving the units anymore.
+    # 6. Active profile: nothing is driving the units anymore.
     if store.clear_active_profile():
         ws_notifier.notify("profiles:active", None)
 

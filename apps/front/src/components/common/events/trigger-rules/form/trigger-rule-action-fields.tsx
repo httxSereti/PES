@@ -32,6 +32,7 @@ import { SwitchRow } from "./switch-row";
 import { TokenComposer } from "./token-composer";
 import { DurationInput } from "./duration-input";
 import { MagicNumberInput } from "./magic-number-input";
+import { LovenseActionFields } from "./lovense-action-fields";
 
 export default function TriggerRuleActionFields({
     index,
@@ -289,7 +290,7 @@ export default function TriggerRuleActionFields({
                                             </FieldDescription>
                                             <MagicNumberInput
                                                 id={`trigger-action-${index}-value`}
-                                                value={field.value}
+                                                value={String(field.value ?? "")}
                                                 onChange={field.onChange}
                                                 invalid={fieldState.invalid}
                                             />
@@ -738,6 +739,14 @@ export default function TriggerRuleActionFields({
                                 Fails the running session, cancels the action queue, stops ramps and
                                 zeroes every output. Use it as a safety action on failure.
                             </p>
+                        )}
+
+                        {actionType.startsWith("LOVENSE_") && (
+                            <LovenseActionFields
+                                index={index}
+                                control={control}
+                                actionType={actionType}
+                            />
                         )}
 
                         {/* ── Common scheduling ── */}

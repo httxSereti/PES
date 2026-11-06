@@ -16,6 +16,7 @@ import sessionReducer from '@/store/slices/sessionSlice';
 import sessionHistoryReducer from '@/store/slices/sessionHistorySlice';
 import profilesReducer from '@/store/slices/profilesSlice';
 import queueReducer from '@/store/slices/queueSlice';
+import lovenseReducer from '@/store/slices/lovenseSlice';
 
 import { createWebSocketMiddleware } from '@/store/middleware/websocketMiddleware';
 
@@ -53,6 +54,7 @@ export const store = configureStore({
         sessionHistory: sessionHistoryReducer,
         profiles: profilesReducer,
         queue: queueReducer,
+        lovense: lovenseReducer,
     },
     middleware: (getDefaultMiddleware) =>
         getDefaultMiddleware({

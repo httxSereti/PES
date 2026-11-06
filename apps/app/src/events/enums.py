@@ -26,6 +26,18 @@ class ActionType(str, Enum):
     TRAINING_RECORD_EDGE = "TRAINING_RECORD_EDGE"
     TRAINING_STOP_AND_NEUTRALIZE = "TRAINING_STOP_AND_NEUTRALIZE"
 
+    # Lovense / Buttplug devices
+    LOVENSE_SET = "LOVENSE_SET"
+    LOVENSE_PULSE = "LOVENSE_PULSE"
+    LOVENSE_STOP = "LOVENSE_STOP"
+    LOVENSE_PATTERN_PLAY = "LOVENSE_PATTERN_PLAY"
+    LOVENSE_PATTERN_STOP = "LOVENSE_PATTERN_STOP"
+    LOVENSE_RANDOM_PATTERN = "LOVENSE_RANDOM_PATTERN"
+    LOVENSE_SCAN = "LOVENSE_SCAN"
+    LOVENSE_SET_CAP = "LOVENSE_SET_CAP"
+    LOVENSE_ASSIGN = "LOVENSE_ASSIGN"
+    LOVENSE_RECONNECT = "LOVENSE_RECONNECT"
+
 
 class QueueItemStatus(str, Enum):
     """Status of an item in the action queue."""
@@ -74,3 +86,19 @@ class TriggerableEvent(str, Enum):
     TRAINING_SESSION_FAILED = "training_session_failed"
     TRAINING_SESSION_CANCELLED = "training_session_cancelled"
     TRAINING_PROGRAM_COMPLETED = "training_program_completed"
+
+    # Lovense / Buttplug devices
+    LOVENSE_NODE_ONLINE = "lovense_node_online"
+    LOVENSE_NODE_OFFLINE = "lovense_node_offline"
+    LOVENSE_DEVICE_CONNECTED = "lovense_device_connected"
+    LOVENSE_DEVICE_DISCONNECTED = "lovense_device_disconnected"
+    LOVENSE_BATTERY_LOW = "lovense_battery_low"
+    LOVENSE_BATTERY_CHARGED = "lovense_battery_charged"
+    LOVENSE_PATTERN_STARTED = "lovense_pattern_started"
+    LOVENSE_PATTERN_COMPLETED = "lovense_pattern_completed"
+    LOVENSE_PATTERN_STOPPED = "lovense_pattern_stopped"
+    LOVENSE_OUTPUT_LIMITED = "lovense_output_limited"
+    LOVENSE_MANUAL_RELEASED = "lovense_manual_released"
+    LOVENSE_SCAN_FINISHED = "lovense_scan_finished"
+    LOVENSE_DEVICE_ERROR = "lovense_device_error"
+    LOVENSE_NODE_LATENCY_HIGH = "lovense_node_latency_high"

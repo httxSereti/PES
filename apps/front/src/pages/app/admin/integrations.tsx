@@ -12,6 +12,7 @@ import {
     Settings,
     Shield,
     Sparkles,
+    Vibrate,
     Zap,
     type LucideIcon,
 } from "lucide-react";
@@ -61,6 +62,7 @@ const INTEGRATION_ICONS: Record<string, LucideIcon> = {
     sensors: Radio,
     chaster: Lock,
     puryfi: Shield,
+    lovense: Vibrate,
 };
 
 function iconFor(id: string): LucideIcon {
@@ -480,7 +482,11 @@ function IntegrationPanel({
                     )}
                     {entry.endpoint && (
                         <p className="text-[10.5px] text-muted-foreground/50">
-                            Register this URL as a WebSocket plugin in PuryFi&apos;s options page.
+                            {entry.id === "puryfi"
+                                ? "Register this URL as a WebSocket plugin in PuryFi's options page."
+                                : entry.id === "lovense"
+                                  ? "Relay base URL for remote companions (see the companion command on the Lovense page)."
+                                  : "Connection URL used by this integration."}
                         </p>
                     )}
                 </SheetHeader>

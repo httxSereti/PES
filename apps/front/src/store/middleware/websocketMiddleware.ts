@@ -18,6 +18,20 @@ import { sessionInit, sessionUpdated } from '@/store/slices/sessionSlice';
 import { sessionHistoryLoaded, sessionHistoryDetailLoaded, sessionHistoryDeleted } from '@/store/slices/sessionHistorySlice';
 import { profilesLoaded, profileSaved, profileDeleted, profileDetailLoaded, activeProfileUpdated, pendingProfilesLoaded } from '@/store/slices/profilesSlice';
 import { queueUpdated } from '@/store/slices/queueSlice';
+import {
+    lovenseInitialized,
+    lovenseNodesUpdated,
+    lovenseDevicesUpdated,
+    lovenseDeviceUpdated,
+    lovenseRunsUpdated,
+    lovensePatternsUpdated,
+    lovensePatternSaved,
+    lovensePatternDetailLoaded,
+    lovensePatternDeleted,
+    lovenseHealthUpdated,
+    lovenseIntifaceUpdated,
+    lovenseErrorReceived,
+} from '@/store/slices/lovenseSlice';
 
 export function createWebSocketMiddleware(config: WebSocketConfig): Middleware {
     const {
@@ -358,6 +372,61 @@ export function createWebSocketMiddleware(config: WebSocketConfig): Middleware {
 
                     case 'sessions:deleted':
                         dispatch(sessionHistoryDeleted(message.payload.id));
+                        break;
+
+                    /**
+                     * @Lovense (devices, nodes, patterns)
+                     */
+                    case 'lovense:init':
+                        dispatch(lovenseInitialized(message.payload));
+                        break;
+
+                    case 'lovense:nodes':
+                        dispatch(lovenseNodesUpdated(message.payload));
+                        break;
+
+                    case 'lovense:devices':
+                        dispatch(lovenseDevicesUpdated(message.payload));
+                        break;
+
+                    case 'lovense:device':
+                        dispatch(lovenseDeviceUpdated(message.payload));
+                        break;
+
+                    case 'lovense:runs':
+                        dispatch(lovenseRunsUpdated(message.payload));
+                        break;
+
+                    case 'lovense:patterns':
+                        dispatch(lovensePatternsUpdated(message.payload));
+                        break;
+
+                    case 'lovense:pattern_saved':
+                        dispatch(lovensePatternSaved(message.payload));
+                        break;
+
+                    case 'lovense:pattern_detail':
+                        dispatch(lovensePatternDetailLoaded(message.payload));
+                        break;
+
+                    case 'lovense:pattern_deleted':
+                        dispatch(lovensePatternDeleted(message.payload));
+                        break;
+
+                    case 'lovense:health':
+                        dispatch(lovenseHealthUpdated(message.payload));
+                        break;
+
+                    case 'lovense:intiface':
+                        dispatch(lovenseIntifaceUpdated(message.payload));
+                        break;
+
+                    case 'lovense:error':
+                        dispatch(lovenseErrorReceived(message.payload.message));
+                        toast.error('Lovense error', {
+                            description: message.payload.message,
+                            duration: 8000,
+                        });
                         break;
                 }
             } catch (err) {

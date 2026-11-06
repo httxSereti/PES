@@ -9,14 +9,17 @@ class Permission(Enum):
     READ_PROFILES = "read_profiles"
     READ_USERS = "read_users"
     READ_EVENTS = "read_events"
+    READ_DEVICES = "read_devices"
     
     WRITE_UNITS = "write_units"
     WRITE_SENSORS = "write_sensors"
     WRITE_PROFILES = "write_profiles"
+    WRITE_DEVICES = "write_devices"
     
     MANAGE_USERS = "manage_users"
     MANAGE_SENSORS = "manage_sensors"
     MANAGE_PROFILES = "manage_profiles"
+    MANAGE_DEVICES = "manage_devices"
 
     TRAINING_EDGING_READ = "training_edging_read"
     TRAINING_EDGING_MANAGE = "training_edging_manage"

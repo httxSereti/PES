@@ -44,6 +44,16 @@ from .models import (
     TriggerRulePatch,
     UnitSettings,
     UnitSettingsPatch,
+    LovenseDeviceInfo,
+    LovenseError,
+    LovenseHealth,
+    LovenseNodeInfo,
+    LovensePatternDeleted,
+    LovensePatternDetail,
+    LovensePatternSummary,
+    LovenseRunInfo,
+    LovenseSnapshot,
+    LovenseIntifaceStatus,
 )
 
 # ─────────────────────────────── Core ───────────────────────────────
@@ -557,6 +567,85 @@ class SessionsDeletedMessage(ServerMessage):
     payload: SessionDeletedPayload
 
 
+# ─────────────────────────────── Lovense ───────────────────────────────
+
+
+@server_message(audience=Permission.READ_DEVICES)
+class LovenseInitMessage(ServerMessage):
+    """Connect snapshot / reply to `lovense:pattern_list` + `lovense:health`."""
+
+    type: Literal["lovense:init"] = "lovense:init"
+    payload: LovenseSnapshot
+
+
+@server_message(audience=Permission.READ_DEVICES)
+class LovenseNodesMessage(ServerMessage):
+    type: Literal["lovense:nodes"] = "lovense:nodes"
+    payload: list[LovenseNodeInfo]
+
+
+@server_message(audience=Permission.READ_DEVICES)
+class LovenseDevicesMessage(ServerMessage):
+    type: Literal["lovense:devices"] = "lovense:devices"
+    payload: list[LovenseDeviceInfo]
+
+
+@server_message(audience=Permission.READ_DEVICES)
+class LovenseDeviceMessage(ServerMessage):
+    type: Literal["lovense:device"] = "lovense:device"
+    payload: LovenseDeviceInfo
+
+
+@server_message(audience=Permission.READ_DEVICES)
+class LovenseRunsMessage(ServerMessage):
+    type: Literal["lovense:runs"] = "lovense:runs"
+    payload: list[LovenseRunInfo]
+
+
+@server_message(audience=Permission.READ_DEVICES)
+class LovensePatternsMessage(ServerMessage):
+    type: Literal["lovense:patterns"] = "lovense:patterns"
+    payload: list[LovensePatternSummary]
+
+
+@server_message(audience=Permission.READ_DEVICES)
+class LovensePatternSavedMessage(ServerMessage):
+    type: Literal["lovense:pattern_saved"] = "lovense:pattern_saved"
+    payload: LovensePatternSummary
+
+
+@server_message(audience=Permission.READ_DEVICES)
+class LovensePatternDetailMessage(ServerMessage):
+    type: Literal["lovense:pattern_detail"] = "lovense:pattern_detail"
+    payload: LovensePatternDetail
+
+
+@server_message(audience=Permission.READ_DEVICES)
+class LovensePatternDeletedMessage(ServerMessage):
+    type: Literal["lovense:pattern_deleted"] = "lovense:pattern_deleted"
+    payload: LovensePatternDeleted
+
+
+@server_message(audience=Permission.READ_DEVICES)
+class LovenseErrorMessage(ServerMessage):
+    type: Literal["lovense:error"] = "lovense:error"
+    payload: LovenseError
+
+
+@server_message(audience=Permission.READ_DEVICES)
+class LovenseHealthMessage(ServerMessage):
+    type: Literal["lovense:health"] = "lovense:health"
+    payload: LovenseHealth
+
+
+@server_message(audience=Permission.READ_DEVICES)
+class LovenseIntifaceMessage(ServerMessage):
+    """Managed Intiface Engine status (started, external, stopped, error)."""
+
+    type: Literal["lovense:intiface"] = "lovense:intiface"
+    payload: LovenseIntifaceStatus
+
+
 __all__ = [
     "ConnectedPayload",
     "ConnectedMessage",
@@ -629,4 +718,16 @@ __all__ = [
     "SessionsHistoryDetailMessage",
     "SessionDeletedPayload",
     "SessionsDeletedMessage",
+    "LovenseInitMessage",
+    "LovenseNodesMessage",
+    "LovenseDevicesMessage",
+    "LovenseDeviceMessage",
+    "LovenseRunsMessage",
+    "LovensePatternsMessage",
+    "LovensePatternSavedMessage",
+    "LovensePatternDetailMessage",
+    "LovensePatternDeletedMessage",
+    "LovenseErrorMessage",
+    "LovenseHealthMessage",
+    "LovenseIntifaceMessage",
 ]

@@ -311,6 +311,11 @@ class CommandResult(WireModel):
     # Present on training mutation replies (create/update/start/edge/end)
     session: EdgingSession | None = None
     edge: EdgingEdge | None = None
+    # Present on Lovense mutation replies
+    node_id: str | None = None
+    token: str | None = None
+    run_id: str | None = None
+    pattern_id: str | None = None
 
 
 class StatusMessage(WireModel):
@@ -646,6 +651,152 @@ class SessionHistoryDetail(WireModel):
     events: list[TriggeredEvent] | None
 
 
+# ─────────────────────────────── Lovense ───────────────────────────────
+
+
+class LovenseTarget(WireModel):
+    """Device selector shared by commands and action payloads."""
+
+    device_ids: list[str] = []
+    tags: list[str] = []
+    node_ids: list[str] = []
+    all: bool = False
+
+
+class LovenseFeatureOutput(WireModel):
+    min: int = 0
+    max: int = 1
+    duration: list[int] | None = None
+
+
+class LovenseFeature(WireModel):
+    index: int
+    description: str = ""
+    outputs: dict[str, LovenseFeatureOutput] = {}
+    inputs: dict[str, dict[str, Any]] = {}
+
+
+class LovenseNodeInfo(WireModel):
+    id: str
+    name: str
+    kind: str
+    url: str | None = None
+    status: str = "offline"
+    latency_ms: float | None = None
+    scanning: bool = False
+    last_error: str | None = None
+    token_prefix: str | None = None
+    devices: int = 0
+
+
+class LovenseOutputValue(WireModel):
+    feature_index: int
+    output: str
+    value: int
+
+
+class LovenseDeviceInfo(WireModel):
+    id: str
+    node_id: str
+    device_index: int
+    name: str
+    alias: str | None = None
+    display_name: str
+    tags: list[str] = []
+    features: list[LovenseFeature] = []
+    battery_pct: int | None = None
+    rssi: int | None = None
+    max_intensity_pct: int = 100
+    control_policy: str = "owner_only"
+    owner_user_id: str | None = None
+    enabled: bool = True
+    online: bool = False
+    outputs: list[LovenseOutputValue] = []
+
+
+class LovenseRunInfo(WireModel):
+    id: str
+    pattern_id: str | None = None
+    pattern_name: str = ""
+    status: str = "running"
+    targets: dict[str, Any] = {}
+    options: dict[str, Any] = {}
+    origin: str = ""
+    created_by: str = "system"
+    queue_item_id: str | None = None
+    elapsed_s: float = 0
+    loops: int = 0
+    error: str | None = None
+
+
+class LovensePatternSummary(WireModel):
+    id: str
+    name: str
+    description: str = ""
+    author_id: str = "system"
+    visibility: str = "private"
+    tags: list[str] = []
+    built_in: bool = False
+    duration_ms: int = 0
+    updated_at: str | None = None
+
+
+class LovensePatternDetail(LovensePatternSummary):
+    definition: dict[str, Any] = {}
+
+
+class LovenseIntifaceStatus(WireModel):
+    status: str = "stopped"
+    running: bool = False
+    owned: bool = False
+    external: bool = False
+    port: int = 12345
+    path: str | None = None
+    pid: int | None = None
+    last_error: str | None = None
+    log_path: str | None = None
+
+
+class LovenseHealth(WireModel):
+    status: str = "idle"
+    nodes: int = 0
+    nodes_online: int = 0
+    devices: int = 0
+    devices_online: int = 0
+    runs: int = 0
+    relay_enabled: bool = False
+    latency_ms: float | None = None
+    intiface: LovenseIntifaceStatus | None = None
+
+
+class LovensePublicSettings(WireModel):
+    max_intensity_pct: int = 70
+    pattern_tick_hz: int = 20
+    manual_hold_seconds: int = 60
+    relay_enabled: bool = False
+
+
+class LovenseSnapshot(WireModel):
+    nodes: list[LovenseNodeInfo] = []
+    devices: list[LovenseDeviceInfo] = []
+    runs: list[LovenseRunInfo] = []
+    patterns: list[LovensePatternSummary] = []
+    health: LovenseHealth = LovenseHealth()
+    intiface: LovenseIntifaceStatus | None = None
+    settings: LovensePublicSettings = LovensePublicSettings()
+
+
+class LovenseError(WireModel):
+    scope: str
+    message: str
+    node_id: str | None = None
+    device_id: str | None = None
+
+
+class LovensePatternDeleted(WireModel):
+    id: str
+
+
 __all__ = [
     "UnitSettingsPatch",
     "SensorPatch",
@@ -697,4 +848,19 @@ __all__ = [
     "Session",
     "SessionHistoryItem",
     "SessionHistoryDetail",
+    "LovenseTarget",
+    "LovenseFeatureOutput",
+    "LovenseFeature",
+    "LovenseNodeInfo",
+    "LovenseOutputValue",
+    "LovenseDeviceInfo",
+    "LovenseRunInfo",
+    "LovensePatternSummary",
+    "LovensePatternDetail",
+    "LovenseHealth",
+    "LovenseIntifaceStatus",
+    "LovensePublicSettings",
+    "LovenseSnapshot",
+    "LovenseError",
+    "LovensePatternDeleted",
 ]

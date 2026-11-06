@@ -17,10 +17,54 @@ const ONE_SHOT_ACTIONS = new Set<ActionType>([
     ActionType.TRAINING_NEXT_PROGRAM_STEP,
     ActionType.TRAINING_RECORD_EDGE,
     ActionType.TRAINING_STOP_AND_NEUTRALIZE,
+    ActionType.LOVENSE_PULSE,
+    ActionType.LOVENSE_STOP,
+    ActionType.LOVENSE_PATTERN_STOP,
+    ActionType.LOVENSE_SCAN,
+    ActionType.LOVENSE_SET_CAP,
+    ActionType.LOVENSE_ASSIGN,
+    ActionType.LOVENSE_RECONNECT,
 ]);
 
 export function isOneShotAction(actionType: ActionType): boolean {
     return ONE_SHOT_ACTIONS.has(actionType);
+}
+
+function payloadDevices(value: unknown): string {
+    if (Array.isArray(value)) return value.map(String).join(", ");
+    if (typeof value === "string" && value.trim()) return value;
+    return "all";
+}
+
+function payloadTags(value: unknown): string {
+    if (Array.isArray(value)) return value.map(String).join(", ");
+    if (typeof value === "string") return value;
+    return "";
+}
+
+function lovenseMode(
+    value: unknown
+): "expression" | "absolute" | "relative" | "percent" {
+    const mode = String(value ?? "expression");
+    return mode === "absolute" || mode === "relative" || mode === "percent"
+        ? mode
+        : "expression";
+}
+
+function splitList(value: string): string[] {
+    return value
+        .split(",")
+        .map(item => item.trim())
+        .filter(Boolean);
+}
+
+function lovenseTargets(devices: string, tags: string) {
+    const trimmed = devices.trim();
+    const tagList = splitList(tags);
+    if (!trimmed || trimmed.toLowerCase() === "all") {
+        return { all: true, tags: tagList };
+    }
+    return { device_ids: splitList(trimmed), tags: tagList };
 }
 
 export const actionSchema = z.discriminatedUnion("action_type", [
@@ -112,6 +156,75 @@ export const actionSchema = z.discriminatedUnion("action_type", [
         action_type: z.literal(ActionType.TRAINING_STOP_AND_NEUTRALIZE),
         session_id: z.string(),
     }),
+    baseAction.extend({
+        action_type: z.literal(ActionType.LOVENSE_SET),
+        devices: z.string(),
+        tags: z.string(),
+        output: z.string(),
+        value: z.string().min(1, "e.g. 50, +10, [10-20]"),
+        mode: z.enum(["expression", "absolute", "relative", "percent"]),
+        ramp_ms: z.coerce.number().int().min(0),
+    }),
+    baseAction.extend({
+        action_type: z.literal(ActionType.LOVENSE_PULSE),
+        devices: z.string(),
+        tags: z.string(),
+        output: z.string(),
+        value: z.coerce.number().min(0).max(100),
+        attack_ms: z.coerce.number().int().min(0),
+        hold_ms: z.coerce.number().int().min(0),
+        release_ms: z.coerce.number().int().min(0),
+    }),
+    baseAction.extend({
+        action_type: z.literal(ActionType.LOVENSE_STOP),
+        devices: z.string(),
+        tags: z.string(),
+        output: z.string(),
+    }),
+    baseAction.extend({
+        action_type: z.literal(ActionType.LOVENSE_PATTERN_PLAY),
+        pattern_id: z.string().min(1, "Choose a pattern"),
+        devices: z.string(),
+        tags: z.string(),
+        loop: z.boolean(),
+        scale_pct: z.coerce.number().int().min(0).max(150),
+        replace: z.boolean(),
+    }),
+    baseAction.extend({
+        action_type: z.literal(ActionType.LOVENSE_PATTERN_STOP),
+        run_id: z.string(),
+        pattern_id: z.string(),
+        all: z.boolean(),
+    }),
+    baseAction.extend({
+        action_type: z.literal(ActionType.LOVENSE_RANDOM_PATTERN),
+        pattern_tags: z.string(),
+        devices: z.string(),
+        scale_pct: z.coerce.number().int().min(0).max(150),
+        replace: z.boolean(),
+    }),
+    baseAction.extend({
+        action_type: z.literal(ActionType.LOVENSE_SCAN),
+        node_id: z.string(),
+        seconds: z.coerce.number().int().min(1).max(120),
+    }),
+    baseAction.extend({
+        action_type: z.literal(ActionType.LOVENSE_SET_CAP),
+        devices: z.string(),
+        tags: z.string(),
+        max_pct: z.coerce.number().int().min(0).max(100),
+    }),
+    baseAction.extend({
+        action_type: z.literal(ActionType.LOVENSE_ASSIGN),
+        devices: z.string(),
+        tags: z.string(),
+        alias: z.string(),
+        new_tags: z.string(),
+    }),
+    baseAction.extend({
+        action_type: z.literal(ActionType.LOVENSE_RECONNECT),
+        node_id: z.string(),
+    }),
 ]);
 
 export const formSchema = z.object({
@@ -174,6 +287,86 @@ export function defaultAction(action_type: ActionType): ActionValues {
             };
         case ActionType.TRAINING_STOP_AND_NEUTRALIZE:
             return { ...oneShot, action_type, session_id: "" };
+        case ActionType.LOVENSE_SET:
+            return {
+                ...base,
+                action_type,
+                devices: "all",
+                tags: "",
+                output: "Vibrate",
+                value: "50",
+                mode: "expression",
+                ramp_ms: 0,
+            };
+        case ActionType.LOVENSE_PULSE:
+            return {
+                ...oneShot,
+                action_type,
+                devices: "all",
+                tags: "",
+                output: "Vibrate",
+                value: 50,
+                attack_ms: 200,
+                hold_ms: 800,
+                release_ms: 300,
+            };
+        case ActionType.LOVENSE_STOP:
+            return {
+                ...oneShot,
+                action_type,
+                devices: "all",
+                tags: "",
+                output: "",
+            };
+        case ActionType.LOVENSE_PATTERN_PLAY:
+            return {
+                ...base,
+                action_type,
+                pattern_id: "",
+                devices: "all",
+                tags: "",
+                loop: false,
+                scale_pct: 100,
+                replace: true,
+            };
+        case ActionType.LOVENSE_PATTERN_STOP:
+            return {
+                ...oneShot,
+                action_type,
+                run_id: "",
+                pattern_id: "",
+                all: true,
+            };
+        case ActionType.LOVENSE_RANDOM_PATTERN:
+            return {
+                ...base,
+                action_type,
+                pattern_tags: "",
+                devices: "all",
+                scale_pct: 100,
+                replace: true,
+            };
+        case ActionType.LOVENSE_SCAN:
+            return { ...oneShot, action_type, node_id: "", seconds: 10 };
+        case ActionType.LOVENSE_SET_CAP:
+            return {
+                ...oneShot,
+                action_type,
+                devices: "all",
+                tags: "",
+                max_pct: 70,
+            };
+        case ActionType.LOVENSE_ASSIGN:
+            return {
+                ...oneShot,
+                action_type,
+                devices: "all",
+                tags: "",
+                alias: "",
+                new_tags: "",
+            };
+        case ActionType.LOVENSE_RECONNECT:
+            return { ...oneShot, action_type, node_id: "" };
     }
 }
 
@@ -301,6 +494,97 @@ export function actionToFormValues(action: TriggerAction): ActionValues {
                 action_type: ActionType.TRAINING_STOP_AND_NEUTRALIZE,
                 session_id: String(p["session_id"] ?? ""),
             };
+        case ActionType.LOVENSE_SET:
+            return {
+                ...base,
+                action_type: ActionType.LOVENSE_SET,
+                devices: payloadDevices(p["devices"]),
+                tags: payloadTags(p["tags"]),
+                output: String(p["output"] ?? "Vibrate"),
+                value: String(p["value"] ?? "50"),
+                mode: lovenseMode(p["mode"]),
+                ramp_ms: Number(p["ramp_ms"] ?? 0),
+            };
+        case ActionType.LOVENSE_PULSE:
+            return {
+                ...base,
+                action_type: ActionType.LOVENSE_PULSE,
+                devices: payloadDevices(p["devices"]),
+                tags: payloadTags(p["tags"]),
+                output: String(p["output"] ?? "Vibrate"),
+                value: Number(p["value"] ?? 50),
+                attack_ms: Number(p["attack_ms"] ?? 200),
+                hold_ms: Number(p["hold_ms"] ?? 800),
+                release_ms: Number(p["release_ms"] ?? 300),
+            };
+        case ActionType.LOVENSE_STOP:
+            return {
+                ...base,
+                action_type: ActionType.LOVENSE_STOP,
+                devices: payloadDevices(p["devices"]),
+                tags: payloadTags(p["tags"]),
+                output: String(p["output"] ?? ""),
+            };
+        case ActionType.LOVENSE_PATTERN_PLAY:
+            return {
+                ...base,
+                action_type: ActionType.LOVENSE_PATTERN_PLAY,
+                pattern_id: String(p["pattern_id"] ?? p["pattern_name"] ?? ""),
+                devices: payloadDevices(p["devices"]),
+                tags: payloadTags(p["tags"]),
+                loop: Boolean(p["loop"] ?? false),
+                scale_pct: Number(p["scale_pct"] ?? 100),
+                replace: Boolean(p["replace"] ?? true),
+            };
+        case ActionType.LOVENSE_PATTERN_STOP:
+            return {
+                ...base,
+                action_type: ActionType.LOVENSE_PATTERN_STOP,
+                run_id: String(p["run_id"] ?? ""),
+                pattern_id: String(p["pattern_id"] ?? ""),
+                all: Boolean(
+                    p["all"] ?? (!p["run_id"] && !p["pattern_id"])
+                ),
+            };
+        case ActionType.LOVENSE_RANDOM_PATTERN:
+            return {
+                ...base,
+                action_type: ActionType.LOVENSE_RANDOM_PATTERN,
+                pattern_tags: payloadTags(p["pattern_tags"]),
+                devices: payloadDevices(p["devices"]),
+                scale_pct: Number(p["scale_pct"] ?? 100),
+                replace: Boolean(p["replace"] ?? true),
+            };
+        case ActionType.LOVENSE_SCAN:
+            return {
+                ...base,
+                action_type: ActionType.LOVENSE_SCAN,
+                node_id: String(p["node_id"] ?? ""),
+                seconds: Number(p["seconds"] ?? 10),
+            };
+        case ActionType.LOVENSE_SET_CAP:
+            return {
+                ...base,
+                action_type: ActionType.LOVENSE_SET_CAP,
+                devices: payloadDevices(p["devices"]),
+                tags: payloadTags(p["tags"]),
+                max_pct: Number(p["max_pct"] ?? 70),
+            };
+        case ActionType.LOVENSE_ASSIGN:
+            return {
+                ...base,
+                action_type: ActionType.LOVENSE_ASSIGN,
+                devices: payloadDevices(p["devices"]),
+                tags: payloadTags(p["tags"]),
+                alias: String(p["alias"] ?? ""),
+                new_tags: payloadTags(p["new_tags"]),
+            };
+        case ActionType.LOVENSE_RECONNECT:
+            return {
+                ...base,
+                action_type: ActionType.LOVENSE_RECONNECT,
+                node_id: String(p["node_id"] ?? ""),
+            };
         default:
             return defaultAction(ActionType.LEVEL);
     }
@@ -346,6 +630,28 @@ export function actionSummary(action: ActionValues): string {
             return `${action.difficulty} · ${action.outcome}`;
         case ActionType.TRAINING_STOP_AND_NEUTRALIZE:
             return "Fail + neutralize every output";
+        case ActionType.LOVENSE_SET:
+            return `${action.output || "Vibrate"} · ${action.value || "?"} · ${action.devices || "all"}`;
+        case ActionType.LOVENSE_PULSE:
+            return `Pulse ${action.value}% · ${action.hold_ms} ms`;
+        case ActionType.LOVENSE_STOP:
+            return action.output ? `Stop ${action.output}` : "Stop every output";
+        case ActionType.LOVENSE_PATTERN_PLAY:
+            return action.pattern_id || "Choose a pattern";
+        case ActionType.LOVENSE_PATTERN_STOP:
+            return action.run_id || action.pattern_id || "Every run";
+        case ActionType.LOVENSE_RANDOM_PATTERN:
+            return action.pattern_tags
+                ? `Random · ${action.pattern_tags}`
+                : "Random pattern";
+        case ActionType.LOVENSE_SCAN:
+            return action.node_id || "Choose a node";
+        case ActionType.LOVENSE_SET_CAP:
+            return `Cap ${action.max_pct}% · ${action.devices || "all"}`;
+        case ActionType.LOVENSE_ASSIGN:
+            return `${action.alias || "alias"} · ${action.new_tags || "no tags"}`;
+        case ActionType.LOVENSE_RECONNECT:
+            return action.node_id || "Every node";
         default:
             return "Configure action";
     }
@@ -434,6 +740,74 @@ export function toActionBody(action: ActionValues, sort_order: number) {
                 note: action.note,
             };
             if (action.session_id) payload["session_id"] = action.session_id;
+            break;
+        case ActionType.LOVENSE_SET:
+            payload = {
+                ...lovenseTargets(action.devices, action.tags),
+                output: action.output || "Vibrate",
+                value: action.value,
+                mode: action.mode,
+                ramp_ms: action.ramp_ms,
+            };
+            break;
+        case ActionType.LOVENSE_PULSE:
+            payload = {
+                ...lovenseTargets(action.devices, action.tags),
+                output: action.output || "Vibrate",
+                value: action.value,
+                attack_ms: action.attack_ms,
+                hold_ms: action.hold_ms,
+                release_ms: action.release_ms,
+            };
+            break;
+        case ActionType.LOVENSE_STOP:
+            payload = {
+                ...lovenseTargets(action.devices, action.tags),
+            };
+            if (action.output) payload["output"] = action.output;
+            break;
+        case ActionType.LOVENSE_PATTERN_PLAY:
+            payload = {
+                pattern_id: action.pattern_id,
+                ...lovenseTargets(action.devices, action.tags),
+                loop: action.loop,
+                scale_pct: action.scale_pct,
+                replace: action.replace,
+            };
+            break;
+        case ActionType.LOVENSE_PATTERN_STOP:
+            payload = { all: action.all };
+            if (action.run_id) payload["run_id"] = action.run_id;
+            if (action.pattern_id) payload["pattern_id"] = action.pattern_id;
+            break;
+        case ActionType.LOVENSE_RANDOM_PATTERN:
+            payload = {
+                pattern_tags: splitList(action.pattern_tags),
+                devices: action.devices,
+                scale_pct: action.scale_pct,
+                replace: action.replace,
+            };
+            break;
+        case ActionType.LOVENSE_SCAN:
+            payload = { node_id: action.node_id };
+            if (action.seconds) payload["seconds"] = action.seconds;
+            break;
+        case ActionType.LOVENSE_SET_CAP:
+            payload = {
+                ...lovenseTargets(action.devices, action.tags),
+                max_pct: action.max_pct,
+            };
+            break;
+        case ActionType.LOVENSE_ASSIGN:
+            payload = {
+                ...lovenseTargets(action.devices, action.tags),
+                alias: action.alias,
+                new_tags: splitList(action.new_tags),
+            };
+            break;
+        case ActionType.LOVENSE_RECONNECT:
+            payload = {};
+            if (action.node_id) payload["node_id"] = action.node_id;
             break;
     }
     return { action_type, payload, duration, cumulative, sort_order };

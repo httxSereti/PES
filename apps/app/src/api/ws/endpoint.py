@@ -123,6 +123,12 @@ async def _send_init_sequence(websocket: WebSocket, user) -> None:
 
         await profiles_loader(user.id, store.websocket)
 
+    # Lovense devices/patterns snapshot (device readers)
+    if allowed("lovense:init"):
+        from api.ws.loaders import lovense_loader
+
+        await lovense_loader(user.id, store.websocket)
+
     # Integrations catalog (event readers)
     if allowed("integrations:load"):
         from api.ws.loaders import integrations_loader

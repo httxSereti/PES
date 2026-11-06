@@ -1,4 +1,4 @@
-import { Blocks, Cpu, GraduationCap, ImageOff, Lock, Radio, Shield, type LucideIcon } from "lucide-react";
+import { Blocks, Cpu, GraduationCap, ImageOff, Lock, Radio, Shield, Vibrate, type LucideIcon } from "lucide-react";
 
 import { cn } from "@pes/ui/lib/utils";
 
@@ -47,6 +47,13 @@ const SOURCE_META: Record<string, SourceMeta> = {
         iconClass: "text-rose-600 dark:text-rose-400",
         tileClass: "border-rose-500/25 bg-rose-500/10",
         badgeClass: "border-rose-500/30 bg-rose-500/10 text-rose-700 dark:text-rose-300",
+    },
+    lovense: {
+        label: "Lovense",
+        icon: Vibrate,
+        iconClass: "text-fuchsia-600 dark:text-fuchsia-400",
+        tileClass: "border-fuchsia-500/25 bg-fuchsia-500/10",
+        badgeClass: "border-fuchsia-500/30 bg-fuchsia-500/10 text-fuchsia-700 dark:text-fuchsia-300",
     },
 };
 

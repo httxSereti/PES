@@ -11,10 +11,12 @@ import {
     Play,
     Shield,
     ShieldAlert,
+    Shuffle,
     SkipForward,
     SlidersHorizontal,
     Square,
     Timer,
+    Vibrate,
     Zap,
     type LucideIcon,
 } from "lucide-react";
@@ -44,6 +46,16 @@ const ACTION_ICONS: Record<string, LucideIcon> = {
     [ActionType.TRAINING_NEXT_PROGRAM_STEP]: SkipForward,
     [ActionType.TRAINING_RECORD_EDGE]: Zap,
     [ActionType.TRAINING_STOP_AND_NEUTRALIZE]: ShieldAlert,
+    [ActionType.LOVENSE_SET]: Vibrate,
+    [ActionType.LOVENSE_PULSE]: Zap,
+    [ActionType.LOVENSE_STOP]: Square,
+    [ActionType.LOVENSE_PATTERN_PLAY]: Play,
+    [ActionType.LOVENSE_PATTERN_STOP]: Square,
+    [ActionType.LOVENSE_RANDOM_PATTERN]: Shuffle,
+    [ActionType.LOVENSE_SCAN]: Activity,
+    [ActionType.LOVENSE_SET_CAP]: Percent,
+    [ActionType.LOVENSE_ASSIGN]: Layers,
+    [ActionType.LOVENSE_RECONNECT]: Activity,
 };
 
 export function actionIcon(type: string): LucideIcon {

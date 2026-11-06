@@ -1,6 +1,6 @@
 "use client"
 
-import { Archive, HardDrive, Home, UserRound, Wifi, type LucideIcon } from "lucide-react"
+import { Archive, HardDrive, Home, UserRound, Vibrate, Wifi, type LucideIcon } from "lucide-react"
 import { Link, useLocation } from "react-router"
 import { cn } from "@pes/ui/lib/utils"
 import {
@@ -26,6 +26,11 @@ const tabs: { title: string; url: string; icon: LucideIcon }[] = [
         icon: Wifi,
     },
     {
+        title: "Toys",
+        url: "/app/lovense",
+        icon: Vibrate,
+    },
+    {
         title: "Events",
         url: "/app/events",
         icon: Archive,
@@ -40,7 +45,7 @@ export function MobileTabBar() {
 
     return (
         <nav className="bg-background/95 supports-[backdrop-filter]:bg-background/80 fixed inset-x-0 bottom-0 z-50 border-t backdrop-blur md:hidden">
-            <div className="grid h-16 grid-cols-5">
+            <div className="grid h-16 grid-cols-6">
                 {tabs.map((tab) => (
                     <Link
                         key={tab.title}

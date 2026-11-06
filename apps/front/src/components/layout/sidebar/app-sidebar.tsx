@@ -1,19 +1,16 @@
 import * as React from "react";
 import {
   Archive,
-  BellIcon,
   Bookmark,
-  Crown,
   Dumbbell,
   Frame,
-  Hammer,
   HardDrive,
   History,
   Home,
   Map,
   PieChart,
-  Settings2,
   SquareTerminal,
+  Vibrate,
   Wifi,
 } from "lucide-react";
 
@@ -25,7 +22,6 @@ import {
   SidebarRail,
 } from "@pes/ui/components/sidebar";
 import { NavMain } from "@/components/layout/sidebar/nav-main";
-import { NavPlayground } from "@/components/layout/sidebar/nav-playground";
 import { AppSidebarHeader } from "@/components/layout/sidebar/app-sidebar-header";
 import { ControlPanel } from "@/components/layout/sidebar/control-panel";
 import { NavAdmin } from "@/components/layout/sidebar/nav-admin";
@@ -53,6 +49,11 @@ const data = {
       title: "Units",
       url: "/app/units",
       icon: HardDrive,
+    },
+    {
+      title: "Lovense",
+      url: "/app/lovense",
+      icon: Vibrate,
     },
     {
       title: "Sensors",

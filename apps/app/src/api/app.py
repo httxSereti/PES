@@ -99,6 +99,12 @@ async def lifespan(app: FastAPI):
     from database.models.edging_template import EdgingTemplate  # noqa: F401
     from database.models.edging_program import EdgingProgram  # noqa: F401
     from database.models.app_session import AppSession  # noqa: F401
+    from database.models.lovense import (  # noqa: F401
+        LovenseDevice,
+        LovenseNode,
+        LovensePattern,
+        LovenseRun,
+    )
 
     async with db._engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)

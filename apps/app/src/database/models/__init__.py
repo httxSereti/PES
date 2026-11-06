@@ -10,6 +10,7 @@ from .edging_edge import EdgingEdge
 from .edging_template import EdgingTemplate
 from .edging_program import EdgingProgram
 from .app_session import AppSession
+from .lovense import LovenseDevice, LovenseNode, LovensePattern, LovenseRun
 
 __all__ = [
     "TriggerRule",
@@ -24,4 +25,8 @@ __all__ = [
     "EdgingTemplate",
     "EdgingProgram",
     "AppSession",
+    "LovenseNode",
+    "LovenseDevice",
+    "LovensePattern",
+    "LovenseRun",
 ]

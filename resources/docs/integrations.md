@@ -11,6 +11,16 @@ in one `IntegrationRegistry`.
 | `training` | core     | `training_*` (9) | `TRAINING_*` (7)           | —                         |
 | `chaster`  | external | `chaster_*`      | `CHASTER_TIME_UPDATE`      | `CHASTER_*` (env, ro)     |
 | `puryfi`   | external | `puryfi_*` (17)  | `PURYFI_*` (6)             | thresholds, port, secrets |
+| `lovense`  | external | `lovense_*` (14) | `LOVENSE_*` (10)           | caps, relay, battery, timings |
+
+### Lovense / Buttplug (toys)
+
+The `lovense` integration drives Lovense toys (and any Buttplug-compatible
+device) through Intiface Central. Devices are discovered at runtime from one or
+more Buttplug servers ("nodes"), so there is no hardcoded device count. It
+supports real-time control, multi-track patterns (profiles), per-device caps,
+battery events and remote companions. See [lovense.md](lovense.md) for setup,
+the pattern format and the companion.
 
 ### Training (edging sessions)
 

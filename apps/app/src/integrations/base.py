@@ -173,6 +173,22 @@ class Integration:
     async def stop(self) -> None:
         """Called once at app shutdown."""
 
+    async def emergency_stop(self, reason: str) -> None:
+        """
+        Best-effort safety hook called by `services.neutralize.neutralize_all`
+        (panic stop, session end, shutdown). Integrations that drive physical
+        hardware must release it here; the default is a no-op.
+        """
+
+    def on_enabled_changed(self, enabled: bool) -> None:
+        """
+        Called after an external integration is enabled/disabled from the UI.
+
+        Disabling an integration is a global kill switch: hardware integrations
+        should stop their outputs and tear down connections here. The hook is
+        synchronous; schedule async work instead of blocking the registry.
+        """
+
     def health(self) -> dict[str, Any]:
         """Small status payload surfaced to the UI."""
         return {"status": "ok"}

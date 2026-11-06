@@ -17,6 +17,7 @@ from typings import RampEndAction, RampMode
 
 from .base import ClientMessage, WireModel
 from .models import (
+    LovenseTarget,
     ProfileDefaults,
     SensorPatch,
     SessionSensorId,
@@ -722,6 +723,238 @@ class IntegrationsUpdateCommand(ClientMessage):
     payload: IntegrationUpdatePayload
 
 
+# ─────────────────────────────── Lovense ───────────────────────────────
+
+
+class LovenseSetPayload(WireModel):
+    targets: LovenseTarget = Field(default_factory=LovenseTarget)
+    output: str = "Vibrate"
+    feature: int | str = "all"
+    value: float = 0
+    mode: Literal["absolute", "relative", "percent"] = "absolute"
+    ramp_ms: int = 0
+    force: bool = False
+
+
+class LovenseSetCommand(ClientMessage):
+    type: Literal["lovense:set"] = "lovense:set"
+    payload: LovenseSetPayload
+
+
+class LovenseStopPayload(WireModel):
+    targets: LovenseTarget = Field(default_factory=LovenseTarget)
+    output: str | None = None
+
+
+class LovenseStopCommand(ClientMessage):
+    type: Literal["lovense:stop"] = "lovense:stop"
+    payload: LovenseStopPayload
+
+
+class LovenseStopAllCommand(ClientMessage):
+    type: Literal["lovense:stop_all"] = "lovense:stop_all"
+    payload: dict[str, Any] | None = None
+
+
+class LovensePulsePayload(WireModel):
+    targets: LovenseTarget = Field(default_factory=LovenseTarget)
+    output: str = "Vibrate"
+    value: float = 50
+    attack_ms: int = 200
+    hold_ms: int = 800
+    release_ms: int = 300
+
+
+class LovensePulseCommand(ClientMessage):
+    type: Literal["lovense:pulse"] = "lovense:pulse"
+    payload: LovensePulsePayload
+
+
+class LovenseScanPayload(WireModel):
+    node_id: str
+    seconds: int | None = None
+
+
+class LovenseScanCommand(ClientMessage):
+    type: Literal["lovense:scan"] = "lovense:scan"
+    payload: LovenseScanPayload
+
+
+class LovenseNodeSavePayload(WireModel):
+    node_id: str | None = None
+    name: str = Field(min_length=1, max_length=80)
+    kind: Literal["direct", "relay"] = "direct"
+    url: str | None = None
+    enabled: bool = True
+
+
+class LovenseNodeSaveCommand(ClientMessage):
+    type: Literal["lovense:node_save"] = "lovense:node_save"
+    payload: LovenseNodeSavePayload
+
+
+class LovenseNodeIdPayload(WireModel):
+    node_id: str
+
+
+class LovenseNodeDeleteCommand(ClientMessage):
+    type: Literal["lovense:node_delete"] = "lovense:node_delete"
+    payload: LovenseNodeIdPayload
+
+
+class LovenseNodeReconnectCommand(ClientMessage):
+    type: Literal["lovense:node_reconnect"] = "lovense:node_reconnect"
+    payload: LovenseNodeIdPayload
+
+
+class LovenseNodeTokenCommand(ClientMessage):
+    type: Literal["lovense:node_token"] = "lovense:node_token"
+    payload: LovenseNodeIdPayload
+
+
+class LovenseDeviceUpdatePayload(WireModel):
+    device_id: str
+    alias: str | None = None
+    tags: list[str] | None = None
+    max_intensity_pct: int | None = Field(default=None, ge=0, le=100)
+    control_policy: str | None = None
+
+
+class LovenseDeviceUpdateCommand(ClientMessage):
+    type: Literal["lovense:device_update"] = "lovense:device_update"
+    payload: LovenseDeviceUpdatePayload
+
+
+class LovenseDeviceDeleteCommand(ClientMessage):
+    type: Literal["lovense:device_delete"] = "lovense:device_delete"
+    payload: LovenseDeviceUpdatePayload
+
+
+class LovenseBatteryPayload(WireModel):
+    device_ids: list[str] = []
+
+
+class LovenseBatteryCommand(ClientMessage):
+    type: Literal["lovense:battery"] = "lovense:battery"
+    payload: LovenseBatteryPayload
+
+
+class LovenseIdentifyPayload(WireModel):
+    device_id: str
+
+
+class LovenseIdentifyCommand(ClientMessage):
+    type: Literal["lovense:identify"] = "lovense:identify"
+    payload: LovenseIdentifyPayload
+
+
+class LovensePatternSavePayload(WireModel):
+    pattern_id: str | None = None
+    name: str = Field(min_length=1, max_length=80)
+    definition: dict[str, Any]
+    description: str | None = None
+    visibility: str = "private"
+    tags: list[str] = []
+
+
+class LovensePatternSaveCommand(ClientMessage):
+    type: Literal["lovense:pattern_save"] = "lovense:pattern_save"
+    payload: LovensePatternSavePayload
+
+
+class LovensePatternIdPayload(WireModel):
+    pattern_id: str
+
+
+class LovensePatternDeleteCommand(ClientMessage):
+    type: Literal["lovense:pattern_delete"] = "lovense:pattern_delete"
+    payload: LovensePatternIdPayload
+
+
+class LovensePatternDetailCommand(ClientMessage):
+    type: Literal["lovense:pattern_detail"] = "lovense:pattern_detail"
+    payload: LovensePatternIdPayload
+
+
+class LovensePatternDuplicatePayload(WireModel):
+    pattern_id: str
+    name: str = Field(min_length=1, max_length=80)
+
+
+class LovensePatternDuplicateCommand(ClientMessage):
+    type: Literal["lovense:pattern_duplicate"] = "lovense:pattern_duplicate"
+    payload: LovensePatternDuplicatePayload
+
+
+class LovensePatternPlayPayload(WireModel):
+    pattern_id: str | None = None
+    pattern_name: str | None = None
+    targets: LovenseTarget = Field(default_factory=LovenseTarget)
+    duration: int = -1
+    loop: bool = False
+    loop_count: int = 0
+    scale_pct: int = Field(default=100, ge=0, le=150)
+    replace: bool = True
+    fade_in_ms: int | None = None
+    fade_out_ms: int | None = None
+    sync_offset_ms: int = 0
+
+
+class LovensePatternPlayCommand(ClientMessage):
+    type: Literal["lovense:pattern_play"] = "lovense:pattern_play"
+    payload: LovensePatternPlayPayload
+
+
+class LovensePatternStopPayload(WireModel):
+    run_id: str | None = None
+    pattern_id: str | None = None
+    all: bool = False
+
+
+class LovensePatternStopCommand(ClientMessage):
+    type: Literal["lovense:pattern_stop"] = "lovense:pattern_stop"
+    payload: LovensePatternStopPayload
+
+
+class LovensePatternExportCommand(ClientMessage):
+    type: Literal["lovense:pattern_export"] = "lovense:pattern_export"
+    payload: LovensePatternIdPayload
+
+
+class LovensePatternImportPayload(WireModel):
+    document: dict[str, Any]
+
+
+class LovensePatternImportCommand(ClientMessage):
+    type: Literal["lovense:pattern_import"] = "lovense:pattern_import"
+    payload: LovensePatternImportPayload
+
+
+class LovensePatternListCommand(ClientMessage):
+    type: Literal["lovense:pattern_list"] = "lovense:pattern_list"
+    payload: dict[str, Any] | None = None
+
+
+class LovenseHealthCommand(ClientMessage):
+    type: Literal["lovense:health"] = "lovense:health"
+    payload: dict[str, Any] | None = None
+
+
+class LovenseIntifaceStartCommand(ClientMessage):
+    type: Literal["lovense:intiface_start"] = "lovense:intiface_start"
+    payload: dict[str, Any] | None = None
+
+
+class LovenseIntifaceStopCommand(ClientMessage):
+    type: Literal["lovense:intiface_stop"] = "lovense:intiface_stop"
+    payload: dict[str, Any] | None = None
+
+
+class LovenseIntifaceRestartCommand(ClientMessage):
+    type: Literal["lovense:intiface_restart"] = "lovense:intiface_restart"
+    payload: dict[str, Any] | None = None
+
+
 __all__ = [
     "PingCommand",
     "CoreStopCommand",
@@ -828,4 +1061,45 @@ __all__ = [
     "HardwareRescanBtSensorsCommand",
     "IntegrationUpdatePayload",
     "IntegrationsUpdateCommand",
+    "LovenseSetPayload",
+    "LovenseSetCommand",
+    "LovenseStopPayload",
+    "LovenseStopCommand",
+    "LovenseStopAllCommand",
+    "LovensePulsePayload",
+    "LovensePulseCommand",
+    "LovenseScanPayload",
+    "LovenseScanCommand",
+    "LovenseNodeSavePayload",
+    "LovenseNodeSaveCommand",
+    "LovenseNodeIdPayload",
+    "LovenseNodeDeleteCommand",
+    "LovenseNodeReconnectCommand",
+    "LovenseNodeTokenCommand",
+    "LovenseDeviceUpdatePayload",
+    "LovenseDeviceUpdateCommand",
+    "LovenseDeviceDeleteCommand",
+    "LovenseBatteryPayload",
+    "LovenseBatteryCommand",
+    "LovenseIdentifyPayload",
+    "LovenseIdentifyCommand",
+    "LovensePatternSavePayload",
+    "LovensePatternSaveCommand",
+    "LovensePatternIdPayload",
+    "LovensePatternDeleteCommand",
+    "LovensePatternDetailCommand",
+    "LovensePatternDuplicatePayload",
+    "LovensePatternDuplicateCommand",
+    "LovensePatternPlayPayload",
+    "LovensePatternPlayCommand",
+    "LovensePatternStopPayload",
+    "LovensePatternStopCommand",
+    "LovensePatternExportCommand",
+    "LovensePatternImportPayload",
+    "LovensePatternImportCommand",
+    "LovensePatternListCommand",
+    "LovenseHealthCommand",
+    "LovenseIntifaceStartCommand",
+    "LovenseIntifaceStopCommand",
+    "LovenseIntifaceRestartCommand",
 ]

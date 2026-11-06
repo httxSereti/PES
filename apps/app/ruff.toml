@@ -1,0 +1,7 @@
+# Conservative Ruff configuration: the codebase predates a lint baseline, so
+# only correctness rules (syntax, undefined names, redefinitions) are enforced.
+target-version = "py312"
+line-length = 100
+
+[lint]
+select = ["E9", "F811", "F821", "F822", "F823"]

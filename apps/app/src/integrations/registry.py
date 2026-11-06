@@ -137,6 +137,15 @@ class IntegrationRegistry:
                 return
             raise ValueError(f"'{integration_id}' is a core integration and cannot be disabled")
         self._settings.set_enabled(integration_id, enabled)
+        # Let the integration react to its own kill switch (stop hardware,
+        # tear down connections, ...). Kept synchronous: implementations must
+        # schedule async work instead of blocking the registry.
+        try:
+            integration.on_enabled_changed(bool(enabled))
+        except Exception:
+            logger.exception(
+                f"[Integrations] on_enabled_changed failed for '{integration_id}'"
+            )
 
     def _is_item_toggled(self, integration_id: str, section: str, item_id: str) -> bool:
         values = self._settings.get(integration_id).get(section)
