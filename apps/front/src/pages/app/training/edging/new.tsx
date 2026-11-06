@@ -46,6 +46,7 @@ export default function NewEdgingSessionPage() {
   const [formKey, setFormKey] = useState(0);
 
   useEffect(() => {
+    if (!canManage) return;
     async function loadTemplates() {
       try {
         const result = await sendCommand("training:templates");
@@ -59,7 +60,7 @@ export default function NewEdgingSessionPage() {
       }
     }
     void loadTemplates();
-  }, [sendCommand]);
+  }, [canManage, sendCommand]);
 
   useWebSocketEvent("training:templates", (payload) => {
     setTemplates(payload);
@@ -85,6 +86,11 @@ export default function NewEdgingSessionPage() {
       auto_stop_on_goal: template.auto_stop_on_goal,
       mode: template.mode === "guided" ? "guided" : "manual",
       guided_config: template.guided_config,
+      participant_ids: template.participant_ids ?? [],
+      min_edge_interval_seconds: template.min_edge_interval_seconds,
+      notification_level: template.notification_level,
+      allow_partner_edges: template.allow_partner_edges,
+      visibility: template.visibility,
     });
     setFormKey((key) => key + 1);
   }
@@ -121,6 +127,8 @@ export default function NewEdgingSessionPage() {
         min_edge_interval_seconds: fields.min_edge_interval_seconds,
         notification_level: fields.notification_level,
         allow_partner_edges: fields.allow_partner_edges,
+        visibility: fields.visibility,
+        participant_ids: fields.participant_ids ?? [],
       });
       if (result.status !== "ok" || !result.session) {
         setError(result.message ?? "Failed to create the session");
@@ -182,13 +190,13 @@ export default function NewEdgingSessionPage() {
             )}
           </div>
 
-            <SessionForm
-              key={formKey}
-              initial={initial}
-              submitLabel="Create session"
-              onSubmit={handleSubmit}
-              error={error}
-            />
+          <SessionForm
+            key={formKey}
+            initial={initial}
+            submitLabel="Create session"
+            onSubmit={handleSubmit}
+            error={error}
+          />
         </CardContent>
       </Card>
     </div>

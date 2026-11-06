@@ -73,3 +73,4 @@ class TriggerableEvent(str, Enum):
     TRAINING_SESSION_SUCCEEDED = "training_session_succeeded"
     TRAINING_SESSION_FAILED = "training_session_failed"
     TRAINING_SESSION_CANCELLED = "training_session_cancelled"
+    TRAINING_PROGRAM_COMPLETED = "training_program_completed"

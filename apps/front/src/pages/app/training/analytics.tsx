@@ -18,9 +18,12 @@ import {
   CardHeader,
   CardTitle,
 } from "@pes/ui/components/card";
+import { Button } from "@pes/ui/components/button";
 import {
   Activity,
   Clock,
+  Download,
+  FileJson,
   Flame,
   Gauge,
   Star,
@@ -29,6 +32,11 @@ import {
 
 import { useWebSocket, useWebSocketEvent } from "@/hooks/useWebSocket";
 import { formatDuration } from "@/lib/training";
+import {
+  downloadCsv,
+  downloadJson,
+  exportDateStamp,
+} from "@/lib/training-export";
 import type { TrainingAnalytics } from "@/types";
 
 export function meta() {
@@ -82,9 +90,7 @@ export default function TrainingAnalyticsPage() {
         setError(result.message ?? "Failed to load analytics");
       }
     } catch (err) {
-      setError(
-        err instanceof Error ? err.message : "Failed to load analytics",
-      );
+      setError(err instanceof Error ? err.message : "Failed to load analytics");
     }
   }, [sendCommand]);
 
@@ -106,6 +112,40 @@ export default function TrainingAnalyticsPage() {
       void load();
     }
   });
+
+  function handleExportJson() {
+    if (!data) return;
+    downloadJson(`training-analytics-${exportDateStamp()}.json`, {
+      kind: "pes.training.analytics",
+      version: 1,
+      exported_at: new Date().toISOString(),
+      analytics: data,
+    });
+  }
+
+  function handleExportCsv() {
+    if (!data) return;
+    downloadCsv(`training-sessions-${exportDateStamp()}.csv`, [
+      [
+        "date",
+        "session",
+        "status",
+        "duration_seconds",
+        "success_edges",
+        "edges_per_minute",
+        "rating",
+      ],
+      ...data.trend.map((point) => [
+        point.ended_at,
+        point.name,
+        point.status,
+        point.duration_seconds,
+        point.edges,
+        point.edges_per_minute,
+        point.rating,
+      ]),
+    ]);
+  }
 
   if (error) {
     return <p className="px-4 text-sm text-destructive md:px-5">{error}</p>;
@@ -129,11 +169,23 @@ export default function TrainingAnalyticsPage() {
 
   return (
     <div className="space-y-4 px-4 md:px-5">
-      <div>
-        <h2 className="text-lg font-semibold">Analytics</h2>
-        <p className="text-xs text-muted-foreground">
-          Trends, records and edge pacing across your accessible sessions.
-        </p>
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <h2 className="text-lg font-semibold">Analytics</h2>
+          <p className="text-xs text-muted-foreground">
+            Trends, records and edge pacing across your accessible sessions.
+          </p>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          <Button variant="outline" size="sm" onClick={handleExportCsv}>
+            <Download size={13} />
+            Sessions CSV
+          </Button>
+          <Button variant="outline" size="sm" onClick={handleExportJson}>
+            <FileJson size={13} />
+            Export JSON
+          </Button>
+        </div>
       </div>
 
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
@@ -173,7 +225,9 @@ export default function TrainingAnalyticsPage() {
           </CardHeader>
           <CardContent className="grid grid-cols-2 gap-4 px-4">
             <div>
-              <p className="text-[11px] text-muted-foreground">Current streak</p>
+              <p className="text-[11px] text-muted-foreground">
+                Current streak
+              </p>
               <p className="font-mono text-2xl font-bold tabular-nums">
                 {records.current_streak_days}
                 <span className="ml-1 text-xs font-normal text-muted-foreground">

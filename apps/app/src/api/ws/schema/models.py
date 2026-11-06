@@ -383,6 +383,7 @@ class IntegrationCatalogEntry(WireModel):
 TrainingNotificationLevel = Literal[
     "all", "edges", "failures", "summary", "none"
 ]
+TrainingVisibility = Literal["private", "everyone"]
 
 
 class EdgingGoal(WireModel):
@@ -449,6 +450,7 @@ class EdgingSessionSummary(WireModel):
     min_edge_interval_seconds: int
     notification_level: TrainingNotificationLevel
     allow_partner_edges: bool
+    visibility: TrainingVisibility
     paused_at: datetime | None
     total_paused_seconds: int
     created_at: datetime
@@ -472,6 +474,14 @@ class EdgingSession(EdgingSessionSummary):
     notes: str | None
 
 
+class TrainingParticipant(WireModel):
+    """User that can be added to a training session or template."""
+
+    id: str
+    display_name: str | None
+    is_guest: bool = False
+
+
 class TrainingTemplate(WireModel):
     id: str
     name: str
@@ -479,6 +489,11 @@ class TrainingTemplate(WireModel):
     auto_stop_on_goal: bool
     mode: str
     guided_config: TrainingGuidedConfig | None
+    participant_ids: list[str]
+    min_edge_interval_seconds: int
+    notification_level: TrainingNotificationLevel
+    allow_partner_edges: bool
+    visibility: TrainingVisibility
     created_by: str
     created_at: datetime
 
@@ -496,11 +511,21 @@ class TrainingProgram(WireModel):
     steps: list[TrainingProgramStep]
     created_by: str
     created_at: datetime
+    # Whole-program goals: sessions succeeded and/or cumulative active time.
+    goals: list[EdgingGoal]
     # Derived progress across every user's sessions in this program.
+    sessions_succeeded: int
+    duration_seconds: int
+    goals_met: bool
     completed_steps: int
     completed_step_indices: list[int]
     step_count: int
     next_step: int | None
+    completed: bool
+    # Optional profile applied automatically once the program completes.
+    reward_profile: str | None
+    reward_level_pct: int
+    rewarded_at: datetime | None
 
 
 class TrainingTrendPoint(WireModel):
@@ -655,6 +680,8 @@ __all__ = [
     "EdgingEdge",
     "EdgingSessionSummary",
     "EdgingSession",
+    "TrainingVisibility",
+    "TrainingParticipant",
     "TrainingTemplate",
     "TrainingProgramStep",
     "TrainingProgram",

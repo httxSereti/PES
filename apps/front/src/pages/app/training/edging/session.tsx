@@ -407,6 +407,7 @@ export default function EdgingSessionPage() {
         min_edge_interval_seconds: session.min_edge_interval_seconds,
         notification_level: session.notification_level,
         allow_partner_edges: session.allow_partner_edges,
+        visibility: session.visibility,
       });
       if (result.status !== "ok" || !result.session) {
         setError(result.message ?? "Failed to duplicate the session");
@@ -450,6 +451,11 @@ export default function EdgingSessionPage() {
           auto_stop_on_goal: session.auto_stop_on_goal,
           mode: session.mode === "guided" ? "guided" : "manual",
           guided_config: session.guided_config,
+          participant_ids: session.participant_ids ?? [],
+          min_edge_interval_seconds: session.min_edge_interval_seconds,
+          notification_level: session.notification_level,
+          allow_partner_edges: session.allow_partner_edges,
+          visibility: session.visibility,
         }),
       "Template saved",
     );
@@ -506,6 +512,7 @@ export default function EdgingSessionPage() {
                 {participantCount === 1 ? " participant" : " participants"}
               </>
             )}
+            {session.visibility === "everyone" && <> · visible to everyone</>}
             {session.allow_partner_edges && <> · partner edge control</>}
             {session.program_id && (
               <>
@@ -668,9 +675,7 @@ export default function EdgingSessionPage() {
                     size="sm"
                     disabled={busy}
                     onClick={() =>
-                      void (session.paused_at
-                        ? handleResume()
-                        : handlePause())
+                      void (session.paused_at ? handleResume() : handlePause())
                     }
                   >
                     {session.paused_at ? (
@@ -905,6 +910,8 @@ export default function EdgingSessionPage() {
               min_edge_interval_seconds: session.min_edge_interval_seconds,
               notification_level: session.notification_level,
               allow_partner_edges: session.allow_partner_edges,
+              visibility: session.visibility,
+              participant_ids: session.participant_ids ?? [],
             }}
             submitLabel="Save changes"
             onSubmit={async (fields) => {
@@ -974,7 +981,9 @@ export default function EdgingSessionPage() {
             </div>
             <div className="flex items-center justify-between gap-3 rounded-lg border border-border/60 px-3 py-2.5">
               <div className="flex flex-col">
-                <span className="text-xs font-medium">Partner edge control</span>
+                <span className="text-xs font-medium">
+                  Partner edge control
+                </span>
                 <span className="text-[10px] text-muted-foreground/60">
                   Participants can record successful edges. The Host is
                   notified.
@@ -986,10 +995,7 @@ export default function EdgingSessionPage() {
               />
             </div>
             <div className="flex justify-end gap-2">
-              <Button
-                variant="outline"
-                onClick={() => setSettingsOpen(false)}
-              >
+              <Button variant="outline" onClick={() => setSettingsOpen(false)}>
                 Cancel
               </Button>
               <Button disabled={busy} onClick={() => void handleSaveSettings()}>
@@ -1048,10 +1054,7 @@ export default function EdgingSessionPage() {
               maxLength={120}
             />
             <div className="flex justify-end gap-2">
-              <Button
-                variant="outline"
-                onClick={() => setTemplateOpen(false)}
-              >
+              <Button variant="outline" onClick={() => setTemplateOpen(false)}>
                 Cancel
               </Button>
               <Button

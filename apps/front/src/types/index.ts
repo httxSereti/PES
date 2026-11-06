@@ -54,4 +54,10 @@ export type {
     EdgingSessionStats,
     EdgeDifficulty,
     EdgeOutcome,
+    TrainingParticipant,
+    TrainingProgram,
+    TrainingProgramStep,
+    TrainingTemplate,
+    TrainingProgramFields,
+    TrainingProgramGoalType,
 } from './training.types'

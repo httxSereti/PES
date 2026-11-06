@@ -26,6 +26,7 @@ export function TrainingNotifications() {
 
     if (
       payload.kind === "goal_reached" ||
+      payload.kind === "program_completed" ||
       (payload.kind === "ended" && payload.status === "succeeded")
     ) {
       toast.success(payload.message, options);

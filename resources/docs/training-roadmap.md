@@ -1,8 +1,8 @@
 # Training / Edging — prochaines actions à implémenter
 
-Roadmap des évolutions identifiées pour le module Training après les lots 1 à 4
+Roadmap des évolutions identifiées pour le module Training après les lots 1 à 5
 (auto-stop, participants, pause, métadonnées, événements, templates, programmes,
-mode guidé et analytics).
+mode guidé, analytics, édition des programmes/templates et exports).
 
 ## Priorités
 
@@ -117,13 +117,25 @@ l'automatisation s'arrête au lieu de réappliquer quoi que ce soit.
 
 ## 5. Programmes et templates
 
-- [ ] Éditeur de programme existant
-- [ ] Réorganisation des steps
-- [ ] Duplication d'un programme
-- [ ] Templates avec participants / mode par défaut
-- [ ] Import / export JSON
-- [ ] Objectifs de programme (ex. 10 sessions réussies, 1 h cumulée)
-- [ ] Récompenses automatiques à la fin d'un programme
+- [x] Éditeur de programme existant
+- [x] Réorganisation des steps
+- [x] Duplication d'un programme
+- [x] Templates avec participants / mode par défaut
+- [x] Import / export JSON
+- [x] Objectifs de programme (ex. 10 sessions réussies, 1 h cumulée)
+- [x] Récompenses automatiques à la fin d'un programme
+
+Les programmes et les templates se gèrent désormais depuis la page Programs :
+édition, réorganisation, duplication et import/export JSON. Les templates
+conservent aussi les participants, le mode, la cooldown, le niveau de
+notification, le contrôle partenaire et la visibilité ; ces valeurs sont
+recopiées dans la session créée. Une session ou un template peut être privé ou
+visible par tout le monde : dans ce second cas, les guests connectés reçoivent
+aussi le direct et peuvent suivre la session. Les objectifs de programme comptent les sessions réussies et la
+durée active cumulée. Quand toutes les étapes et tous les objectifs sont
+terminés, le programme émet `training_program_completed` et applique
+éventuellement le profil de récompense configuré, via la file d'actions (donc
+révocable par `units:stop` / `neutralize_all()`).
 
 ---
 
@@ -133,8 +145,12 @@ l'automatisation s'arrête au lieu de réappliquer quoi que ce soit.
 - [ ] Comparaison semaine précédente / semaine en cours
 - [ ] Distribution des temps entre edges par difficulté
 - [ ] Évolution des records
-- [ ] Export CSV / JSON
+- [x] Export CSV / JSON
 - [ ] Résumé partageable d'une session ou d'un programme
+
+La page Analytics exporte la tendance des sessions en CSV et l'agrégat complet
+en JSON (records, quotidien, intervalles et résumé).
+
 - [ ] Heatmap calendrier et streaks par programme
 
 ---

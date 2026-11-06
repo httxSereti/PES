@@ -25,6 +25,9 @@ async def handle_training_program_save(
                 for step in payload.steps
             ],
             created_by=ctx.user.id,
+            goals=[goal.model_dump() for goal in payload.goals],
+            reward_profile=payload.reward_profile,
+            reward_level_pct=payload.reward_level_pct,
         )
         programs = await list_programs()
     except ValueError as e:

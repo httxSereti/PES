@@ -54,6 +54,8 @@ class EdgingSession(Base):
     notification_level: Mapped[str] = mapped_column(String, default="all")
     # Participants may record successful edges (reported to the Host).
     allow_partner_edges: Mapped[bool] = mapped_column(Boolean, default=False)
+    # private = creator/participants/Hosts, everyone = any authenticated user.
+    visibility: Mapped[str] = mapped_column(String, default="private")
     # Extra users allowed to see/control the session (creator is implicit).
     participant_ids: Mapped[List] = mapped_column(JSON, default=list)
     status: Mapped[str] = mapped_column(String, default="configured", index=True)

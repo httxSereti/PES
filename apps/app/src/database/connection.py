@@ -87,6 +87,7 @@ class Database:
                     "min_edge_interval_seconds": "INTEGER DEFAULT 0",
                     "notification_level": "VARCHAR DEFAULT 'all'",
                     "allow_partner_edges": "BOOLEAN DEFAULT 0",
+                    "visibility": "VARCHAR DEFAULT 'private'",
                     "participant_ids": "JSON",
                     "paused_at": "DATETIME",
                     "total_paused_seconds": "INTEGER DEFAULT 0",
@@ -125,6 +126,11 @@ class Database:
                 template_migrations = {
                     "mode": "VARCHAR DEFAULT 'manual'",
                     "guided_config": "JSON",
+                    "participant_ids": "JSON",
+                    "min_edge_interval_seconds": "INTEGER DEFAULT 0",
+                    "notification_level": "VARCHAR DEFAULT 'all'",
+                    "allow_partner_edges": "BOOLEAN DEFAULT 0",
+                    "visibility": "VARCHAR DEFAULT 'private'",
                 }
                 for column, sql_type in template_migrations.items():
                     if column not in template_columns:
@@ -136,6 +142,29 @@ class Database:
                         )
                         logger.info(
                             f"[Database] Added training_edging_templates.{column}"
+                        )
+
+            result = await conn.execute(
+                text("PRAGMA table_info(training_edging_programs)")
+            )
+            program_columns = {row[1] for row in result.fetchall()}
+            if program_columns:
+                program_migrations = {
+                    "goals": "JSON",
+                    "reward_profile": "VARCHAR",
+                    "reward_level_pct": "INTEGER DEFAULT 80",
+                    "rewarded_at": "DATETIME",
+                }
+                for column, sql_type in program_migrations.items():
+                    if column not in program_columns:
+                        await conn.execute(
+                            text(
+                                "ALTER TABLE training_edging_programs "
+                                f"ADD COLUMN {column} {sql_type}"
+                            )
+                        )
+                        logger.info(
+                            f"[Database] Added training_edging_programs.{column}"
                         )
 
             result = await conn.execute(

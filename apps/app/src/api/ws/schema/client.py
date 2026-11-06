@@ -23,6 +23,7 @@ from .models import (
     SessionUnitId,
     TrainingGuidedConfig,
     TrainingNotificationLevel,
+    TrainingVisibility,
 )
 
 # ─────────────────────────────── Core ───────────────────────────────
@@ -463,6 +464,7 @@ class TrainingSessionDraft(WireModel):
     min_edge_interval_seconds: int = Field(default=0, ge=0, le=3600)
     notification_level: TrainingNotificationLevel | None = None
     allow_partner_edges: bool = False
+    visibility: TrainingVisibility = "private"
 
 
 class TrainingCreateCommand(ClientMessage):
@@ -481,6 +483,7 @@ class TrainingUpdatePayload(WireModel):
     min_edge_interval_seconds: int | None = Field(default=None, ge=0, le=3600)
     notification_level: TrainingNotificationLevel | None = None
     allow_partner_edges: bool | None = None
+    visibility: TrainingVisibility | None = None
     notes: str | None = None
     rating: int | None = Field(default=None, ge=1, le=5)
 
@@ -563,6 +566,13 @@ class TrainingEndCommand(ClientMessage):
 # ── Templates ──
 
 
+class TrainingParticipantsCommand(ClientMessage):
+    """Active users that can be added as training participants."""
+
+    type: Literal["training:participants"] = "training:participants"
+    payload: dict[str, Any] | None = None
+
+
 class TrainingTemplatesCommand(ClientMessage):
     type: Literal["training:templates"] = "training:templates"
     payload: dict[str, Any] | None = None
@@ -575,6 +585,11 @@ class TrainingTemplateSavePayload(WireModel):
     auto_stop_on_goal: bool = False
     mode: Literal["manual", "guided"] | None = None
     guided_config: TrainingGuidedConfig | None = None
+    participant_ids: list[str] | None = Field(default=None, max_length=20)
+    min_edge_interval_seconds: int = Field(default=0, ge=0, le=3600)
+    notification_level: TrainingNotificationLevel | None = None
+    allow_partner_edges: bool = False
+    visibility: TrainingVisibility = "private"
 
 
 class TrainingTemplateSaveCommand(ClientMessage):
@@ -610,6 +625,9 @@ class TrainingProgramSavePayload(WireModel):
     name: str = Field(min_length=1, max_length=120)
     description: str | None = None
     steps: list[TrainingProgramStepDraft] = Field(min_length=1, max_length=30)
+    goals: list[TrainingGoalDraft] = Field(default_factory=list, max_length=10)
+    reward_profile: str | None = Field(default=None, max_length=32)
+    reward_level_pct: int = Field(default=80, ge=0, le=100)
 
 
 class TrainingProgramSaveCommand(ClientMessage):
@@ -785,6 +803,7 @@ __all__ = [
     "TrainingDeleteEdgeCommand",
     "TrainingEndPayload",
     "TrainingEndCommand",
+    "TrainingParticipantsCommand",
     "TrainingTemplatesCommand",
     "TrainingTemplateSavePayload",
     "TrainingTemplateSaveCommand",

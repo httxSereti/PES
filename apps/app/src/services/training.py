@@ -23,7 +23,9 @@ from database.models import EdgingEdge, EdgingProgram, EdgingSession, EdgingTemp
 from database.repositories.edging_repo import EdgingRepo
 from database.repositories.training_repo import TrainingRepo
 from events.enums import TriggerableEvent
+from services.profiles import profile_exists
 from services.training_guided import (
+    apply_program_reward,
     discard_guided_automation,
     finish_guided_automation,
     normalize_guided_config,
@@ -82,8 +84,8 @@ def _session_lock(session_id: str) -> asyncio.Lock:
 def can_access_session(
     session: EdgingSession, viewer_id: str | None, is_host: bool = False
 ) -> bool:
-    """Creator, explicit participants and Hosts can see a training session."""
-    if is_host or viewer_id is None:
+    """Public sessions are visible to everyone; private ones stay scoped."""
+    if is_host or viewer_id is None or session.visibility == "everyone":
         return True
     return session.created_by == viewer_id or viewer_id in (
         session.participant_ids or []
@@ -118,6 +120,10 @@ def _session_recipients(session: EdgingSession) -> set[str]:
 
     for user in store.get_all_users().values():
         if user.has_permission(Permission.HOST):
+            recipients.add(user.id)
+        if session.visibility == "everyone" and user.has_permission(
+            Permission.TRAINING_EDGING_READ
+        ):
             recipients.add(user.id)
     return recipients
 
@@ -171,6 +177,7 @@ def _training_event_data(session: EdgingSession, **extra) -> dict:
         "min_edge_interval_seconds": session.min_edge_interval_seconds or 0,
         "notification_level": session.notification_level or "all",
         "allow_partner_edges": bool(session.allow_partner_edges),
+        "visibility": session.visibility or "private",
         "program_id": session.program_id,
         "program_step": session.program_step,
         **extra,
@@ -216,11 +223,11 @@ def _notification_allowed(
     if level == EdgingNotificationLevel.ALL.value:
         return True
     if level == EdgingNotificationLevel.EDGES.value:
-        return kind in {"edge", "goal_reached", "ended"}
+        return kind in {"edge", "goal_reached", "program_completed", "ended"}
     if level == EdgingNotificationLevel.FAILURES.value:
         return kind == "ended" and status == "failed"
     if level == EdgingNotificationLevel.SUMMARY.value:
-        return kind == "ended"
+        return kind in {"program_completed", "ended"}
     # Unknown persisted value: keep the historical behavior.
     return True
 
@@ -289,6 +296,63 @@ _ENDED_EVENT_TYPES = {
 }
 
 
+async def _maybe_complete_program(session: EdgingSession) -> None:
+    """Reward a program once, when its last step and goals are complete."""
+    if session.status != "succeeded" or session.program_id is None:
+        return
+
+    training_repo = TrainingRepo()
+    program = await training_repo.get_program(session.program_id)
+    if program is None:
+        return
+    sessions = await EdgingRepo().list_sessions(limit=1000)
+    progress = serialize_program(program, sessions)
+    if not progress["completed"] or program.rewarded_at is not None:
+        return
+
+    updated = await training_repo.update_program(
+        program.id, rewarded_at=datetime.utcnow()
+    )
+    if updated is None:
+        return
+
+    if program.reward_profile:
+        try:
+            await apply_program_reward(
+                program.id,
+                program.name,
+                program.reward_profile,
+                program.reward_level_pct,
+            )
+        except Exception:
+            logger.exception(
+                "[Training] Program reward failed",
+                program_id=program.id,
+                profile=program.reward_profile,
+            )
+
+    _notify_training(
+        session,
+        "program_completed",
+        f"{program.name}: training program completed",
+        status=session.status,
+    )
+    await _dispatch_training_event(
+        TriggerableEvent.TRAINING_PROGRAM_COMPLETED.value,
+        session,
+        program_name=program.name,
+        program_sessions_succeeded=progress["sessions_succeeded"],
+        program_duration_seconds=progress["duration_seconds"],
+        program_reward_profile=program.reward_profile,
+    )
+    await broadcast_programs()
+    logger.info(
+        "[Training] Program completed",
+        program_id=program.id,
+        reward_profile=program.reward_profile,
+    )
+
+
 async def _announce_session_ended(
     session: EdgingSession,
     actor_user_id: str | None = None,
@@ -306,6 +370,15 @@ async def _announce_session_ended(
     if dispatch_event and event_type is not None:
         extra = {"outcome": "fail"} if session.status == "failed" else {}
         await _dispatch_training_event(event_type, session, **extra)
+    if dispatch_event and session.status == "succeeded":
+        try:
+            await _maybe_complete_program(session)
+        except Exception:
+            logger.exception(
+                "[Training] Program completion check failed",
+                session_id=session.id,
+                program_id=session.program_id,
+            )
     _goal_announced.discard(session.id)
 
 
@@ -408,6 +481,7 @@ def serialize_session_summary(
         "min_edge_interval_seconds": session.min_edge_interval_seconds or 0,
         "notification_level": session.notification_level or "all",
         "allow_partner_edges": bool(session.allow_partner_edges),
+        "visibility": session.visibility or "private",
         "paused_at": to_utc_iso(session.paused_at),
         "total_paused_seconds": session.total_paused_seconds or 0,
         "last_edge_at": to_utc_iso(last_success_edge_at(session)),
@@ -598,6 +672,22 @@ def broadcast_edge_deleted(
     )
 
 
+async def broadcast_programs() -> None:
+    """Refresh program progress/reward state for every training reader."""
+    from store import Store
+
+    recipients = {
+        user.id
+        for user in Store().get_all_users().values()
+        if user.has_permission(Permission.TRAINING_EDGING_READ)
+    }
+    if not recipients:
+        return
+    ws_notifier.notify_to_users(
+        "training:programs", await list_programs(), recipients
+    )
+
+
 async def get_live_snapshot(
     repo: Optional[EdgingRepo] = None,
     *,
@@ -653,6 +743,13 @@ def _validate_notification_level(level: str | None) -> str:
     value = level or EdgingNotificationLevel.ALL.value
     if value not in {item.value for item in EdgingNotificationLevel}:
         raise ValueError(f"Unknown notification level: {value}")
+    return value
+
+
+def _validate_visibility(visibility: str | None) -> str:
+    value = visibility or "private"
+    if value not in {"private", "everyone"}:
+        raise ValueError(f"Unknown session visibility: {value}")
     return value
 
 
@@ -756,6 +853,7 @@ async def create_edging_session(
     min_edge_interval_seconds: int | None = None,
     notification_level: str | None = None,
     allow_partner_edges: bool = False,
+    visibility: str | None = None,
     program_id: str | None = None,
     program_step: int | None = None,
     repo: Optional[EdgingRepo] = None,
@@ -782,6 +880,7 @@ async def create_edging_session(
         ),
         notification_level=_validate_notification_level(notification_level),
         allow_partner_edges=allow_partner_edges,
+        visibility=_validate_visibility(visibility),
         program_id=program_id,
         program_step=program_step,
     )
@@ -803,6 +902,7 @@ async def update_edging_session(
     min_edge_interval_seconds: Optional[int] = None,
     notification_level: Optional[str] = None,
     allow_partner_edges: Optional[bool] = None,
+    visibility: Optional[str] = None,
     notes: Optional[str] = None,
     rating: Optional[int] = None,
     repo: Optional[EdgingRepo] = None,
@@ -826,6 +926,7 @@ async def update_edging_session(
         goals is not None
         or auto_stop_on_goal is not None
         or participant_ids is not None
+        or visibility is not None
         or mode is not None
         or guided_config is not None
     ):
@@ -841,6 +942,8 @@ async def update_edging_session(
             fields["participant_ids"] = _validate_participants(
                 participant_ids, session.created_by
             )
+        if visibility is not None:
+            fields["visibility"] = _validate_visibility(visibility)
         if mode is not None or guided_config is not None:
             next_mode = mode if mode is not None else (session.mode or "manual")
             next_config = (
@@ -1484,6 +1587,11 @@ def serialize_template(template: EdgingTemplate) -> dict:
         "guided_config": (
             dict(template.guided_config) if template.guided_config else None
         ),
+        "participant_ids": list(template.participant_ids or []),
+        "min_edge_interval_seconds": template.min_edge_interval_seconds or 0,
+        "notification_level": template.notification_level or "all",
+        "allow_partner_edges": bool(template.allow_partner_edges),
+        "visibility": template.visibility or "private",
         "created_by": template.created_by,
         "created_at": to_utc_iso(template.created_at),
     }
@@ -1510,20 +1618,68 @@ def _validate_program_steps(steps: list[dict]) -> list[dict]:
     return normalized
 
 
+_PROGRAM_GOAL_TYPES = {"sessions", "duration"}
+
+
+def _validate_program_goals(goals: list[dict] | None) -> list[dict]:
+    normalized: list[dict] = []
+    for goal in goals or []:
+        goal_type = goal.get("type")
+        if goal_type not in _PROGRAM_GOAL_TYPES:
+            raise ValueError(f"Unknown program goal type: {goal_type}")
+        try:
+            value = int(goal.get("value", 0))
+        except (TypeError, ValueError):
+            raise ValueError("Program goal values must be positive numbers")
+        if value <= 0:
+            raise ValueError("Program goal values must be positive numbers")
+        normalized.append({"type": goal_type, "value": value})
+    return normalized
+
+
+def _validate_program_reward(
+    profile: str | None, level_pct: int
+) -> tuple[str | None, int]:
+    cleaned = profile.strip() if isinstance(profile, str) else None
+    if cleaned == "":
+        cleaned = None
+    if cleaned is not None and not profile_exists(cleaned):
+        raise ValueError(f"Profile '{cleaned}' not found")
+    if level_pct < 0 or level_pct > 100:
+        raise ValueError("Program reward level must be between 0 and 100")
+    return cleaned, level_pct
+
+
 def serialize_program(
     program: EdgingProgram, sessions: list[EdgingSession]
 ) -> dict:
     steps = list(program.steps or [])
+    program_sessions = [
+        session
+        for session in sessions
+        if session.program_id == program.id and session.status == "succeeded"
+    ]
     completed = {
         session.program_step
-        for session in sessions
-        if session.program_id == program.id
-        and session.program_step is not None
-        and session.status == "succeeded"
+        for session in program_sessions
+        if session.program_step is not None
     }
     next_step = next(
         (index for index in range(len(steps)) if index not in completed),
         None,
+    )
+    sessions_succeeded = len(program_sessions)
+    duration_seconds = sum(
+        session_elapsed_seconds(session) or 0 for session in program_sessions
+    )
+    goals = [dict(goal) for goal in program.goals or []]
+    goals_met = all(
+        (
+            sessions_succeeded >= int(goal.get("value", 0))
+            if goal.get("type") == "sessions"
+            else duration_seconds >= int(goal.get("value", 0))
+        )
+        for goal in goals
     )
     return {
         "id": program.id,
@@ -1539,11 +1695,41 @@ def serialize_program(
         ],
         "created_by": program.created_by,
         "created_at": to_utc_iso(program.created_at),
+        "goals": goals,
+        "sessions_succeeded": sessions_succeeded,
+        "duration_seconds": duration_seconds,
+        "goals_met": goals_met,
         "completed_steps": len(completed),
         "completed_step_indices": sorted(completed),
         "step_count": len(steps),
         "next_step": next_step,
+        "completed": next_step is None and goals_met,
+        "reward_profile": program.reward_profile,
+        "reward_level_pct": program.reward_level_pct or 0,
+        "rewarded_at": to_utc_iso(program.rewarded_at),
     }
+
+
+def list_training_participants() -> list[dict]:
+    """Active persistent users that can be added to a training session."""
+    from store import Store
+
+    users: list[dict] = [
+        {
+            "id": user.id,
+            "display_name": user.display_name,
+            "is_guest": user.is_ephemeral,
+        }
+        for user in Store().get_all_users().values()
+        if user.is_active
+    ]
+    return sorted(
+        users,
+        key=lambda user: (
+            (user["display_name"] or user["id"]).casefold(),
+            user["id"],
+        ),
+    )
 
 
 async def list_templates(
@@ -1562,6 +1748,11 @@ async def save_template(
     created_by: str,
     mode: str | None = None,
     guided_config: dict | None = None,
+    participant_ids: list[str] | None = None,
+    min_edge_interval_seconds: int | None = None,
+    notification_level: str | None = None,
+    allow_partner_edges: bool = False,
+    visibility: str | None = None,
     training_repo: Optional[TrainingRepo] = None,
 ) -> dict:
     repo = training_repo or TrainingRepo()
@@ -1569,27 +1760,54 @@ async def save_template(
     normalized_mode, normalized_config = _validate_guided_settings(
         mode, guided_config
     )
+
+    owner_id = created_by
+    if template_id is not None:
+        existing = await repo.get_template(template_id)
+        if existing is None:
+            raise ValueError("Template not found")
+        owner_id = existing.created_by
+
+    normalized_name = name.strip()
+    if not normalized_name:
+        raise ValueError("Template name is required")
+    normalized_participants = _validate_participants(participant_ids, owner_id)
+    normalized_interval = _validate_min_interval(min_edge_interval_seconds)
+    normalized_notification = _validate_notification_level(notification_level)
+    normalized_visibility = _validate_visibility(visibility)
+
     if template_id is None:
         template = await repo.create_template(
-            name=name,
+            name=normalized_name,
             goals=normalized_goals,
             auto_stop_on_goal=auto_stop_on_goal,
             created_by=created_by,
             mode=normalized_mode,
             guided_config=normalized_config,
+            participant_ids=normalized_participants,
+            min_edge_interval_seconds=normalized_interval,
+            notification_level=normalized_notification,
+            allow_partner_edges=bool(allow_partner_edges),
+            visibility=normalized_visibility,
         )
-    else:
-        template = await repo.update_template(
-            template_id,
-            name=name,
-            goals=normalized_goals,
-            auto_stop_on_goal=auto_stop_on_goal,
-            mode=normalized_mode,
-            guided_config=normalized_config,
-        )
-        if template is None:
-            raise ValueError("Template not found")
-    return serialize_template(template)
+        return serialize_template(template)
+
+    updated = await repo.update_template(
+        template_id,
+        name=normalized_name,
+        goals=normalized_goals,
+        auto_stop_on_goal=auto_stop_on_goal,
+        mode=normalized_mode,
+        guided_config=normalized_config,
+        participant_ids=normalized_participants,
+        min_edge_interval_seconds=normalized_interval,
+        notification_level=normalized_notification,
+        allow_partner_edges=bool(allow_partner_edges),
+        visibility=normalized_visibility,
+    )
+    if updated is None:
+        raise ValueError("Template not found")
+    return serialize_template(updated)
 
 
 async def delete_template(
@@ -1620,29 +1838,59 @@ async def save_program(
     description: str | None,
     steps: list[dict],
     created_by: str,
+    goals: list[dict] | None = None,
+    reward_profile: str | None = None,
+    reward_level_pct: int = 80,
     training_repo: Optional[TrainingRepo] = None,
     edging_repo: Optional[EdgingRepo] = None,
 ) -> dict:
     repo = training_repo or TrainingRepo()
+    normalized_name = name.strip()
+    if not normalized_name:
+        raise ValueError("Program name is required")
     normalized_steps = _validate_program_steps(steps)
+    normalized_goals = _validate_program_goals(goals)
+    normalized_reward, normalized_reward_level = _validate_program_reward(
+        reward_profile, reward_level_pct
+    )
+    edging = edging_repo or EdgingRepo()
     if program_id is None:
-        program = await repo.create_program(
-            name=name,
+        created = await repo.create_program(
+            name=normalized_name,
             description=description,
             steps=normalized_steps,
             created_by=created_by,
+            goals=normalized_goals,
+            reward_profile=normalized_reward,
+            reward_level_pct=normalized_reward_level,
         )
-    else:
-        program = await repo.update_program(
-            program_id,
-            name=name,
-            description=description,
-            steps=normalized_steps,
-        )
-        if program is None:
-            raise ValueError("Program not found")
-    sessions = await (edging_repo or EdgingRepo()).list_sessions(limit=1000)
-    return serialize_program(program, sessions)
+        sessions = await edging.list_sessions(limit=1000)
+        return serialize_program(created, sessions)
+
+    existing = await repo.get_program(program_id)
+    if existing is None:
+        raise ValueError("Program not found")
+    fields: dict = {
+        "name": normalized_name,
+        "description": description,
+        "steps": normalized_steps,
+        "goals": normalized_goals,
+        "reward_profile": normalized_reward,
+        "reward_level_pct": normalized_reward_level,
+    }
+    # Editing the plan or its reward starts a new completion cycle.
+    if (
+        list(existing.steps or []) != normalized_steps
+        or list(existing.goals or []) != normalized_goals
+        or existing.reward_profile != normalized_reward
+        or existing.reward_level_pct != normalized_reward_level
+    ):
+        fields["rewarded_at"] = None
+    updated = await repo.update_program(program_id, **fields)
+    if updated is None:
+        raise ValueError("Program not found")
+    sessions = await edging.list_sessions(limit=1000)
+    return serialize_program(updated, sessions)
 
 
 async def delete_program(

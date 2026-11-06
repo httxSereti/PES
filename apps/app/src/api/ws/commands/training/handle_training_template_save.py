@@ -24,6 +24,11 @@ async def handle_training_template_save(
                 if payload.guided_config is not None
                 else None
             ),
+            participant_ids=payload.participant_ids,
+            min_edge_interval_seconds=payload.min_edge_interval_seconds,
+            notification_level=payload.notification_level,
+            allow_partner_edges=payload.allow_partner_edges,
+            visibility=payload.visibility,
         )
         templates = await list_templates()
     except ValueError as e:

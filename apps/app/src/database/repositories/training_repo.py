@@ -28,6 +28,11 @@ class TrainingRepo:
         created_by: str,
         mode: str = "manual",
         guided_config: dict | None = None,
+        visibility: str = "private",
+        participant_ids: list[str] | None = None,
+        min_edge_interval_seconds: int = 0,
+        notification_level: str = "all",
+        allow_partner_edges: bool = False,
     ) -> EdgingTemplate:
         template = EdgingTemplate(
             id=generate_id(),
@@ -36,6 +41,11 @@ class TrainingRepo:
             auto_stop_on_goal=auto_stop_on_goal,
             mode=mode,
             guided_config=guided_config,
+            visibility=visibility,
+            participant_ids=participant_ids or [],
+            min_edge_interval_seconds=min_edge_interval_seconds,
+            notification_level=notification_level,
+            allow_partner_edges=allow_partner_edges,
             created_by=created_by,
         )
         async with self._db.session_maker() as db_session:
@@ -85,12 +95,18 @@ class TrainingRepo:
         description: str | None,
         steps: list[dict],
         created_by: str,
+        goals: list[dict] | None = None,
+        reward_profile: str | None = None,
+        reward_level_pct: int = 80,
     ) -> EdgingProgram:
         program = EdgingProgram(
             id=generate_id(),
             name=name,
             description=description,
             steps=steps,
+            goals=goals or [],
+            reward_profile=reward_profile,
+            reward_level_pct=reward_level_pct,
             created_by=created_by,
         )
         async with self._db.session_maker() as db_session:

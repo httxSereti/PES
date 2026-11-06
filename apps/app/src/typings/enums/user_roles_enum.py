@@ -14,6 +14,7 @@ ROLE_PERMISSIONS: Dict[Role, Set[Permission]] = {
     Role.GUEST: {
         Permission.READ_UNITS,
         Permission.READ_SENSORS,
+        Permission.TRAINING_EDGING_READ,
         Permission.SESSION_READ,
     },
     Role.USER: {

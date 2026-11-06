@@ -77,6 +77,7 @@ export const SERVER_MESSAGE_AUDIENCE: Record<WebSocketServerMessage['type'], Per
     'training:overview': Permission.TRAINING_EDGING_READ,
     'training:sessions': Permission.TRAINING_EDGING_READ,
     'training:session_detail': Permission.TRAINING_EDGING_READ,
+    'training:participants': Permission.TRAINING_EDGING_READ,
     'training:templates': Permission.TRAINING_EDGING_READ,
     'training:programs': Permission.TRAINING_EDGING_READ,
     'training:analytics': Permission.TRAINING_EDGING_READ,

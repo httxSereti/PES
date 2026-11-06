@@ -25,6 +25,7 @@ _SESSION_FIELDS = {
     "min_edge_interval_seconds": "configured cooldown between successful edges",
     "notification_level": "all, edges, failures, summary or none",
     "allow_partner_edges": "whether participants may record successful edges",
+    "visibility": "private (creator/participants/Hosts) or everyone",
     "program_id": "program id when the session belongs to a program",
     "program_step": "zero-based program step index",
 }
@@ -207,5 +208,21 @@ class TrainingIntegration(Integration):
                 description="A training session was cancelled by the Host.",
                 group="Training",
                 data_schema=_SESSION_FIELDS,
+            ),
+            EventDef(
+                id=TriggerableEvent.TRAINING_PROGRAM_COMPLETED.value,
+                label="Training program completed",
+                description=(
+                    "Every step and whole-program goal of a training program "
+                    "is complete."
+                ),
+                group="Training",
+                data_schema={
+                    **_SESSION_FIELDS,
+                    "program_name": "program name",
+                    "program_sessions_succeeded": "succeeded sessions in the program",
+                    "program_duration_seconds": "cumulative active seconds",
+                    "program_reward_profile": "automatic reward profile, if any",
+                },
             ),
         ]

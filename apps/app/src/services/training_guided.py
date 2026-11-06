@@ -411,6 +411,64 @@ async def _cancel_terminal_item() -> None:
         await queue.cancel(item_id)
 
 
+async def apply_program_reward(
+    program_id: str, program_name: str, profile: str, level_pct: int
+) -> None:
+    """Apply the optional profile reward of a completed training program.
+
+    Uses the same single terminal queue slot as the guided reward/punishment
+    profiles, so a new guided session (or any stop/neutralize path) cancels it.
+    """
+    global _terminal_item_id
+    queue = _queue()
+    if queue is None:
+        return
+
+    await _cancel_terminal_item()
+    item = _queue_item(
+        item_id=f"program-reward:{program_id}",
+        session_id=program_id,
+        name=f"Program reward: {program_name}"[:120],
+        payload={"profile": profile, "level_pct": level_pct},
+        priority=900,
+    )
+    try:
+        snapshot = await queue.executor.apply(item)
+    except Exception:
+        logger.exception(
+            "[Training] Failed to apply the program reward profile",
+            program_id=program_id,
+            profile=profile,
+        )
+        try:
+            from services.neutralize import neutralize_all
+
+            await neutralize_all(reason=f"training:program_reward_failed:{program_id}")
+        except Exception:
+            logger.exception(
+                "[Training] Failed to neutralize after a program reward error",
+                program_id=program_id,
+            )
+        return
+    if not isinstance(snapshot, dict) or not snapshot.get("units"):
+        logger.warning(
+            "[Training] Program reward profile has no applicable units",
+            program_id=program_id,
+            profile=profile,
+        )
+        return
+
+    item.snapshot_data = snapshot
+    queue.adopt(item, snapshot)
+    _terminal_item_id = item.id
+    logger.info(
+        "[Training] Applied program reward profile",
+        program_id=program_id,
+        profile=profile,
+        level_pct=level_pct,
+    )
+
+
 async def _apply_terminal_profile(
     session: EdgingSession, profile: str, level_pct: int
 ) -> None:

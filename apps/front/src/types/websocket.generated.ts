@@ -2,7 +2,7 @@
 // by apps/app/scripts/generate_ws_types.py — DO NOT EDIT.
 // Regenerate with: pnpm codegen:ws
 
-export const WS_SCHEMA_VERSION = 20;
+export const WS_SCHEMA_VERSION = 21;
 
 export enum ActionType {
     PROFILE = "PROFILE",
@@ -191,6 +191,7 @@ export interface TrainingSessionDraft {
     min_edge_interval_seconds: number;
     notification_level?: 'all' | 'edges' | 'failures' | 'summary' | 'none' | null;
     allow_partner_edges: boolean;
+    visibility: 'private' | 'everyone';
 }
 
 export interface TrainingGoalDraft {
@@ -225,6 +226,7 @@ export interface TrainingUpdatePayload {
     min_edge_interval_seconds?: number | null;
     notification_level?: 'all' | 'edges' | 'failures' | 'summary' | 'none' | null;
     allow_partner_edges?: boolean | null;
+    visibility?: 'private' | 'everyone' | null;
     notes?: string | null;
     rating?: number | null;
 }
@@ -270,6 +272,11 @@ export interface TrainingTemplateSavePayload {
     auto_stop_on_goal: boolean;
     mode?: 'manual' | 'guided' | null;
     guided_config?: TrainingGuidedConfig | null;
+    participant_ids?: string[] | null;
+    min_edge_interval_seconds: number;
+    notification_level?: 'all' | 'edges' | 'failures' | 'summary' | 'none' | null;
+    allow_partner_edges: boolean;
+    visibility: 'private' | 'everyone';
 }
 
 export interface TrainingTemplateDeletePayload {
@@ -281,6 +288,9 @@ export interface TrainingProgramSavePayload {
     name: string;
     description?: string | null;
     steps: TrainingProgramStepDraft[];
+    goals: TrainingGoalDraft[];
+    reward_profile?: string | null;
+    reward_level_pct: number;
 }
 
 export interface TrainingProgramStepDraft {
@@ -383,6 +393,7 @@ export interface EdgingSessionSummary {
     min_edge_interval_seconds: number;
     notification_level: 'all' | 'edges' | 'failures' | 'summary' | 'none';
     allow_partner_edges: boolean;
+    visibility: 'private' | 'everyone';
     paused_at: string | null;
     total_paused_seconds: number;
     created_at: string;
@@ -684,7 +695,7 @@ export interface TrainingEdgeDeletedPayload {
 }
 
 export interface TrainingNotificationPayload {
-    kind: 'started' | 'edge' | 'goal_reached' | 'paused' | 'resumed' | 'ended';
+    kind: 'started' | 'edge' | 'goal_reached' | 'paused' | 'resumed' | 'ended' | 'program_completed';
     session_id: string;
     message: string;
     actor_user_id?: string | null;
@@ -734,6 +745,12 @@ export interface EdgingSessionStats {
     difficulty_counts: Record<string, number>;
 }
 
+export interface TrainingParticipant {
+    id: string;
+    display_name: string | null;
+    is_guest: boolean;
+}
+
 export interface TrainingTemplate {
     id: string;
     name: string;
@@ -741,6 +758,11 @@ export interface TrainingTemplate {
     auto_stop_on_goal: boolean;
     mode: string;
     guided_config: TrainingGuidedConfig | null;
+    participant_ids: string[];
+    min_edge_interval_seconds: number;
+    notification_level: 'all' | 'edges' | 'failures' | 'summary' | 'none';
+    allow_partner_edges: boolean;
+    visibility: 'private' | 'everyone';
     created_by: string;
     created_at: string;
 }
@@ -752,10 +774,18 @@ export interface TrainingProgram {
     steps: TrainingProgramStep[];
     created_by: string;
     created_at: string;
+    goals: EdgingGoal[];
+    sessions_succeeded: number;
+    duration_seconds: number;
+    goals_met: boolean;
     completed_steps: number;
     completed_step_indices: number[];
     step_count: number;
     next_step: number | null;
+    completed: boolean;
+    reward_profile: string | null;
+    reward_level_pct: number;
+    rewarded_at: string | null;
 }
 
 export interface TrainingProgramStep {
@@ -1161,6 +1191,12 @@ export interface TrainingEndCommand {
     payload: TrainingEndPayload;
 }
 
+export interface TrainingParticipantsCommand {
+    id?: string | null;
+    type: 'training:participants';
+    payload?: Record<string, unknown> | null;
+}
+
 export interface TrainingTemplatesCommand {
     id?: string | null;
     type: 'training:templates';
@@ -1494,6 +1530,12 @@ export interface TrainingSessionDetailMessage {
     payload: TrainingSessionDetail;
 }
 
+export interface TrainingParticipantsMessage {
+    id?: string | null;
+    type: 'training:participants';
+    payload: TrainingParticipant[];
+}
+
 export interface TrainingTemplatesMessage {
     id?: string | null;
     type: 'training:templates';
@@ -1589,6 +1631,7 @@ export type WebSocketClientMessage =
     | TrainingResumeCommand
     | TrainingDeleteEdgeCommand
     | TrainingEndCommand
+    | TrainingParticipantsCommand
     | TrainingTemplatesCommand
     | TrainingTemplateSaveCommand
     | TrainingTemplateDeleteCommand
@@ -1647,6 +1690,7 @@ export type WebSocketServerMessage =
     | TrainingOverviewMessage
     | TrainingSessionsMessage
     | TrainingSessionDetailMessage
+    | TrainingParticipantsMessage
     | TrainingTemplatesMessage
     | TrainingProgramsMessage
     | TrainingAnalyticsMessage

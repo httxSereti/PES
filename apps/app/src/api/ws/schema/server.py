@@ -35,6 +35,7 @@ from .models import (
     StatusMessage,
     TrainingAnalytics,
     TrainingOverviewStats,
+    TrainingParticipant,
     TrainingProgram,
     TrainingTemplate,
     TriggeredEvent,
@@ -421,6 +422,7 @@ class TrainingNotificationPayload(WireModel):
         "paused",
         "resumed",
         "ended",
+        "program_completed",
     ]
     session_id: str
     message: str
@@ -467,6 +469,14 @@ class TrainingSessionDetail(WireModel):
 class TrainingSessionDetailMessage(ServerMessage):
     type: Literal["training:session_detail"] = "training:session_detail"
     payload: TrainingSessionDetail
+
+
+@server_message(audience=Permission.TRAINING_EDGING_READ)
+class TrainingParticipantsMessage(ServerMessage):
+    """Personal reply to `training:participants`."""
+
+    type: Literal["training:participants"] = "training:participants"
+    payload: list[TrainingParticipant]
 
 
 @server_message(audience=Permission.TRAINING_EDGING_READ)
@@ -608,6 +618,7 @@ __all__ = [
     "TrainingSessionsMessage",
     "TrainingSessionDetail",
     "TrainingSessionDetailMessage",
+    "TrainingParticipantsMessage",
     "TrainingTemplatesMessage",
     "TrainingProgramsMessage",
     "TrainingAnalyticsMessage",

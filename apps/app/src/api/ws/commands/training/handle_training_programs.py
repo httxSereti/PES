@@ -6,7 +6,7 @@ from services.training import list_programs
 from typings import Permission
 
 
-@command(TrainingProgramsCommand, Permission.TRAINING_EDGING_READ)
+@command(TrainingProgramsCommand, Permission.TRAINING_EDGING_MANAGE)
 async def handle_training_programs(
     msg: TrainingProgramsCommand, ctx: CommandContext
 ) -> CommandResult:

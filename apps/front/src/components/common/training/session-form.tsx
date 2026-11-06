@@ -1,6 +1,8 @@
 import { useState } from "react";
-import type { TrainingSessionFields } from "@/types";
+import type { TrainingParticipant, TrainingSessionFields } from "@/types";
 import { NOTIFICATION_LEVEL_OPTIONS } from "@/lib/training";
+import { useTrainingParticipants } from "@/hooks/useTrainingParticipants";
+import { useAppSelector } from "@/store/hooks";
 import {
   GuidedAutomationFields,
   guidedConfigFrom,
@@ -24,7 +26,9 @@ import {
 import { Switch } from "@pes/ui/components/switch";
 import {
   Bell,
+  Check,
   Compass,
+  Globe2,
   Plus,
   SquareCheck,
   Timer,
@@ -60,14 +64,10 @@ export const sessionFormSchema = z.object({
     .int("Must be a whole number of seconds.")
     .min(0, "Cannot be negative.")
     .max(3600, "Maximum 1 hour."),
-  notification_level: z.enum([
-    "all",
-    "edges",
-    "failures",
-    "summary",
-    "none",
-  ]),
+  notification_level: z.enum(["all", "edges", "failures", "summary", "none"]),
   allow_partner_edges: z.boolean(),
+  visibility: z.enum(["private", "everyone"]),
+  participant_ids: z.array(z.string()).max(20, "Too many participants."),
 });
 
 export type SessionFormValues = z.output<typeof sessionFormSchema>;
@@ -94,6 +94,8 @@ export function toSessionFields(
     min_edge_interval_seconds: values.min_edge_interval_seconds,
     notification_level: values.notification_level,
     allow_partner_edges: values.allow_partner_edges,
+    visibility: values.visibility,
+    participant_ids: values.participant_ids,
   };
 }
 
@@ -115,6 +117,8 @@ export function fromSessionFields(
     min_edge_interval_seconds: fields?.min_edge_interval_seconds ?? 0,
     notification_level: fields?.notification_level ?? "all",
     allow_partner_edges: fields?.allow_partner_edges ?? false,
+    visibility: fields?.visibility ?? "private",
+    participant_ids: fields?.participant_ids ?? [],
   };
 }
 
@@ -149,6 +153,9 @@ export function SessionForm({
     guidedConfigFrom(initial?.guided_config),
   );
   const guidedMode = form.watch("mode") === "guided";
+  const publicSession = form.watch("visibility") === "everyone";
+  const currentUserId = useAppSelector((state) => state.auth.user?.id);
+  const participants = useTrainingParticipants();
 
   const isSubmitting = form.formState.isSubmitting;
 
@@ -184,6 +191,131 @@ export function SessionForm({
           )}
         />
       </FieldGroup>
+
+      <Controller
+        name="visibility"
+        control={form.control}
+        render={({ field }) => (
+          <Field
+            orientation="horizontal"
+            className={`items-center justify-between rounded-lg border px-3 py-2.5 transition-colors ${
+              field.value === "everyone"
+                ? "border-emerald-500/20 bg-emerald-500/5"
+                : "border-border/30 bg-transparent"
+            }`}
+          >
+            <div className="flex items-center gap-2">
+              <Globe2
+                size={12}
+                className={
+                  field.value === "everyone"
+                    ? "text-emerald-500"
+                    : "text-muted-foreground/30"
+                }
+              />
+              <div className="flex flex-col">
+                <span
+                  className={`font-mono text-[11px] ${
+                    field.value === "everyone"
+                      ? "text-emerald-600 dark:text-emerald-300"
+                      : "text-muted-foreground/40"
+                  }`}
+                >
+                  Visible to everyone
+                </span>
+                <span className="text-[10px] text-muted-foreground/50">
+                  Every connected user, including guests, can follow this
+                  session.
+                </span>
+              </div>
+            </div>
+            <Switch
+              id="form-training-session-visibility"
+              checked={field.value === "everyone"}
+              onCheckedChange={(checked) =>
+                field.onChange(checked ? "everyone" : "private")
+              }
+            />
+          </Field>
+        )}
+      />
+
+      {!publicSession && (
+        <Controller
+          name="participant_ids"
+          control={form.control}
+          render={({ field }) => {
+            const selected = field.value ?? [];
+            const available: TrainingParticipant[] = participants.filter(
+              (participant) => participant.id !== currentUserId,
+            );
+            for (const participantId of selected) {
+              if (
+                !available.some(
+                  (participant) => participant.id === participantId,
+                )
+              ) {
+                available.push({
+                  id: participantId,
+                  display_name: participantId,
+                  is_guest: false,
+                });
+              }
+            }
+
+            return (
+              <Field className="rounded-lg border border-border/30 px-3 py-2.5">
+                <div className="flex items-center gap-2">
+                  <Users size={12} className="text-muted-foreground/40" />
+                  <div className="flex flex-1 flex-col">
+                    <FieldLabel>Participants</FieldLabel>
+                    <span className="text-[10px] text-muted-foreground/50">
+                      Members who can see the session and record partner edges.
+                    </span>
+                  </div>
+                </div>
+                {available.length === 0 ? (
+                  <p className="text-[11px] text-muted-foreground/60">
+                    No other active users found.
+                  </p>
+                ) : (
+                  <div className="flex flex-wrap gap-1.5">
+                    {available.map((participant) => {
+                      const active = selected.includes(participant.id);
+                      return (
+                        <button
+                          key={participant.id}
+                          type="button"
+                          aria-pressed={active}
+                          onClick={() =>
+                            field.onChange(
+                              active
+                                ? selected.filter(
+                                    (participantId) =>
+                                      participantId !== participant.id,
+                                  )
+                                : [...selected, participant.id],
+                            )
+                          }
+                          className={`inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-[11px] transition-colors ${
+                            active
+                              ? "border-sky-500/40 bg-sky-500/10 text-sky-700 dark:text-sky-300"
+                              : "border-border/60 text-muted-foreground hover:border-border"
+                          }`}
+                        >
+                          {active && <Check size={11} />}
+                          {participant.display_name || participant.id}
+                          {participant.is_guest ? " (guest)" : ""}
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
+              </Field>
+            );
+          }}
+        />
+      )}
 
       <div className="space-y-3">
         <div className="flex items-center justify-between gap-3">
@@ -295,9 +427,7 @@ export function SessionForm({
               />
               <span
                 className={`font-mono text-[11px] ${
-                  field.value
-                    ? "text-primary/80"
-                    : "text-muted-foreground/40"
+                  field.value ? "text-primary/80" : "text-muted-foreground/40"
                 }`}
               >
                 Auto stop on success

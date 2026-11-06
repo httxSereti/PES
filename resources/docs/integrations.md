@@ -4,13 +4,13 @@ Everything that contributes **events**, **actions** or **settings** to PES is an
 integration. They all live under `apps/app/src/integrations/` and are registered
 in one `IntegrationRegistry`.
 
-| Id        | Kind     | Events           | Actions                    | Settings                  |
-| --------- | -------- | ---------------- | -------------------------- | ------------------------- |
+| Id         | Kind     | Events           | Actions                    | Settings                  |
+| ---------- | -------- | ---------------- | -------------------------- | ------------------------- |
 | `units`    | core     | —                | `PROFILE`, `LEVEL`, `MULT` | — (units/hardware pages)  |
 | `sensors`  | core     | `sensor_*_alarm` | —                          | — (sensors page)          |
-| `training` | core     | `training_*` (8) | `TRAINING_*` (7)           | —                         |
-| `chaster` | external | `chaster_*`      | `CHASTER_TIME_UPDATE`      | `CHASTER_*` (env, ro)     |
-| `puryfi`  | external | `puryfi_*` (17)  | `PURYFI_*` (6)             | thresholds, port, secrets |
+| `training` | core     | `training_*` (9) | `TRAINING_*` (7)           | —                         |
+| `chaster`  | external | `chaster_*`      | `CHASTER_TIME_UPDATE`      | `CHASTER_*` (env, ro)     |
+| `puryfi`   | external | `puryfi_*` (17)  | `PURYFI_*` (6)             | thresholds, port, secrets |
 
 ### Training (edging sessions)
 
@@ -30,7 +30,11 @@ Guided sessions can opt into hardware automation (`guided_config`): a profile
 is applied at start, stepped up per phase, lowered after each edge, and
 rewarded/punished on success/failure. The automation profile is a normal queue
 item, so `units:stop` and `neutralize_all()` always override it, and the level
-ceiling is capped at 100%.
+ceiling is capped at 100%. Programs may define whole-program goals and an
+optional reward profile: completing every step and goal emits
+`training_program_completed` and applies the reward through the same queue
+mechanism. Sessions default to private; `visibility=everyone` exposes them to
+every authenticated training reader, including guests.
 
 ### PuryFi (browser blocker)
 

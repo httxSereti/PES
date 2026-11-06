@@ -6,7 +6,7 @@ from services.training import list_templates
 from typings import Permission
 
 
-@command(TrainingTemplatesCommand, Permission.TRAINING_EDGING_READ)
+@command(TrainingTemplatesCommand, Permission.TRAINING_EDGING_MANAGE)
 async def handle_training_templates(
     msg: TrainingTemplatesCommand, ctx: CommandContext
 ) -> CommandResult:
