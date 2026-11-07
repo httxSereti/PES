@@ -1,22 +1,15 @@
-import {
-    Links,
-    Meta,
-    Outlet,
-    Scripts,
-    ScrollRestoration,
-} from "react-router";
+import { Links, Meta, Outlet, Scripts, ScrollRestoration } from "react-router";
 
 import { useEffect } from "react";
 
-import { Toaster } from "@pes/ui/components/sonner"
+import { Toaster } from "@pes/ui/components/sonner";
 
 import { ThemeProvider } from "@/components/layout/theme-provider";
 import { TrainingNotifications } from "@/components/common/training/training-notifications";
 
-
-import { Provider } from 'react-redux';
-import { store } from '@/store';
-import { verifyToken } from '@/store/slices/authSlice';
+import { Provider } from "react-redux";
+import { store } from "@/store";
+import { verifyToken } from "@/store/slices/authSlice";
 import { useAppDispatch } from "@/store/hooks";
 import { WebSocketProvider } from "@/providers/WebSocketProvider";
 import { TooltipProvider } from "@pes/ui/components/tooltip";
@@ -26,7 +19,7 @@ function AppInitializer({ children }: { children: React.ReactNode }) {
 
     useEffect(() => {
         // Verify token on app load
-        if (typeof window !== 'undefined') {
+        if (typeof window !== "undefined") {
             void dispatch(verifyToken());
         }
     }, [dispatch]);
@@ -34,18 +27,14 @@ function AppInitializer({ children }: { children: React.ReactNode }) {
     return <>{children}</>;
 }
 
-export function Layout({
-    children,
-}: {
-    children: React.ReactNode;
-}) {
+export function Layout({ children }: { children: React.ReactNode }) {
     return (
         <html lang="en">
             <head>
                 <meta charSet="UTF-8" />
                 <meta
                     name="viewport"
-                    content="width=device-width, initial-scale=1.0"
+                    content="width=device-width, initial-scale=1.0, viewport-fit=cover"
                 />
                 <Meta />
                 <Links />

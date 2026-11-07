@@ -1,4 +1,4 @@
-import { createSlice, type PayloadAction } from '@reduxjs/toolkit';
+import { createSlice, type PayloadAction } from "@reduxjs/toolkit";
 import type {
     LovenseDeviceInfo,
     LovenseHealth,
@@ -10,7 +10,7 @@ import type {
     LovensePublicSettings,
     LovenseRunInfo,
     LovenseSnapshot,
-} from '@/types';
+} from "@/types";
 
 export interface LovenseState {
     /** True once the connect snapshot (`lovense:init`) has arrived. */
@@ -41,7 +41,7 @@ const initialState: LovenseState = {
 };
 
 const lovenseSlice = createSlice({
-    name: 'lovense',
+    name: "lovense",
     initialState,
     reducers: {
         lovenseInitialized: (state, action: PayloadAction<LovenseSnapshot>) => {
@@ -55,40 +55,64 @@ const lovenseSlice = createSlice({
             state.settings = action.payload.settings ?? null;
             state.error = null;
         },
-        lovenseNodesUpdated: (state, action: PayloadAction<LovenseNodeInfo[]>) => {
+        lovenseNodesUpdated: (
+            state,
+            action: PayloadAction<LovenseNodeInfo[]>,
+        ) => {
             state.nodes = action.payload;
         },
-        lovenseDevicesUpdated: (state, action: PayloadAction<LovenseDeviceInfo[]>) => {
+        lovenseDevicesUpdated: (
+            state,
+            action: PayloadAction<LovenseDeviceInfo[]>,
+        ) => {
             state.devices = action.payload;
         },
-        lovenseDeviceUpdated: (state, action: PayloadAction<LovenseDeviceInfo>) => {
-            const index = state.devices.findIndex(device => device.id === action.payload.id);
+        lovenseDeviceUpdated: (
+            state,
+            action: PayloadAction<LovenseDeviceInfo>,
+        ) => {
+            const index = state.devices.findIndex(
+                (device) => device.id === action.payload.id,
+            );
             if (index === -1) state.devices.push(action.payload);
             else state.devices[index] = action.payload;
         },
-        lovenseRunsUpdated: (state, action: PayloadAction<LovenseRunInfo[]>) => {
+        lovenseRunsUpdated: (
+            state,
+            action: PayloadAction<LovenseRunInfo[]>,
+        ) => {
             state.runs = action.payload;
         },
-        lovensePatternsUpdated: (state, action: PayloadAction<LovensePatternSummary[]>) => {
+        lovensePatternsUpdated: (
+            state,
+            action: PayloadAction<LovensePatternSummary[]>,
+        ) => {
             state.patterns = action.payload;
         },
-        lovensePatternSaved: (state, action: PayloadAction<LovensePatternSummary>) => {
-            const index = state.patterns.findIndex(pattern => pattern.id === action.payload.id);
+        lovensePatternSaved: (
+            state,
+            action: PayloadAction<LovensePatternSummary>,
+        ) => {
+            const index = state.patterns.findIndex(
+                (pattern) => pattern.id === action.payload.id,
+            );
             if (index === -1) state.patterns.push(action.payload);
             else state.patterns[index] = action.payload;
+            // A saved summary does not carry the new definition; fetch it again for previews.
+            delete state.details[action.payload.id];
         },
         lovensePatternDetailLoaded: (
             state,
-            action: PayloadAction<LovensePatternDetail>
+            action: PayloadAction<LovensePatternDetail>,
         ) => {
             state.details[action.payload.id] = action.payload;
         },
         lovensePatternDeleted: (
             state,
-            action: PayloadAction<LovensePatternDeleted>
+            action: PayloadAction<LovensePatternDeleted>,
         ) => {
             state.patterns = state.patterns.filter(
-                pattern => pattern.id !== action.payload.id
+                (pattern) => pattern.id !== action.payload.id,
             );
             delete state.details[action.payload.id];
         },
@@ -97,7 +121,7 @@ const lovenseSlice = createSlice({
         },
         lovenseIntifaceUpdated: (
             state,
-            action: PayloadAction<LovenseIntifaceStatus>
+            action: PayloadAction<LovenseIntifaceStatus>,
         ) => {
             state.intiface = action.payload;
             if (state.health) state.health.intiface = action.payload;
@@ -123,6 +147,7 @@ export const {
     lovenseErrorReceived,
 } = lovenseSlice.actions;
 
-export const selectLovense = (state: { lovense: LovenseState }) => state.lovense;
+export const selectLovense = (state: { lovense: LovenseState }) =>
+    state.lovense;
 
 export default lovenseSlice.reducer;

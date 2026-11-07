@@ -30,8 +30,8 @@ export function AddNodeDialog({
     onSaved: () => void;
 }) {
     const { sendCommand } = useWebSocket();
-    const entry = useAppSelector(state =>
-        integrationsSelectors.selectById(state, "lovense")
+    const entry = useAppSelector((state) =>
+        integrationsSelectors.selectById(state, "lovense"),
     );
     const [name, setName] = useState("");
     const [kind, setKind] = useState<NodeKind>("direct");
@@ -111,7 +111,7 @@ export function AddNodeDialog({
     return (
         <Dialog
             open={open}
-            onOpenChange={next => {
+            onOpenChange={(next) => {
                 if (!next) reset();
                 onOpenChange(next);
             }}
@@ -120,8 +120,9 @@ export function AddNodeDialog({
                 <DialogHeader>
                     <DialogTitle>Add a Buttplug node</DialogTitle>
                     <DialogDescription>
-                        A node is an Intiface Central / Engine server. Use a direct URL when
-                        PES can reach it, or a relay node when the devices are behind NAT.
+                        A node is an Intiface Central / Engine server. Use a
+                        direct URL when PES can reach it, or a relay node when
+                        the devices are behind NAT.
                     </DialogDescription>
                 </DialogHeader>
 
@@ -130,10 +131,13 @@ export function AddNodeDialog({
                         <div className="flex items-start gap-2 rounded-lg border bg-muted/30 p-3 text-xs">
                             <ShieldCheck className="mt-0.5 size-4 shrink-0 text-emerald-500" />
                             <div className="space-y-1">
-                                <p className="font-medium">Relay node created</p>
+                                <p className="font-medium">
+                                    Relay node created
+                                </p>
                                 <p className="text-muted-foreground">
-                                    Run this on the machine that has Bluetooth. The token is
-                                    shown once; rotate it from the node card if you lose it.
+                                    Run this on the machine that has Bluetooth.
+                                    The token is shown once; rotate it from the
+                                    node card if you lose it.
                                 </p>
                             </div>
                         </div>
@@ -179,7 +183,9 @@ export function AddNodeDialog({
                             <Input
                                 value={name}
                                 placeholder="PC Camille"
-                                onChange={event => setName(event.target.value)}
+                                onChange={(event) =>
+                                    setName(event.target.value)
+                                }
                             />
                         </div>
 
@@ -194,7 +200,9 @@ export function AddNodeDialog({
                                 }`}
                             >
                                 <Link2 className="mb-1 size-4 text-violet-500" />
-                                <div className="text-xs font-medium">Direct</div>
+                                <div className="text-xs font-medium">
+                                    Direct
+                                </div>
                                 <div className="text-[10.5px] text-muted-foreground">
                                     PES connects to Intiface
                                 </div>
@@ -222,18 +230,22 @@ export function AddNodeDialog({
                                 <Input
                                     value={url}
                                     placeholder="ws://127.0.0.1:12345"
-                                    onChange={event => setUrl(event.target.value)}
+                                    onChange={(event) =>
+                                        setUrl(event.target.value)
+                                    }
                                     className="font-mono text-[11px]"
                                 />
                                 <p className="text-[10.5px] text-muted-foreground">
-                                    Start the Intiface server first. For a remote server, use a
-                                    VPN rather than exposing Intiface publicly.
+                                    Start the Intiface server first. For a
+                                    remote server, use a VPN rather than
+                                    exposing Intiface publicly.
                                 </p>
                             </div>
                         ) : (
                             <p className="text-[11px] text-muted-foreground">
-                                The companion will run next to the remote Intiface and connect
-                                to PES. No port forwarding needed.
+                                The companion will run next to the remote
+                                Intiface and connect to PES. No port forwarding
+                                needed.
                             </p>
                         )}
                     </div>
@@ -259,7 +271,11 @@ export function AddNodeDialog({
                             >
                                 Cancel
                             </Button>
-                            <Button type="button" disabled={saving} onClick={() => void save()}>
+                            <Button
+                                type="button"
+                                disabled={saving}
+                                onClick={() => void save()}
+                            >
                                 {saving ? "Saving..." : "Add node"}
                             </Button>
                         </>
