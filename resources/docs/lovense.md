@@ -46,6 +46,7 @@ install.
 | Direct remote | PES -> Intiface | VPN / port forward | on the device owner | LAN, Tailscale, ZeroTier |
 | Relay + companion | companion -> PES | yes | **no** | internet, non-technical users |
 | Intiface Repeater | desktop -> phone | LAN | no | phone used as the Bluetooth radio |
+| Demo node | in-process | - | no | UI/pattern development without hardware |
 
 ### Managed Intiface (recommended)
 
@@ -104,6 +105,16 @@ local Intiface, so direct and relay nodes share one code path.
 
 If the companion loses PES, it sends `StopAllDevices` to its local Intiface
 before exiting. This is the fail-safe for remote devices.
+
+### Demo node
+
+Add a node of kind `demo` (Toys → Connection center → **Add demo toy**) to get
+an in-process **Demo Rabbit** with two vibration motors. It needs no Intiface,
+no Bluetooth and no download: the hub registers it like a real device, applies
+the usual caps and lets manual control, patterns, the pattern editor and the
+kiosk run end-to-end. Add several demo toys to exercise multi-device grouping.
+Delete its node or device like any other; demo devices are named `Demo Rabbit`
+so they are never mistaken for hardware.
 
 ## Device model
 

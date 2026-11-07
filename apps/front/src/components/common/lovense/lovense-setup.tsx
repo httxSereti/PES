@@ -5,6 +5,7 @@ import {
     ChevronRight,
     Copy,
     ExternalLink,
+    FlaskConical,
     Link2,
     Plus,
     Power,
@@ -59,6 +60,7 @@ export function LovenseSetup({
 }: LovenseSetupProps) {
     const { send, sendCommand } = useWebSocket();
     const [addNodeOpen, setAddNodeOpen] = useState(false);
+    const [addingDemo, setAddingDemo] = useState(false);
     const [tokenDialog, setTokenDialog] = useState<{
         nodeId: string;
         token: string;
@@ -131,6 +133,35 @@ export function LovenseSetup({
             toast.success(`${label} copied`);
         } catch {
             toast.error("Unable to copy");
+        }
+    };
+
+    const addDemoToy = async () => {
+        if (addingDemo) return;
+        setAddingDemo(true);
+        try {
+            const demoCount = nodes.filter(
+                (node) => node.kind === "demo",
+            ).length;
+            const result = await sendCommand("lovense:node_save", {
+                name:
+                    demoCount === 0
+                        ? "Demo Rabbit"
+                        : `Demo Rabbit ${demoCount + 1}`,
+                kind: "demo",
+                url: null,
+                enabled: true,
+            });
+            if (result.status !== "ok") {
+                toast.error(result.message ?? "Unable to add the demo toy");
+                return;
+            }
+            toast.success("Demo toy connected — no hardware needed");
+            onChanged();
+        } catch {
+            toast.error("Demo toy command timed out");
+        } finally {
+            setAddingDemo(false);
         }
     };
 
@@ -297,6 +328,27 @@ export function LovenseSetup({
                             <ExternalLink className="size-3" />
                         </a>
                     )}
+
+                    <div className="mt-3 flex flex-wrap items-center gap-2 rounded-xl border border-dashed border-violet-500/25 bg-background/40 p-2.5">
+                        <span className="grid size-8 shrink-0 place-items-center rounded-lg bg-violet-500/10 text-violet-500">
+                            <FlaskConical className="size-4" />
+                        </span>
+                        <p className="min-w-[11rem] flex-1 text-[11px] leading-relaxed text-muted-foreground">
+                            No hardware? Add a virtual two-motor toy to test the
+                            player, patterns and kiosk.
+                        </p>
+                        <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            className="h-9 shrink-0 rounded-lg text-xs text-violet-600 hover:bg-violet-500/10 hover:text-violet-600 dark:text-violet-400"
+                            disabled={addingDemo}
+                            onClick={() => void addDemoToy()}
+                        >
+                            <FlaskConical className="size-3.5" />
+                            {addingDemo ? "Adding…" : "Add demo toy"}
+                        </Button>
+                    </div>
                 </div>
             </section>
 
@@ -338,15 +390,25 @@ export function LovenseSetup({
                                 Turn your toy on, keep it near the machine
                                 running Intiface, then start a scan.
                             </p>
-                            <Button
-                                type="button"
-                                variant="outline"
-                                className="mt-4"
-                                onClick={scanAll}
-                            >
-                                Scan now
-                                <ChevronRight className="size-3.5" />
-                            </Button>
+                            <div className="mt-4 flex flex-wrap justify-center gap-2">
+                                <Button
+                                    type="button"
+                                    variant="outline"
+                                    onClick={scanAll}
+                                >
+                                    Scan now
+                                    <ChevronRight className="size-3.5" />
+                                </Button>
+                                <Button
+                                    type="button"
+                                    variant="outline"
+                                    disabled={addingDemo}
+                                    onClick={() => void addDemoToy()}
+                                >
+                                    <FlaskConical className="size-3.5" />
+                                    {addingDemo ? "Adding…" : "Add demo toy"}
+                                </Button>
+                            </div>
                         </div>
                     </div>
                 ) : (

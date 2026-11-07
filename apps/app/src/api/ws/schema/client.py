@@ -783,7 +783,7 @@ class LovenseScanCommand(ClientMessage):
 class LovenseNodeSavePayload(WireModel):
     node_id: str | None = None
     name: str = Field(min_length=1, max_length=80)
-    kind: Literal["direct", "relay"] = "direct"
+    kind: Literal["direct", "relay", "demo"] = "direct"
     url: str | None = None
     enabled: bool = True
 

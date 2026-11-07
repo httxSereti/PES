@@ -382,7 +382,7 @@ export interface LovenseScanPayload {
 export interface LovenseNodeSavePayload {
     node_id?: string | null;
     name: string;
-    kind: 'direct' | 'relay';
+    kind: 'direct' | 'relay' | 'demo';
     url?: string | null;
     enabled: boolean;
 }

@@ -337,6 +337,11 @@ class LovenseHub:
         await self._seed_builtins()
 
     def _create_runtime(self, row: LovenseNode) -> None:
+        if row.kind == "demo":
+            from .demo import DemoNodeRuntime
+
+            self._nodes[row.id] = DemoNodeRuntime(self, row.id, row.name)
+            return
         url = row.url or ""
         if row.kind == "relay":
             url = self._relay.url_for(row) if self._relay is not None else ""
@@ -791,13 +796,15 @@ class LovenseHub:
         name = name.strip()[:80]
         if not name:
             raise ValueError("Node name is required")
-        kind = "relay" if kind == "relay" else "direct"
+        if kind not in {"direct", "relay", "demo"}:
+            kind = "direct"
         if kind == "direct" and not (url or "").strip():
             raise ValueError("A direct node needs an Intiface URL")
         if kind == "relay" and self._relay is None:
             raise ValueError(
                 "Relay is disabled: enable 'relay_enabled' in the Lovense settings first"
             )
+        stored_url = ((url or "").strip() or None) if kind == "direct" else None
 
         row = await self._repo.get_node(node_id) if node_id else None
         token: str | None = None
@@ -806,7 +813,7 @@ class LovenseHub:
                 id=node_id or generate_id(),
                 name=name,
                 kind=kind,
-                url=(url or "").strip() or None,
+                url=stored_url,
                 enabled=enabled,
             )
             if kind == "relay":
@@ -814,9 +821,9 @@ class LovenseHub:
         else:
             row.name = name
             row.kind = kind
-            row.url = (url or "").strip() or None
+            row.url = stored_url
             row.enabled = enabled
-            if kind == "direct":
+            if kind in {"direct", "demo"}:
                 row.token_hash = None
                 row.token_prefix = None
             elif not row.token_hash:
