@@ -16,6 +16,14 @@ async def handle_profiles_save(
     """Snapshot the current unit state (and ramps) into a profile file."""
     p = msg.payload
     created = not profiles_service.profile_exists(p.name)
+    levels = (
+        {
+            unit: override.model_dump(exclude_none=True)
+            for unit, override in p.levels.items()
+        }
+        if p.levels
+        else None
+    )
 
     try:
         summary = profiles_service.save_profile(
@@ -24,6 +32,7 @@ async def handle_profiles_save(
             include_ramps=p.include_ramps,
             created_by=ctx.user.display_name or ctx.user.id,
             overwrite=p.overwrite,
+            levels=levels,
         )
     except profiles_service.ProfileError as err:
         logger.warning(f"[WS|profiles:save] Rejected: {err}")

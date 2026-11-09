@@ -138,6 +138,12 @@ export interface ProfileSavePayload {
     description?: string | null;
     include_ramps: boolean;
     overwrite: boolean;
+    levels?: Record<string, ProfileLevelOverride> | null;
+}
+
+export interface ProfileLevelOverride {
+    ch_A?: number | null;
+    ch_B?: number | null;
 }
 
 export interface ProfileApplyPayload {

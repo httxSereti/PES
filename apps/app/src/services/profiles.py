@@ -734,6 +734,37 @@ def capture_threads_settings(include_ramps: bool) -> dict:
     return threads_settings
 
 
+_LEVEL_OVERRIDE_FIELDS = ("ch_A", "ch_B")
+
+
+def _apply_level_overrides(
+    threads_settings: dict[str, dict], levels: dict[str, dict]
+) -> None:
+    """Apply explicit ch_A/ch_B edits on top of a captured live snapshot."""
+    allowed = set(_LEVEL_OVERRIDE_FIELDS)
+    for unit_name, override in levels.items():
+        if unit_name not in threads_settings:
+            raise ProfileError(f"Unit '{unit_name}' has no live settings to save")
+        if not isinstance(override, dict):
+            raise ProfileError(f"levels.{unit_name} must be a JSON object")
+        unknown = set(override) - allowed
+        if unknown:
+            raise ProfileError(
+                f"levels.{unit_name} only accepts {', '.join(_LEVEL_OVERRIDE_FIELDS)}"
+            )
+
+        block = threads_settings[unit_name]
+        for field in _LEVEL_OVERRIDE_FIELDS:
+            if field not in override:
+                continue
+            value = _coerce_int(override[field])
+            if value is None or not 0 <= value <= 100:
+                raise ProfileError(
+                    f"{unit_name}.{field} must be a number 0-100"
+                )
+            block[field] = value
+
+
 def save_profile(
     name: str,
     *,
@@ -741,9 +772,14 @@ def save_profile(
     include_ramps: bool,
     created_by: str,
     overwrite: bool = False,
+    levels: dict[str, dict] | None = None,
 ) -> dict:
     """
     Snapshot the current unit settings (and active ramps) as a profile file.
+
+    `levels` optionally overrides the captured 0-100 `ch_A` / `ch_B` values
+    per unit (e.g. edits made in the save dialog); every other field is still
+    captured from the rig.
 
     Returns the saved profile's catalog summary.
     """
@@ -754,6 +790,8 @@ def save_profile(
     threads_settings = capture_threads_settings(include_ramps)
     if not threads_settings:
         raise ProfileError("No unit settings to save yet")
+    if levels:
+        _apply_level_overrides(threads_settings, levels)
 
     document = {
         "comment": description or "",

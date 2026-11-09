@@ -298,12 +298,22 @@ class ProfilesListCommand(ClientMessage):
     payload: dict[str, Any] | None = None
 
 
+class ProfileLevelOverride(WireModel):
+    """Per-channel levels to store instead of the live values (0-100)."""
+
+    ch_A: int | None = Field(default=None, ge=0, le=100)
+    ch_B: int | None = Field(default=None, ge=0, le=100)
+
+
 class ProfileSavePayload(WireModel):
     name: str = Field(min_length=1, max_length=32, pattern=r"^[A-Za-z0-9_-]+$")
     description: str | None = Field(default=None, max_length=200)
     include_ramps: bool = True
     # required to replace an existing profile (e.g. a legacy letter)
     overwrite: bool = False
+    # Optional level edits applied on top of the live snapshot. Units/fields
+    # omitted here keep the values captured from the rig.
+    levels: dict[str, ProfileLevelOverride] | None = None
 
 
 class ProfilesSaveCommand(ClientMessage):
@@ -996,6 +1006,7 @@ __all__ = [
     "SessionRenamePayload",
     "SessionsRenameCommand",
     "ProfilesListCommand",
+    "ProfileLevelOverride",
     "ProfileSavePayload",
     "ProfilesSaveCommand",
     "ProfileApplyPayload",
