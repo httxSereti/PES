@@ -540,6 +540,11 @@ class LovenseHub:
         index = int(getattr(bp_device, "index", 0))
         name = str(getattr(bp_device, "name", "Lovense device"))
         features = self._serialize_features(bp_device)
+        device_tags = [
+            str(tag).strip()[:40]
+            for tag in (getattr(bp_device, "tags", None) or [])
+            if str(tag).strip()
+        ][:20]
         row = await self._repo.find_device(node.id, index)
         if row is None:
             # Buttplug indexes are not stable across reconnects: reuse an
@@ -563,7 +568,7 @@ class LovenseHub:
                 device_index=index,
                 name=name,
                 alias=None,
-                tags=[],
+                tags=device_tags,
                 features=features,
                 battery_pct=None,
                 rssi=None,
@@ -577,6 +582,8 @@ class LovenseHub:
             row.device_index = index
             row.name = name
             row.features = features
+            if device_tags:
+                row.tags = sorted({*(row.tags or []), *device_tags})[:20]
             row.last_seen_at = datetime.now(UTC).replace(tzinfo=None)
         row = await self._repo.save_device(row)
 

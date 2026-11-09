@@ -146,8 +146,8 @@ export function LovenseSetup({
             const result = await sendCommand("lovense:node_save", {
                 name:
                     demoCount === 0
-                        ? "Demo Rabbit"
-                        : `Demo Rabbit ${demoCount + 1}`,
+                        ? "Demo Edge 2"
+                        : `Demo Edge 2 #${demoCount + 1}`,
                 kind: "demo",
                 url: null,
                 enabled: true,
@@ -156,7 +156,7 @@ export function LovenseSetup({
                 toast.error(result.message ?? "Unable to add the demo toy");
                 return;
             }
-            toast.success("Demo toy connected — no hardware needed");
+            toast.success("Demo Edge 2 connected — no hardware needed");
             onChanged();
         } catch {
             toast.error("Demo toy command timed out");
@@ -334,8 +334,8 @@ export function LovenseSetup({
                             <FlaskConical className="size-4" />
                         </span>
                         <p className="min-w-[11rem] flex-1 text-[11px] leading-relaxed text-muted-foreground">
-                            No hardware? Add a virtual two-motor toy to test the
-                            player, patterns and kiosk.
+                            No hardware? Add a virtual Edge 2 with two motors to
+                            test the player, patterns and kiosk.
                         </p>
                         <Button
                             type="button"
@@ -346,7 +346,7 @@ export function LovenseSetup({
                             onClick={() => void addDemoToy()}
                         >
                             <FlaskConical className="size-3.5" />
-                            {addingDemo ? "Adding…" : "Add demo toy"}
+                            {addingDemo ? "Adding…" : "Add demo Edge 2"}
                         </Button>
                     </div>
                 </div>
@@ -406,7 +406,7 @@ export function LovenseSetup({
                                     onClick={() => void addDemoToy()}
                                 >
                                     <FlaskConical className="size-3.5" />
-                                    {addingDemo ? "Adding…" : "Add demo toy"}
+                                    {addingDemo ? "Adding…" : "Add demo Edge 2"}
                                 </Button>
                             </div>
                         </div>

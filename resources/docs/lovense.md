@@ -46,7 +46,7 @@ install.
 | Direct remote | PES -> Intiface | VPN / port forward | on the device owner | LAN, Tailscale, ZeroTier |
 | Relay + companion | companion -> PES | yes | **no** | internet, non-technical users |
 | Intiface Repeater | desktop -> phone | LAN | no | phone used as the Bluetooth radio |
-| Demo node | in-process | - | no | UI/pattern development without hardware |
+| Demo node | in-process | - | no | Virtual Edge 2 for UI/pattern development |
 
 ### Managed Intiface (recommended)
 
@@ -108,13 +108,14 @@ before exiting. This is the fail-safe for remote devices.
 
 ### Demo node
 
-Add a node of kind `demo` (Toys → Connection center → **Add demo toy**) to get
-an in-process **Demo Rabbit** with two vibration motors. It needs no Intiface,
-no Bluetooth and no download: the hub registers it like a real device, applies
-the usual caps and lets manual control, patterns, the pattern editor and the
-kiosk run end-to-end. Add several demo toys to exercise multi-device grouping.
-Delete its node or device like any other; demo devices are named `Demo Rabbit`
-so they are never mistaken for hardware.
+Add a node of kind `demo` (Toys → Connection center → **Add demo Edge 2**) to
+get an in-process **Lovense Edge 2** with its two vibration motors. It needs no
+Intiface, no Bluetooth and no download: the hub registers it like a real device,
+applies the usual caps and lets manual control, patterns, the pattern editor
+and the kiosk run end-to-end. The device is tagged `edge2` and `demo`, so
+patterns written for a real Edge 2 match it while the UI still flags it as a
+demo toy. Add several demo toys to exercise multi-device grouping; delete a
+node or device like any other.
 
 ## Device model
 

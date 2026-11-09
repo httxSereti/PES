@@ -1,8 +1,8 @@
 """Virtual Lovense node used to exercise the UI without physical hardware.
 
 The demo node behaves like a Buttplug node from the hub's point of view: it
-registers one device with two vibration motors, answers battery reads and
-accepts output writes. Nothing is sent over the network.
+registers one **Lovense Edge 2** with its two vibration motors, answers battery
+reads and accepts output writes. Nothing is sent over the network.
 """
 
 from __future__ import annotations
@@ -15,6 +15,10 @@ from .node import LovenseNodeRuntime
 
 if TYPE_CHECKING:
     from .hub import LovenseHub
+
+# Tags let patterns and actions written for a real Edge 2 target the demo toy,
+# while keeping it explicitly identifiable as a demo device in the UI.
+_DEMO_TAGS = ["edge2", "demo"]
 
 
 @dataclass(frozen=True)
@@ -37,6 +41,7 @@ class _DemoDevice:
     def __init__(self, index: int, name: str) -> None:
         self.index = index
         self.name = name
+        self.tags = list(_DEMO_TAGS)
         self.features: dict[int, _DemoFeature] = {
             0: _DemoFeature(0, "Main motor", {"Vibrate": _DemoOutput()}),
             1: _DemoFeature(1, "Secondary motor", {"Vibrate": _DemoOutput()}),
@@ -44,11 +49,12 @@ class _DemoDevice:
 
 
 class DemoNodeRuntime(LovenseNodeRuntime):
-    """In-process node exposing a single two-motor demo toy."""
+    """In-process node exposing a single two-motor Edge 2 demo toy."""
 
     def __init__(self, hub: LovenseHub, node_id: str, name: str) -> None:
         super().__init__(hub, node_id, name, "demo", "demo://local")
-        self._device = _DemoDevice(0, name)
+        # The node is a PES-side container; the toy itself is always an Edge 2.
+        self._device = _DemoDevice(0, "Edge 2")
 
     async def _connect(self) -> None:
         # No Buttplug client: register the fake device directly with the hub.
