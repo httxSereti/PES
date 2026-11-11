@@ -45,6 +45,7 @@ export default [
             index("pages/app/admin/dashboard.tsx"),
             route("users", "pages/app/admin/users.tsx"),
             route("integrations", "pages/app/admin/integrations.tsx"),
+            route("logs", "pages/app/admin/logs.tsx"),
         ]),
     ]),
 

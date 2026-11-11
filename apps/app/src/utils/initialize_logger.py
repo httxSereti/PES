@@ -4,6 +4,8 @@ import sys
 
 import structlog
 
+from .log_stream import LogHubHandler, log_hub
+
 
 def initialize_logger(
     session_name: str,
@@ -50,6 +52,11 @@ def initialize_logger(
 
     stdlib_logger.addHandler(console_handler)
     stdlib_logger.addHandler(file_handler)
+
+    # Mirror the JSON file output into the in-process hub consumed by the
+    # real-time logs page (SSE).  Uses the same processor chain as the file.
+    log_hub.set_log_dir(log_path.resolve())
+    stdlib_logger.addHandler(LogHubHandler(file_formatter))
 
     stdlib_logger.setLevel(level)
     stdlib_logger.propagate = False

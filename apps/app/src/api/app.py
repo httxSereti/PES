@@ -9,7 +9,7 @@ import structlog
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from api.rest import admin, auth, users
+from api.rest import admin, auth, logs, users
 from api.rest import integrations as integrations_router
 from api.rest import trigger_rules as trigger_rules_router
 from api.ws.endpoint import router as ws_router
@@ -164,6 +164,7 @@ app = FastAPI(lifespan=lifespan)
 app.include_router(users.router)
 app.include_router(auth.router)
 app.include_router(admin.router)
+app.include_router(logs.router)
 app.include_router(integrations_router.router)
 for integration_router in integration_registry.routers():
     app.include_router(integration_router)

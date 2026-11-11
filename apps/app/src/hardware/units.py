@@ -221,7 +221,7 @@ class UnitConnect:
             if not store.is_hardware_enabled(self.name):
                 raise HardwareDisabled(self.name)
 
-            self.logger.info("Scanning for device using BT...")
+            self.logger.debug("Scanning for device using BT...")
             nearby_devices = bluetooth.discover_devices(
                 duration=1, lookup_names=True, flush_cache=True, lookup_class=False
             )

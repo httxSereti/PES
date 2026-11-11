@@ -115,6 +115,10 @@ const data = {
           title: "Integrations",
           url: "/app/admin/integrations",
         },
+        {
+          title: "Logs",
+          url: "/app/admin/logs",
+        },
       ],
     },
   ],
