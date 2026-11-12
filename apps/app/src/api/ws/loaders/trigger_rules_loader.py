@@ -69,7 +69,7 @@ async def trigger_rules_loader(client_id: str, ws_manager: WebSocketManager):
         client_id=client_id,
     )
 
-    logger.info(
+    logger.debug(
         f"[WSNotifier] Sent {len(trigger_rules_payload)} trigger rules and {len(labels_payload)} labels",
         client_id=client_id,
     )

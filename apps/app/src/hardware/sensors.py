@@ -210,7 +210,7 @@ async def sensor_bt(sensor_name: str, address: str, char_uuid: str) -> None:
     current_sensor_settings["sensor_online"] = False
 
     disconnected_event = asyncio.Event()
-    logger.info("[Sensors] Searching Sensor...", sensor_name=sensor_name)
+    logger.debug("[Sensors] Searching Sensor...", sensor_name=sensor_name)
 
     def disconnected_callback(bt_client):
         logger.info("[Sensors] Sensor offline", sensor_name=sensor_name)

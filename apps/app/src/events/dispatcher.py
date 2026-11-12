@@ -77,7 +77,7 @@ class EventDispatcher:
         event_id = generate_id()
         triggered_at = datetime.now(UTC)
 
-        logger.info(
+        logger.debug(
             "[Dispatcher] Event received",
             event_id=event_id,
             event_type=event_type,
@@ -90,7 +90,7 @@ class EventDispatcher:
         # entirely (no DB record, no queue items). Re-enabling brings the
         # rules back.
         if not self._integrations.is_event_enabled(event_type):
-            logger.info(
+            logger.debug(
                 f"[Dispatcher] Event '{event_type}' disabled, ignored",
                 event_id=event_id,
                 origin=origin,
@@ -98,7 +98,7 @@ class EventDispatcher:
             return
 
         if not self._session_allows_event(event_type):
-            logger.info(
+            logger.debug(
                 f"[Dispatcher] Event '{event_type}' outside session scope, ignored",
                 event_id=event_id,
                 origin=origin,
@@ -145,7 +145,7 @@ class EventDispatcher:
             queue_items.extend(items)
             triggered_rules_summary.append(self._build_rule_summary(rule, items))
 
-        logger.info(
+        logger.debug(
             f"[Dispatcher] Created {len(queue_items)} queue items from {len(rules)} rule(s)",
             event_id=event_id,
             event_type=event_type,
@@ -188,7 +188,7 @@ class EventDispatcher:
         triggered_at = datetime.now(UTC)
 
         if not self._session_allows_event(event_type):
-            logger.info(
+            logger.debug(
                 f"[Dispatcher] Direct event '{event_type}' outside session scope, ignored",
                 event_id=event_id,
                 origin=origin,
@@ -196,7 +196,7 @@ class EventDispatcher:
             return
 
         if not self._integrations.is_event_enabled(event_type):
-            logger.info(
+            logger.debug(
                 f"[Dispatcher] Direct event '{event_type}' disabled, ignored",
                 event_id=event_id,
                 origin=origin,
@@ -225,7 +225,7 @@ class EventDispatcher:
         ]
         skipped = len(items) - len(enabled_items)
         if skipped:
-            logger.info(
+            logger.debug(
                 f"[Dispatcher] Direct dispatch '{event_type}': {skipped} item(s) skipped (disabled or local echo)",
                 event_id=event_id,
                 origin=origin,
@@ -237,7 +237,7 @@ class EventDispatcher:
         for item in items:
             item.causation_depth = chain_depth + 1
 
-        logger.info(
+        logger.debug(
             f"[Dispatcher] Direct dispatch '{event_type}' with {len(items)} item(s)",
             event_id=event_id,
             origin=origin,
@@ -411,14 +411,14 @@ class EventDispatcher:
                 else str(action.action_type)
             )
             if not self._integrations.is_action_enabled(action_id):
-                logger.info(
+                logger.debug(
                     f"[Dispatcher] Action '{action_id}' disabled, skipped",
                     rule=rule.name,
                     origin=origin,
                 )
                 continue
             if self._is_local_echo_action(action_id, source_integration_id):
-                logger.info(
+                logger.debug(
                     f"[Dispatcher] Action '{action_id}' skipped (local action echo)",
                     rule=rule.name,
                     origin=origin,

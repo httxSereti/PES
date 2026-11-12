@@ -130,7 +130,7 @@ class LovenseActionHandler:
             owner=f"action:{item.id}",
             priority=20,
         )
-        logger.info(
+        logger.debug(
             "[Lovense] Set action",
             origin=item.origin,
             output=output,
@@ -207,7 +207,7 @@ class LovenseActionHandler:
             created_by=item.origin or "system",
             queue_item_id=item.id,
         )
-        logger.info(
+        logger.debug(
             "[Lovense] Random pattern", pattern=row.name, origin=item.origin
         )
         return {"type": "lovense_pattern", "run_id": run["id"]}

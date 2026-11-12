@@ -70,7 +70,7 @@ def build_profile_items(text: str, origin: str) -> list[QueueItem]:
     else:
         duration = random.randint(10, (ord(dur_char) - 96) * 10)
 
-    logger.info(
+    logger.debug(
         f"[Chaster|WOF] Parsed dynamic profile profile={profile}, level={level_pct}%, duration={duration}s",
         profile=profile,
         origin=origin,

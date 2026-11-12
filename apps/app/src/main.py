@@ -32,7 +32,9 @@ dotenv.load_dotenv("config.env")
 # Configure logger to make log readable
 start_time = datetime.now()
 session_name = start_time.strftime("%d_%m_%y_%Hh%M")
-logger = initialize_logger(session_name=session_name, level=logging.INFO)
+# Level comes from configurations/logs.json (default INFO) so a level
+# selected from the Logs page survives restarts.
+logger = initialize_logger(session_name=session_name)
 
 # init logging TODO: refactor here
 std_logger = logging.getLogger()

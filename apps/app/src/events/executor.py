@@ -137,7 +137,7 @@ class ActionExecutor:
         Apply an action and return snapshot data for future reversal.
         Returns None if no snapshot is needed.
         """
-        logger.info(
+        logger.debug(
             f"[Executor] Applying action '{item.action_type.value}' from '{item.origin}'",
             origin=item.origin,
         )
@@ -174,7 +174,7 @@ class ActionExecutor:
         if item.snapshot_data is None:
             return
 
-        logger.info(
+        logger.debug(
             f"[Executor] Reversing action '{item.action_type.value}' from '{item.origin}'",
             origin=item.origin,
         )
@@ -215,7 +215,7 @@ class ActionExecutor:
                     }
                 )
 
-                logger.info(
+                logger.debug(
                     f"[Executor] Action updated level on {unit_name}.{ch_name}: {old_val} -> {new_val}",
                     unit_name=unit_name,
                 )
@@ -237,7 +237,7 @@ class ActionExecutor:
             new_val = max(0, min(100, unit_data.get(field, 0) + change["diff"]))
 
             self._store.update_unit_dict(unit, {"updated": True, field: new_val})
-            logger.info(
+            logger.debug(
                 f"[Executor] Reversed {change['unit']}.{field} to {new_val}",
                 unit_name=change["unit"],
             )

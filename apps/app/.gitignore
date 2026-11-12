@@ -11,3 +11,4 @@ tmp/
 plunes.db*
 logs/
 hardware.json
+configurations/logs.json

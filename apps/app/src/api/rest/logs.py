@@ -24,21 +24,13 @@ from api.helpers import require_permission, to_utc_iso
 from api.helpers.jwt_helpers import ALGORITHM, SECRET_KEY
 from store import Store
 from typings import Permission
+from utils.log_settings import log_settings
 from utils.log_stream import log_hub
 
 router = APIRouter(prefix="/logs", tags=["logs"])
 
 store = Store()
 logger = logging.getLogger("pes")
-
-LEVEL_NAMES = {
-    "DEBUG": logging.DEBUG,
-    "INFO": logging.INFO,
-    "WARNING": logging.WARNING,
-    "WARN": logging.WARNING,
-    "ERROR": logging.ERROR,
-    "CRITICAL": logging.CRITICAL,
-}
 
 
 class LogSettingsUpdate(BaseModel):
@@ -174,13 +166,14 @@ async def update_log_settings(
     current_user: dict = Depends(require_permission(Permission.ADMIN)),
 ):
     if body.level is not None:
-        level_name = body.level.strip().upper()
-        if level_name not in LEVEL_NAMES:
+        try:
+            log_settings.set_level(body.level)
+        except ValueError:
             raise HTTPException(
                 status_code=400,
                 detail=f"Invalid log level: {body.level}",
-            )
-        logger.setLevel(LEVEL_NAMES[level_name])
+            ) from None
+        logger.setLevel(log_settings.level_int())
 
     return _serialize_settings()
 

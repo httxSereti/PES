@@ -39,16 +39,14 @@ export function meta({}: Route.MetaArgs) {
     ];
 }
 
-const LOG_LEVELS = ["DEBUG", "INFO", "WARNING", "ERROR"] as const;
+const LOG_LEVELS = ["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"] as const;
 
 function LogSettingsPopover({
     level,
-    logDir,
     saving,
     onLevelChange,
 }: {
     level: string;
-    logDir?: string;
     saving: boolean;
     onLevelChange: (level: string) => Promise<void>;
 }) {
@@ -95,18 +93,9 @@ function LogSettingsPopover({
                             </SelectContent>
                         </Select>
                         <p className="text-[10.5px] text-muted-foreground/60">
-                            Applies immediately. Resets to INFO on restart.
+                            Applies immediately and is saved for the next start.
                         </p>
                     </div>
-
-                    {logDir && (
-                        <div className="space-y-1">
-                            <Label className="text-xs">Log directory</Label>
-                            <code className="block break-all rounded border bg-muted/30 p-2 font-mono text-[10.5px]">
-                                {logDir}
-                            </code>
-                        </div>
-                    )}
                 </div>
             </PopoverContent>
         </Popover>
@@ -170,7 +159,6 @@ export default function LogsPage() {
                         </div>
                         <LogSettingsPopover
                             level={level}
-                            logDir={settings?.logDir}
                             saving={saving || changingLevel}
                             onLevelChange={changeLevel}
                         />

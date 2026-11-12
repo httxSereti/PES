@@ -80,7 +80,7 @@ async def read_chaster_webhook(
     """
     ctx = _get_ctx()
     if not ctx.registry.is_enabled(CHASTER_INTEGRATION_ID):
-        logger.info("[Webhook] Chaster integration disabled, event ignored")
+        logger.debug("[Webhook] Chaster integration disabled, event ignored")
         return {"status": "ignored"}
 
     dispatcher = ctx.dispatcher
@@ -90,7 +90,7 @@ async def read_chaster_webhook(
     event: str = data.get("event", "")
     webhook_id: str = data.get("requestId", "")
 
-    logger.info(
+    logger.debug(
         "[Webhook] Received Chaster Webhook", event_name=event, webhook_id=webhook_id
     )
 
@@ -133,7 +133,7 @@ async def read_chaster_webhook(
                 # handle logic for profile action
                 if match_profile:
                     wof_code = f"custom:wof_profile_{match_profile.group(1)}"
-                    logger.info(
+                    logger.debug(
                         f"[Webhook] Custom WOF profile action: {match_profile.group(1)}"
                     )
                     event_data = {
@@ -160,7 +160,7 @@ async def read_chaster_webhook(
                         )
                 elif match_unit_update:
                     wof_code = f"custom:wof_unit_{match_unit_update.group(1)}"
-                    logger.info(
+                    logger.debug(
                         f"[Webhook] Custom WOF update unit action: {match_unit_update.group(1)}"
                     )
                     # TODO: implement unit update logic
@@ -200,7 +200,7 @@ async def read_chaster_webhook(
                 )
                 echo_depth = consume_time_echo(event_type)
                 if echo_depth is not None:
-                    logger.info(
+                    logger.debug(
                         "[Webhook] Tagged time event as local action echo",
                         event_type=event_type,
                         chain_depth=echo_depth,

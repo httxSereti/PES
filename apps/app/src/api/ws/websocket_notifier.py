@@ -98,7 +98,7 @@ class WebSocketNotifier:
             message={"type": "events:history", "payload": payload},
             client_id=client_id,
         )
-        logger.info(
+        logger.debug(
             f"[WSNotifier] Sent {len(payload)} events history", client_id=client_id
         )
 

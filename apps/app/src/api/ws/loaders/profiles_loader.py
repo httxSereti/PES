@@ -28,7 +28,7 @@ async def profiles_loader(client_id: str, ws_manager: WebSocketManager):
         client_id=client_id,
     )
 
-    logger.info(
+    logger.debug(
         f"[Profiles] Sent {len(profiles)} profiles",
         client_id=client_id,
     )

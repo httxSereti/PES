@@ -416,7 +416,7 @@ class PatternRunner:
                 owner_key, self._owner, priority=10, force=self._replace
             )
             if not acquired:
-                logger.info(
+                logger.debug(
                     "[Lovense] Output already owned, pattern skips it",
                     device_id=device_id,
                     feature_index=feature_index,

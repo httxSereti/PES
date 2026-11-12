@@ -20,7 +20,7 @@ async def lovense_loader(client_id: str, ws_manager: WebSocketManager):
         message={"type": "lovense:init", "payload": snapshot},
         client_id=client_id,
     )
-    logger.info(
+    logger.debug(
         "[Lovense] Sent snapshot",
         client_id=client_id,
         devices=len(snapshot.get("devices") or []),

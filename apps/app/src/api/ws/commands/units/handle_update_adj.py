@@ -41,7 +41,7 @@ async def handle_update_adj(
         if not notification_changes:
             continue
 
-        logger.info(f"[WS|units:update_adj] Updated {unit_id}", changes=log_msgs)
+        logger.debug(f"[WS|units:update_adj] Updated {unit_id}", changes=log_msgs)
 
         # save changes
         store.update_unit_dict(unit, changes)

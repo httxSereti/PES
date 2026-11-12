@@ -4,6 +4,7 @@ import sys
 
 import structlog
 
+from .log_settings import log_settings
 from .log_stream import LogHubHandler, log_hub
 
 
@@ -11,7 +12,7 @@ def initialize_logger(
     session_name: str,
     logger_name: str = "pes",
     log_dir: str = "logs",
-    level: int = logging.INFO,
+    level: int | None = None,
 ) -> structlog.BoundLogger:
     log_path = Path(log_dir)
     log_path.mkdir(exist_ok=True)
@@ -29,7 +30,9 @@ def initialize_logger(
 
     console_formatter = structlog.stdlib.ProcessorFormatter(
         foreign_pre_chain=shared_processors,
-        processor=structlog.dev.ConsoleRenderer(colors=True),
+        # force_colors keeps ANSI colors even when colorama does not detect a
+        # TTY (Windows terminals, IDE/agent shells and piped stdout).
+        processor=structlog.dev.ConsoleRenderer(colors=True, force_colors=True),
     )
 
     file_formatter = structlog.stdlib.ProcessorFormatter(
@@ -58,7 +61,7 @@ def initialize_logger(
     log_hub.set_log_dir(log_path.resolve())
     stdlib_logger.addHandler(LogHubHandler(file_formatter))
 
-    stdlib_logger.setLevel(level)
+    stdlib_logger.setLevel(log_settings.level_int() if level is None else level)
     stdlib_logger.propagate = False
 
     structlog.configure(
@@ -69,7 +72,10 @@ def initialize_logger(
             structlog.stdlib.ProcessorFormatter.wrap_for_formatter,
         ],
         logger_factory=structlog.stdlib.LoggerFactory(),
-        cache_logger_on_first_use=True,
+        # Do not cache bound loggers: modules create their structlog proxies
+        # at import time, before this configuration runs, and they must switch
+        # to the configured "pes" logger, file and live hub afterwards.
+        cache_logger_on_first_use=False,
     )
 
     return structlog.wrap_logger(stdlib_logger)

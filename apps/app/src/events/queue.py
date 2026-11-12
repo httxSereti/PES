@@ -78,7 +78,7 @@ class ActionQueue:
             self._items.sort(key=lambda x: (-x.priority, x.created_at))
 
         if items:
-            logger.info(f"[Queue] Enqueued {len(items)} items")
+            logger.debug(f"[Queue] Enqueued {len(items)} items")
             self._notify_update()
 
     def adopt(self, item: QueueItem, snapshot_data: dict | None) -> None:
@@ -360,7 +360,7 @@ class ActionQueue:
                 self._applying.add(item.id)
 
         if skipped:
-            logger.info(
+            logger.debug(
                 f"[Queue] Skipped '{item.action_type.value}' (action disabled)",
                 origin=item.origin,
             )
@@ -410,7 +410,7 @@ class ActionQueue:
             await self._reverse_now(item)
             return
 
-        logger.info(
+        logger.debug(
             f"[Queue] Started '{item.action_type.value}' (duration={item.duration}s, cumulative={item.cumulative})",
             origin=item.origin,
         )
@@ -451,7 +451,7 @@ class ActionQueue:
                 name=f"queue-reverse:{item.id}",
             )
 
-        logger.info(
+        logger.debug(
             f"[Queue] Completed '{item.action_type.value}' after {item.elapsed}s",
             origin=item.origin,
         )

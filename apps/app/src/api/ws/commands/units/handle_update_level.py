@@ -30,7 +30,7 @@ async def handle_update_level(
                 # calc new value using lexer for operators
                 new_value = calculate_magic_number(snapshot[field], str(field_value))
 
-                logger.info(
+                logger.debug(
                     f"[WS|units:update_level] Adjust {unit_id}",
                     changes={
                         "unit_id": unit_id,

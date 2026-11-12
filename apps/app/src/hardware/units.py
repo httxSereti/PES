@@ -280,7 +280,7 @@ class UnitConnect:
                                         )
 
                                         return self.serial_dev
-                                    self.logger.info("2B not responding")
+                                    self.logger.debug("2B not responding")
                                     self.serial_dev.close()
                                     self.logger.debug(
                                         "Serial retry open", retry_count=retry
@@ -341,7 +341,7 @@ class UnitConnect:
                     no_updated = False
                     continue
 
-                self.logger.info(
+                self.logger.debug(
                     "Adjust 2B Settings",
                     field=field,
                     previous=self.settings_return[field],
