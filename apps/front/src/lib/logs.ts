@@ -110,6 +110,10 @@ export function formatLogTime(value: string): string {
     });
 }
 
+export function isCompressedLogFile(name: string): boolean {
+    return name.toLowerCase().endsWith(".gz");
+}
+
 export function formatBytes(bytes: number): string {
     if (!Number.isFinite(bytes) || bytes <= 0) return "0 B";
     const units = ["B", "KB", "MB", "GB", "TB"];

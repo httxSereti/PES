@@ -168,7 +168,7 @@ export default function LogsPage() {
                     </CardContent>
                 </Card>
 
-                <LogFilesList />
+                <LogFilesList logDir={settings?.logDir ?? null} />
             </div>
         </div>
     );
