@@ -15,6 +15,7 @@ import structlog
 from api.ws.websocket_notifier import ws_notifier
 from constants import BT_UNITS
 from hardware.ramp import ramp_manager
+from services.unit_limits import unit_limits
 from store import Store
 from typings import UnitDict
 
@@ -65,6 +66,15 @@ with open("configurations/init_settings.json") as json_file:
 def resolve_usage_limit(usage: str) -> dict:
     """Level limits ({start, warn, max}) for a channel usage name."""
     return USAGE_LIMIT.get(usage, USAGE_LIMIT["default"])
+
+
+def resolve_channel_limit(unit_name: str, channel: str, usage: str) -> dict:
+    """
+    Level limits for one unit/channel: the host's per-unit override when it
+    exists, otherwise the usage default.
+    """
+    override = unit_limits.get(unit_name, channel)
+    return override if override is not None else resolve_usage_limit(usage)
 
 
 class UnitConnect:
@@ -454,6 +464,8 @@ def mk2b_init():
     # Init 2B threads settings
     for init_bt_name in BT_UNITS:
         # TODO: REF double init
+        usage_a = DEFAULT_USAGE[init_bt_name]["A"]
+        usage_b = DEFAULT_USAGE[init_bt_name]["B"]
         store.update_unit_dict(
             unit_dict=UnitDict(init_bt_name),
             changes={
@@ -465,14 +477,10 @@ def mk2b_init():
                 "ch_B": 0,  # ch_B target level for the 2B
                 "ch_B_multiplier": 100,  # percentage of level multiplier
                 # Channels usage
-                "ch_A_use": DEFAULT_USAGE[init_bt_name]["A"],  # ch_A usage
-                "ch_B_use": DEFAULT_USAGE[init_bt_name]["B"],  # ch_B usage
-                "ch_A_limit": USAGE_LIMIT.get(
-                    DEFAULT_USAGE[init_bt_name]["A"], USAGE_LIMIT["default"]
-                ),
-                "ch_B_limit": USAGE_LIMIT.get(
-                    DEFAULT_USAGE[init_bt_name]["B"], USAGE_LIMIT["default"]
-                ),
+                "ch_A_use": usage_a,  # ch_A usage
+                "ch_B_use": usage_b,  # ch_B usage
+                "ch_A_limit": resolve_channel_limit(init_bt_name, "A", usage_a),
+                "ch_B_limit": resolve_channel_limit(init_bt_name, "B", usage_b),
                 # waveform setting 1
                 "adj_1": DEFAULT_USAGE_SETTING[init_bt_name][
                     "adj_1"

@@ -8,7 +8,7 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Annotated, Any, Literal
 
-from pydantic import Field
+from pydantic import Field, model_validator
 
 from events.enums import ActionType
 from typings import RampEndAction, RampMode
@@ -22,9 +22,15 @@ TriggerRulePatch = Annotated[dict[str, Any], TsType("Partial<TriggerRule>")]
 
 
 class UsageLimit(WireModel):
-    start: int
-    warn: int
-    max: int
+    start: int = Field(ge=0, le=100)
+    warn: int = Field(ge=0, le=100)
+    max: int = Field(ge=0, le=100)
+
+    @model_validator(mode="after")
+    def _ordered(self) -> "UsageLimit":
+        if not self.start <= self.warn <= self.max:
+            raise ValueError("limits must satisfy start <= warn <= max")
+        return self
 
 
 class UnitSettings(WireModel):

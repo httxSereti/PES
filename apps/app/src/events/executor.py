@@ -9,7 +9,7 @@ import structlog
 
 from constants import BT_UNITS
 from hardware.ramp import RampMode, ramp_manager
-from hardware.units import resolve_usage_limit
+from hardware.units import resolve_channel_limit
 from services.profiles import ProfileError, load_profile
 from store import Store
 from typings import RampEndAction, UnitDict
@@ -359,14 +359,15 @@ class ActionExecutor:
                         f"'{unit_name}.{use_field}={usage!r}'"
                     )
                     continue
+                applied_limit = resolve_channel_limit(unit_name, ch, usage)
                 unit_snapshot["usages"][ch] = {
                     "before_use": current.get(use_field),
                     "applied_use": usage,
                     "before_limit": current.get(f"ch_{ch}_limit"),
-                    "applied_limit": resolve_usage_limit(usage),
+                    "applied_limit": applied_limit,
                 }
                 usage_changes[use_field] = usage
-                usage_changes[f"ch_{ch}_limit"] = resolve_usage_limit(usage)
+                usage_changes[f"ch_{ch}_limit"] = applied_limit
             if usage_changes:
                 self._store.update_unit_dict(unit, usage_changes)
 
@@ -516,7 +517,11 @@ class ActionExecutor:
                     continue
                 usage_restore[f"ch_{ch}_use"] = info["before_use"]
                 if info.get("before_limit") is not None:
-                    usage_restore[f"ch_{ch}_limit"] = info["before_limit"]
+                    # A host override set while the profile was running wins
+                    # over the limit captured before the apply.
+                    usage_restore[f"ch_{ch}_limit"] = resolve_channel_limit(
+                        unit_name, ch, info["before_use"]
+                    )
             if usage_restore:
                 self._store.update_unit_dict(unit, usage_restore)
 

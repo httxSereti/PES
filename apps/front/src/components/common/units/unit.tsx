@@ -20,6 +20,7 @@ import { UnitSelectMode } from "@/components/common/units/unit-select-mode"
 import { UnitPowerMode } from "@/components/common/units/unit-power-mode"
 import { UnitAdj } from "./unit-adj"
 import { UnitStopButton } from "./unit-stop-button"
+import { UnitLimits } from "./unit-limits"
 import { UnitRamps } from "@/components/common/ramps/unit-ramps"
 
 type UnitProps = {
@@ -108,6 +109,8 @@ export const Unit: FC<UnitProps> = ({ unitId }) => {
 
                     <div className="flex flex-col gap-2.5 rounded-lg border border-border/35 bg-muted/20 px-3 py-3">
                         <p className="font-mono text-[10px] tracking-widest text-primary/40 uppercase border-b pb-1.5">Unit Settings</p>
+
+                        <UnitLimits unitId={unitId} />
 
                         <div className="grid grid-cols-2 divide-x divide-border/60 border-b border-border/60 py-1">
                             {(["adj_1", "adj_2"] as const).map((adj_name) => {

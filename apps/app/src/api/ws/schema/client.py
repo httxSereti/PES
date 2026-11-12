@@ -25,6 +25,7 @@ from .models import (
     TrainingGuidedConfig,
     TrainingNotificationLevel,
     TrainingVisibility,
+    UsageLimit,
 )
 
 # ─────────────────────────────── Core ───────────────────────────────
@@ -100,6 +101,20 @@ class UnitsStopCommand(ClientMessage):
 
     type: Literal["units:stop"] = "units:stop"
     payload: UnitStopPayload
+
+
+class UnitLimitsChange(WireModel):
+    """Per-channel limit overrides (host-only, persisted)."""
+
+    ch_A_limit: UsageLimit | None = None
+    ch_B_limit: UsageLimit | None = None
+
+
+class UnitsUpdateLimitsCommand(ClientMessage):
+    """Change the persisted per-unit channel limits (Host only)."""
+
+    type: Literal["units:update_limits"] = "units:update_limits"
+    payload: dict[str, UnitLimitsChange]
 
 
 # ─────────────────────────────── Ramps ───────────────────────────────
@@ -979,6 +994,8 @@ __all__ = [
     "UnitsUpdateAdjCommand",
     "UnitStopPayload",
     "UnitsStopCommand",
+    "UnitLimitsChange",
+    "UnitsUpdateLimitsCommand",
     "RampTarget",
     "RampStartPayload",
     "RampsStartCommand",

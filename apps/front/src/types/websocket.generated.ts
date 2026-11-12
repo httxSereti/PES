@@ -73,6 +73,17 @@ export interface UnitStopPayload {
     id: 'UNIT1' | 'UNIT2' | 'UNIT3';
 }
 
+export interface UnitLimitsChange {
+    ch_A_limit?: UsageLimit | null;
+    ch_B_limit?: UsageLimit | null;
+}
+
+export interface UsageLimit {
+    start: number;
+    warn: number;
+    max: number;
+}
+
 export interface RampTarget {
     unit: 'UNIT1' | 'UNIT2' | 'UNIT3';
     field: 'ch_A' | 'ch_B' | 'adj_1' | 'adj_2';
@@ -585,12 +596,6 @@ export interface UnitSettings {
     cnx_ok: boolean;
     sync: boolean;
     updated: boolean;
-}
-
-export interface UsageLimit {
-    start: number;
-    warn: number;
-    max: number;
 }
 
 export interface UnitUpdatePayload {
@@ -1233,6 +1238,12 @@ export interface UnitsStopCommand {
     id?: string | null;
     type: 'units:stop';
     payload: UnitStopPayload;
+}
+
+export interface UnitsUpdateLimitsCommand {
+    id?: string | null;
+    type: 'units:update_limits';
+    payload: Record<string, UnitLimitsChange>;
 }
 
 export interface RampsStartCommand {
@@ -2083,6 +2094,7 @@ export type WebSocketClientMessage =
     | UnitsUpdatePowerModeCommand
     | UnitsUpdateAdjCommand
     | UnitsStopCommand
+    | UnitsUpdateLimitsCommand
     | RampsStartCommand
     | RampsPauseCommand
     | RampsResumeCommand

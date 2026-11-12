@@ -44,20 +44,28 @@ function ChannelCard({
     channel,
     unit,
     detail,
+    live,
     actions,
 }: {
     channel: "A" | "B";
     unit: UnitDraft;
     detail: ProfileDetail;
+    live: UnitSettings | undefined;
     actions: ProfileEditorActions;
 }) {
     const isA = channel === "A";
     const usage = isA ? unit.ch_A_use : unit.ch_B_use;
     const level = isA ? unit.ch_A : unit.ch_B;
+    const liveUsage = isA ? live?.ch_A_use : live?.ch_B_use;
+    const liveLimit = isA ? live?.ch_A_limit : live?.ch_B_limit;
+    // The live channel reflects a host per-unit override; other usages fall
+    // back to the shared usage-limit catalog.
     const limit =
-        detail.usage_limits[usage] ??
-        detail.usage_limits.default ??
-        FALLBACK_LIMIT;
+        liveLimit && liveUsage === usage
+            ? liveLimit
+            : (detail.usage_limits[usage] ??
+              detail.usage_limits.default ??
+              FALLBACK_LIMIT);
 
     const usages = detail.usage_names.includes(usage)
         ? detail.usage_names
@@ -168,12 +176,14 @@ export function EditorLevelsTab({
                     channel="A"
                     unit={unit}
                     detail={detail}
+                    live={live}
                     actions={actions}
                 />
                 <ChannelCard
                     channel="B"
                     unit={unit}
                     detail={detail}
+                    live={live}
                     actions={actions}
                 />
             </div>

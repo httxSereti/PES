@@ -168,6 +168,42 @@ class Store:
 
             unit_state.update(changes)
 
+    def update_unit_limits(
+        self, unit_dict: UnitDict, limits: Dict[str, Dict]
+    ) -> Dict:
+        """
+        Apply per-channel limit objects ({start, warn, max}) and clamp the
+        live level to the new max. Returns the changes to broadcast.
+        """
+        with self._units_lock:
+            unit_id = unit_dict.value
+            if unit_id not in self._units_settings:
+                raise KeyError(f"Unit '{unit_id}' doesn't exist")
+
+            unit_state = self._units_settings[unit_id]
+            changes: Dict = {}
+
+            for channel in ("A", "B"):
+                key = f"ch_{channel}_limit"
+                if key not in limits:
+                    continue
+
+                limit = dict(limits[key])
+                unit_state[key] = limit
+                changes[key] = limit
+
+                level_key = f"ch_{channel}"
+                if int(unit_state.get(level_key, 0)) > limit["max"]:
+                    unit_state[level_key] = limit["max"]
+                    changes[level_key] = limit["max"]
+
+            # Only a clamped level needs a firmware push.
+            if any(f"ch_{channel}" in changes for channel in ("A", "B")):
+                unit_state["updated"] = True
+                changes["updated"] = True
+
+            return changes
+
     def get_unit_dict(self, unit_dict: UnitDict) -> Dict:
         with self._units_lock:
             return self._units_settings.get(unit_dict.value, {}).copy()
