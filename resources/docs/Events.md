@@ -1,6 +1,9 @@
-## How it works? 
+> Ancienne description du pipeline. Voir [events-v2.md](events-v2.md) pour l'architecture cible (Event Bus, Rule Engine v2, connecteurs, Discord/Vencord, Chaster, intégrations NSFW), puis [events-v3-flows.md](events-v3-flows.md) pour le plan PES Flow/télémétrie et [events-v3-integrations.md](events-v3-integrations.md) pour le catalogue d'intégrations séparé.
 
-List of supported Events: 
+## How it works?
+
+List of supported Events:
+
 ```
 chaster_PilloryVote
 chaster_VoteAdd

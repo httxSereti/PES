@@ -200,25 +200,47 @@ class Database:
 
             result = await conn.execute(text("PRAGMA table_info(triggered_events)"))
             event_columns = {row[1] for row in result.fetchall()}
-            if event_columns and "session_id" not in event_columns:
-                await conn.execute(
-                    text(
-                        "ALTER TABLE triggered_events "
-                        "ADD COLUMN session_id VARCHAR"
-                    )
-                )
-                logger.info("[Database] Added triggered_events.session_id")
-
             if event_columns:
+                # Keep this list idempotent: SQLite has no
+                # `ADD COLUMN IF NOT EXISTS`, so each ALTER is gated on
+                # PRAGMA table_info.
+                event_migrations = {
+                    "session_id": "VARCHAR",
+                    "occurred_at": "DATETIME",
+                    "source": "VARCHAR",
+                    "actor_id": "VARCHAR",
+                    "correlation_id": "VARCHAR",
+                    "causation_id": "VARCHAR",
+                    "dedupe_key": "VARCHAR",
+                    "severity": "VARCHAR DEFAULT 'info'",
+                    "tags": "JSON",
+                    "version": "INTEGER DEFAULT 1",
+                }
+                for column, sql_type in event_migrations.items():
+                    if column not in event_columns:
+                        await conn.execute(
+                            text(
+                                "ALTER TABLE triggered_events "
+                                f"ADD COLUMN {column} {sql_type}"
+                            )
+                        )
+                        logger.info(f"[Database] Added triggered_events.{column}")
+
                 # `create_all` does not add an index to a table that already
-                # exists, so create it explicitly (idempotent).
-                await conn.execute(
-                    text(
-                        "CREATE INDEX IF NOT EXISTS "
-                        "ix_triggered_events_session_id "
-                        "ON triggered_events (session_id)"
+                # exists, so create the new indexes explicitly (idempotent).
+                event_indexes = {
+                    "ix_triggered_events_session_id": "session_id",
+                    "ix_triggered_events_source": "source",
+                    "ix_triggered_events_actor_id": "actor_id",
+                    "ix_triggered_events_correlation_id": "correlation_id",
+                }
+                for index_name, column in event_indexes.items():
+                    await conn.execute(
+                        text(
+                            f"CREATE INDEX IF NOT EXISTS {index_name} "
+                            f"ON triggered_events ({column})"
+                        )
                     )
-                )
 
     @property
     def session_maker(self) -> async_sessionmaker:

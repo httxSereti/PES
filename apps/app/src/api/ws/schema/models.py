@@ -11,6 +11,7 @@ from typing import Annotated, Any, Literal
 from pydantic import Field, model_validator
 
 from events.enums import ActionType
+from events.envelope import ActorRef
 from typings import RampEndAction, RampMode
 
 from .base import TsType, WireModel
@@ -173,6 +174,18 @@ class TriggeredEvent(WireModel):
     event_data: dict[str, Any]
     triggered_at: datetime
     triggered_rules: list[TriggeredRule]
+    occurred_at: datetime | None = None
+
+    # Events v3 envelope metadata (optional for history rows created before
+    # the migration).
+    source: str | None = None
+    actor: ActorRef | None = None
+    correlation_id: str | None = None
+    causation_id: str | None = None
+    dedupe_key: str | None = None
+    severity: str = "info"
+    tags: list[str] = Field(default_factory=list)
+    version: int = 1
 
 
 class QueueStatus(WireModel):
@@ -819,6 +832,7 @@ __all__ = [
     "TriggeredAction",
     "TriggeredRule",
     "TriggeredEvent",
+    "ActorRef",
     "QueueStatus",
     "Ramp",
     "ProfileRampPreview",

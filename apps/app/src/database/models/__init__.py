@@ -11,6 +11,15 @@ from .edging_template import EdgingTemplate
 from .edging_program import EdgingProgram
 from .app_session import AppSession
 from .lovense import LovenseDevice, LovenseNode, LovensePattern, LovenseRun
+from .actor import Actor, ActorIdentity, ActorStats
+from .flow import (
+    EffectLedger,
+    FlowDef,
+    FlowRun,
+    FlowTriggerIndex,
+    FlowVersion,
+    NodeRun,
+)
 
 __all__ = [
     "TriggerRule",
@@ -29,4 +38,13 @@ __all__ = [
     "LovenseDevice",
     "LovensePattern",
     "LovenseRun",
+    "Actor",
+    "ActorIdentity",
+    "ActorStats",
+    "FlowDef",
+    "FlowVersion",
+    "FlowTriggerIndex",
+    "FlowRun",
+    "NodeRun",
+    "EffectLedger",
 ]

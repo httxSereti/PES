@@ -90,6 +90,15 @@ class WebSocketNotifier:
                 "event_data": redact_payload(ev.event_data),
                 "triggered_at": to_utc_iso(ev.triggered_at),
                 "triggered_rules": redact_triggered_rules(ev.triggered_rules),
+                "occurred_at": to_utc_iso(ev.occurred_at),
+                "source": ev.source,
+                "actor": None,
+                "correlation_id": ev.correlation_id,
+                "causation_id": ev.causation_id,
+                "dedupe_key": ev.dedupe_key,
+                "severity": ev.severity or "info",
+                "tags": ev.tags or [],
+                "version": ev.version or 1,
             }
             for ev in events
         ]

@@ -10,6 +10,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from api.rest import admin, auth, logs, users
+from api.rest import events_v3 as events_v3_router
 from api.rest import integrations as integrations_router
 from api.rest import trigger_rules as trigger_rules_router
 from api.ws.endpoint import router as ws_router
@@ -18,6 +19,7 @@ from database.connection import Database
 from database.seed import seed_from_json
 from events.dispatcher import EventDispatcher
 from events.queue import ActionQueue
+from events.v3 import get_v3_config
 from hardware.sensors import sensor_alarm_check
 from integrations import IntegrationContext, integration_registry
 from services.neutralize import neutralize_all
@@ -75,6 +77,13 @@ async def training_tick_loop():
 async def lifespan(app: FastAPI):
     # startup
     loop = asyncio.get_event_loop()
+    v3_config = get_v3_config()
+    logger.info(
+        "[Events v3] rollout flags",
+        enabled=v3_config.enabled,
+        shadow_mode=v3_config.shadow_mode,
+        max_workers=v3_config.max_workers,
+    )
     ws_notifier.setup(loop)
     asyncio.create_task(ws_notifier.consume(store.websocket))
 
@@ -104,6 +113,19 @@ async def lifespan(app: FastAPI):
         LovenseNode,
         LovensePattern,
         LovenseRun,
+    )
+    from database.models.actor import (  # noqa: F401
+        Actor,
+        ActorIdentity,
+        ActorStats,
+    )
+    from database.models.flow import (  # noqa: F401
+        EffectLedger,
+        FlowDef,
+        FlowRun,
+        FlowTriggerIndex,
+        FlowVersion,
+        NodeRun,
     )
 
     async with db._engine.begin() as conn:
@@ -169,6 +191,7 @@ app.include_router(integrations_router.router)
 for integration_router in integration_registry.routers():
     app.include_router(integration_router)
 app.include_router(trigger_rules_router.router)
+app.include_router(events_v3_router.router)
 app.include_router(ws_router)
 
 app.add_middleware(

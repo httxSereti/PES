@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import datetime, timezone
 from typing import List, Optional
 
-from sqlalchemy import DateTime, JSON, String
+from sqlalchemy import DateTime, Integer, JSON, String
 from sqlalchemy.orm import Mapped, mapped_column
 
 from database.base import Base
@@ -28,3 +28,17 @@ class TriggeredEvent(Base):
     triggered_rules: Mapped[List] = mapped_column(JSON, default=list)
     # Id of the active application session when the event fired (null = outside a session)
     session_id: Mapped[Optional[str]] = mapped_column(String, nullable=True, index=True)
+
+    # ───────── Events v3 envelope metadata ─────────
+    # `triggered_at` is the PES receive time; `occurred_at` is the source time.
+    occurred_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    source: Mapped[Optional[str]] = mapped_column(String, nullable=True, index=True)
+    actor_id: Mapped[Optional[str]] = mapped_column(String, nullable=True, index=True)
+    correlation_id: Mapped[Optional[str]] = mapped_column(
+        String, nullable=True, index=True
+    )
+    causation_id: Mapped[Optional[str]] = mapped_column(String, nullable=True)
+    dedupe_key: Mapped[Optional[str]] = mapped_column(String, nullable=True)
+    severity: Mapped[str] = mapped_column(String, default="info")
+    tags: Mapped[List] = mapped_column(JSON, default=list)
+    version: Mapped[int] = mapped_column(Integer, default=1)

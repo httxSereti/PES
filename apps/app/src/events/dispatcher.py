@@ -1,18 +1,22 @@
 from __future__ import annotations
 
+import time
 from datetime import UTC, datetime
-from typing import TYPE_CHECKING
+from typing import Any, TYPE_CHECKING
 
 import structlog
 from cuid2 import cuid_wrapper
 
 from database.models.triggered_event import TriggeredEvent
+from database.repositories.actor_repo import ActorRepo
 from database.repositories.triggered_event_repo import TriggeredEventRepo
 from events.enums import QueueItemStatus
+from events.envelope import ActorRef, EventEnvelope, actor_ref_from_payload, build_envelope
 from events.models import QueueItem, TriggerRule
 from events.queue import ActionQueue
 from events.redaction import redact_payload, redact_triggered_rules
 from events.registry import EventRegistry
+from events.v3 import EventPlan, ShadowRecorder, get_v3_config
 from integrations import integration_registry
 from integrations.base import IntegrationKind
 from store import Store
@@ -47,13 +51,18 @@ class EventDispatcher:
         queue: ActionQueue,
         ws_notifier: WebSocketNotifier | None = None,
         integrations: IntegrationRegistry | None = None,
+        event_repo: TriggeredEventRepo | None = None,
+        shadow_recorder: ShadowRecorder | None = None,
+        actor_repo: ActorRepo | None = None,
     ):
         EventDispatcher._instance = self
         self._registry = registry
         self._queue = queue
         self._ws_notifier = ws_notifier
-        self._event_repo = TriggeredEventRepo()
+        self._event_repo = event_repo or TriggeredEventRepo()
         self._integrations = integrations or integration_registry
+        self._shadow = shadow_recorder or ShadowRecorder()
+        self._actors = actor_repo or ActorRepo()
 
     async def dispatch(
         self,
@@ -62,109 +71,81 @@ class EventDispatcher:
         origin: str = "unknown",
         chain_depth: int = 0,
         source_integration_id: str | None = None,
+        *,
+        actor: ActorRef | None = None,
+        occurred_at: datetime | None = None,
+        correlation_id: str | None = None,
+        causation_id: str | None = None,
+        dedupe_key: str | None = None,
+        severity: str = "info",
+        tags: list[str] | None = None,
     ) -> None:
         """
-        Dispatch an event: resolve trigger rules, create queue items, and enqueue them.
+        Dispatch an event: resolve trigger rules, create queue items, enqueue.
+
+        The v3 envelope is built here so every persisted event and broadcast
+        carries the same identity, actor, correlation and causation metadata.
+        Legacy integrations can keep sending plain `event_data` dictionaries.
 
         Args:
-            event_type: The event type (TriggerableEvent value or WOF dynamic code)
+            event_type: TriggerableEvent value or `custom:*` dynamic code
             event_data: Contextual data from the event source
             origin: Human-readable origin description
             chain_depth: Causation depth for an event caused by an action echo
             source_integration_id: Integration whose action caused this echo
+            actor: Optional unified actor reference
+            occurred_at: Source timestamp (defaults to now)
+            correlation_id: Root event id for the chain (defaults to this event)
+            causation_id: Event id that caused this one
+            dedupe_key: Stable source key used by the future dedupe stage
+            severity: Event severity (`info`, `warning`, `critical`, ...)
+            tags: Optional labels for telemetry and filtering
         """
-        event_data = event_data or {}
+        started = time.perf_counter()
         event_id = generate_id()
-        triggered_at = datetime.now(UTC)
+        v3_config = get_v3_config()
+        if actor is not None and (v3_config.enabled or v3_config.shadow_mode):
+            actor = await self._resolve_actor(actor)
+        plan = await self._build_plan(
+            event_id=event_id,
+            event_type=event_type,
+            event_data=event_data or {},
+            origin=origin,
+            chain_depth=chain_depth,
+            source_integration_id=source_integration_id,
+            actor=actor,
+            occurred_at=occurred_at,
+            correlation_id=correlation_id,
+            causation_id=causation_id,
+            dedupe_key=dedupe_key,
+            severity=severity,
+            tags=tags,
+        )
 
         logger.debug(
             "[Dispatcher] Event received",
             event_id=event_id,
             event_type=event_type,
             origin=origin,
+            correlation_id=plan.envelope.correlation_id,
             chain_depth=chain_depth,
             source_integration_id=source_integration_id,
+            skipped_reason=plan.skipped_reason,
         )
 
-        # Disabled at the integration or per-event level: drop the event
-        # entirely (no DB record, no queue items). Re-enabling brings the
-        # rules back.
-        if not self._integrations.is_event_enabled(event_type):
-            logger.debug(
-                f"[Dispatcher] Event '{event_type}' disabled, ignored",
-                event_id=event_id,
-                origin=origin,
-            )
+        # Disabled at the integration or per-event level, or outside the
+        # active session scope: drop entirely (no DB record, no queue items).
+        # Re-enabling brings the rules back.
+        if plan.skipped_reason in {"event_disabled", "out_of_scope"}:
             return
 
-        if not self._session_allows_event(event_type):
-            logger.debug(
-                f"[Dispatcher] Event '{event_type}' outside session scope, ignored",
-                event_id=event_id,
-                origin=origin,
-            )
-            return
+        await self._save_and_notify(plan.envelope, plan.summary)
 
-        if chain_depth >= _MAX_EVENT_CHAIN_DEPTH:
-            logger.warning(
-                "[Dispatcher] Event chain depth limit reached, actions skipped",
-                event_id=event_id,
-                event_type=event_type,
-                origin=origin,
-                chain_depth=chain_depth,
-            )
-            await self._save_and_notify(
-                event_id, event_type, origin, event_data, triggered_at, []
-            )
-            return
+        if plan.items:
+            self._queue.enqueue(plan.items)
 
-        # Resolve trigger rules from DB
-        rules = await self._registry.get_rules_for_event(event_type)
-        if not rules:
-            logger.debug(
-                f"[Dispatcher] No trigger rules for event '{event_type}'",
-                event_id=event_id,
-                origin=origin,
-            )
-            await self._save_and_notify(
-                event_id, event_type, origin, event_data, triggered_at, []
-            )
-            return
-
-        # Build queue items + summary in a single pass over rules
-        queue_items: list[QueueItem] = []
-        triggered_rules_summary: list[dict] = []
-
-        for rule in rules:
-            items = self._rule_to_queue_items(
-                rule,
-                origin,
-                source_integration_id=source_integration_id,
-                chain_depth=chain_depth,
-            )
-            queue_items.extend(items)
-            triggered_rules_summary.append(self._build_rule_summary(rule, items))
-
-        logger.debug(
-            f"[Dispatcher] Created {len(queue_items)} queue items from {len(rules)} rule(s)",
-            event_id=event_id,
-            event_type=event_type,
-            origin=origin,
-        )
-
-        # ── Step 2: Persist + notify with full context ──
-        await self._save_and_notify(
-            event_id,
-            event_type,
-            origin,
-            event_data,
-            triggered_at,
-            triggered_rules_summary,
-        )
-
-        # ── Step 3: Enqueue ──
-        if queue_items:
-            self._queue.enqueue(queue_items)
+        if v3_config.shadow_mode:
+            await self._record_shadow(plan, started)
 
     async def dispatch_direct(
         self,
@@ -175,6 +156,14 @@ class EventDispatcher:
         summary_name: str | None = None,
         chain_depth: int = 0,
         source_integration_id: str | None = None,
+        *,
+        actor: ActorRef | None = None,
+        occurred_at: datetime | None = None,
+        correlation_id: str | None = None,
+        causation_id: str | None = None,
+        dedupe_key: str | None = None,
+        severity: str = "info",
+        tags: list[str] | None = None,
     ) -> None:
         """
         Dispatch pre-built queue items without resolving trigger rules.
@@ -186,6 +175,9 @@ class EventDispatcher:
         event_data = event_data or {}
         event_id = generate_id()
         triggered_at = datetime.now(UTC)
+        v3_config = get_v3_config()
+        if actor is not None and (v3_config.enabled or v3_config.shadow_mode):
+            actor = await self._resolve_actor(actor)
 
         if not self._session_allows_event(event_type):
             logger.debug(
@@ -244,17 +236,235 @@ class EventDispatcher:
             chain_depth=chain_depth,
         )
 
+        envelope = build_envelope(
+            event_id=event_id,
+            event_type=event_type,
+            payload=event_data,
+            origin=origin,
+            source=source_integration_id or origin,
+            actor=actor,
+            occurred_at=occurred_at,
+            received_at=triggered_at,
+            session_id=self._active_session_id(),
+            correlation_id=correlation_id,
+            causation_id=causation_id,
+            dedupe_key=dedupe_key,
+            severity=severity,
+            tags=tags,
+            chain_depth=chain_depth,
+            source_integration_id=source_integration_id,
+        )
         await self._save_and_notify(
-            event_id,
-            event_type,
-            origin,
-            event_data,
-            triggered_at,
+            envelope,
             self._build_direct_summary(summary_name or event_type, items),
         )
 
         if items:
             self._queue.enqueue(items)
+
+    async def simulate(
+        self,
+        *,
+        event_type: str,
+        event_data: dict | None = None,
+        origin: str = "simulate",
+        actor: ActorRef | None = None,
+        occurred_at: datetime | None = None,
+        correlation_id: str | None = None,
+        causation_id: str | None = None,
+        dedupe_key: str | None = None,
+        severity: str = "info",
+        tags: list[str] | None = None,
+        chain_depth: int = 0,
+        source_integration_id: str | None = None,
+    ) -> dict[str, Any]:
+        """
+        Evaluate the current rules for an event without side effects.
+
+        Returns the envelope, matched rules, resolved queue items and a skip
+        reason. Nothing is persisted, enqueued or broadcast. This is the
+        debugging surface for phase 0 and the future `POST /api/events/simulate`.
+        """
+        payload = event_data or {}
+        if actor is None:
+            actor = actor_ref_from_payload(payload)
+
+        plan = await self._build_plan(
+            event_id=generate_id(),
+            event_type=event_type,
+            event_data=payload,
+            origin=origin,
+            chain_depth=chain_depth,
+            source_integration_id=source_integration_id,
+            actor=actor,
+            occurred_at=occurred_at,
+            correlation_id=correlation_id,
+            causation_id=causation_id,
+            dedupe_key=dedupe_key,
+            severity=severity,
+            tags=tags,
+            check_known=True,
+        )
+
+        envelope_dict = redact_payload(plan.envelope.model_dump(mode="json"))
+
+        warnings: list[str] = []
+        if plan.skipped_reason == "unknown_event":
+            warnings.append(f"Unknown event type '{event_type}'")
+        elif plan.skipped_reason == "event_disabled":
+            warnings.append("The event is disabled at the integration or event level")
+        elif plan.skipped_reason == "out_of_scope":
+            warnings.append("The active session does not include this integration")
+        elif plan.skipped_reason == "chain_depth":
+            warnings.append("The event chain depth limit is reached")
+        elif plan.skipped_reason == "no_rules":
+            warnings.append("No enabled trigger rule matches this event")
+        elif plan.rules and not plan.items:
+            warnings.append("Matching rules produced no enabled action")
+
+        return {
+            "event": envelope_dict,
+            "matched": plan.skipped_reason is None,
+            "skipped_reason": plan.skipped_reason,
+            "rules": redact_triggered_rules(plan.summary),
+            "queue_items": [
+                {
+                    "id": item.id,
+                    "action_type": item.action_type.value,
+                    "payload": self._redacted_action_payload(
+                        item.action_type.value, item.payload
+                    ),
+                    "duration": item.duration,
+                    "cumulative": item.cumulative,
+                    "priority": item.priority,
+                    "display_name": item.display_name,
+                    "trigger_rule_id": item.trigger_rule_id,
+                    "trigger_action_id": item.trigger_action_id,
+                }
+                for item in plan.items
+            ],
+            "counts": {
+                "rules": len(plan.rules),
+                "actions": len(plan.items),
+            },
+            "warnings": warnings,
+            "shadow": get_v3_config().shadow_mode,
+        }
+
+    async def _build_plan(
+        self,
+        *,
+        event_id: str,
+        event_type: str,
+        event_data: dict,
+        origin: str,
+        chain_depth: int,
+        source_integration_id: str | None,
+        actor: ActorRef | None,
+        occurred_at: datetime | None,
+        correlation_id: str | None,
+        causation_id: str | None,
+        dedupe_key: str | None,
+        severity: str,
+        tags: list[str] | None,
+        check_known: bool = False,
+    ) -> EventPlan:
+        received_at = datetime.now(UTC)
+        envelope = build_envelope(
+            event_id=event_id,
+            event_type=event_type,
+            payload=event_data,
+            origin=origin,
+            source=source_integration_id or origin,
+            actor=actor,
+            occurred_at=occurred_at,
+            received_at=received_at,
+            session_id=self._active_session_id(),
+            correlation_id=correlation_id,
+            causation_id=causation_id,
+            dedupe_key=dedupe_key,
+            severity=severity,
+            tags=tags,
+            chain_depth=chain_depth,
+            source_integration_id=source_integration_id,
+        )
+
+        if check_known and not self._integrations.is_known_event(event_type):
+            return EventPlan(envelope=envelope, skipped_reason="unknown_event")
+
+        if not self._integrations.is_event_enabled(event_type):
+            return EventPlan(envelope=envelope, skipped_reason="event_disabled")
+
+        if not self._session_allows_event(event_type):
+            return EventPlan(envelope=envelope, skipped_reason="out_of_scope")
+
+        if chain_depth >= _MAX_EVENT_CHAIN_DEPTH:
+            return EventPlan(envelope=envelope, skipped_reason="chain_depth")
+
+        rules = await self._registry.get_rules_for_event(event_type)
+        if not rules:
+            return EventPlan(envelope=envelope, skipped_reason="no_rules")
+
+        queue_items: list[QueueItem] = []
+        triggered_rules_summary: list[dict] = []
+        for rule in rules:
+            items = self._rule_to_queue_items(
+                rule,
+                origin,
+                source_integration_id=source_integration_id,
+                chain_depth=chain_depth,
+            )
+            queue_items.extend(items)
+            triggered_rules_summary.append(self._build_rule_summary(rule, items))
+
+        return EventPlan(
+            envelope=envelope,
+            rules=rules,
+            items=queue_items,
+            summary=triggered_rules_summary,
+        )
+
+    def _active_session_id(self) -> str | None:
+        active_session = store.get_active_session()
+        return active_session.get("id") if active_session else None
+
+    async def _resolve_actor(self, actor: ActorRef) -> ActorRef:
+        """Resolve a platform identity to a unified actor id (best effort)."""
+        if actor.id or not actor.platform_id:
+            return actor
+        try:
+            resolved = await self._actors.resolve(
+                platform=actor.platform,
+                platform_id=actor.platform_id,
+                display_name=actor.display_name,
+                is_bot=actor.is_bot,
+                metadata=actor.metadata,
+            )
+        except Exception:
+            logger.exception(
+                "[Dispatcher] Actor resolution failed",
+                platform=actor.platform,
+                platform_id=actor.platform_id,
+            )
+            return actor
+        return actor.model_copy(
+            update={
+                "id": resolved.id,
+                "display_name": actor.display_name or resolved.display_name,
+            }
+        )
+
+    async def _record_shadow(self, plan: EventPlan, started: float) -> None:
+        try:
+            latency_ms = int((time.perf_counter() - started) * 1000)
+            await self._shadow.record(plan, latency_ms=latency_ms)
+        except Exception:
+            # Shadow telemetry must never break the legacy pipeline.
+            logger.exception(
+                "[Dispatcher] Shadow recording failed",
+                event_id=plan.envelope.id,
+                event_type=plan.envelope.type,
+            )
 
     def _session_allows_event(self, event_type: str) -> bool:
         """
@@ -284,25 +494,29 @@ class EventDispatcher:
 
     async def _save_and_notify(
         self,
-        event_id: str,
-        event_type: str,
-        origin: str,
-        event_data: dict,
-        triggered_at: datetime,
+        envelope: EventEnvelope,
         triggered_rules: list[dict],
     ) -> None:
         """Persist the event to DB and broadcast it to all WS clients."""
-        safe_event_data = redact_payload(event_data)
+        safe_event_data = redact_payload(envelope.payload)
         safe_triggered_rules = redact_triggered_rules(triggered_rules)
-        active_session = store.get_active_session()
         record = TriggeredEvent(
-            id=event_id,
-            event_type=event_type,
-            origin=origin,
+            id=envelope.id,
+            event_type=envelope.type,
+            origin=envelope.origin,
             event_data=safe_event_data,
-            triggered_at=triggered_at,
+            triggered_at=envelope.received_at,
             triggered_rules=safe_triggered_rules,
-            session_id=active_session["id"] if active_session else None,
+            session_id=envelope.session_id,
+            occurred_at=envelope.occurred_at,
+            source=envelope.source,
+            actor_id=envelope.actor.id if envelope.actor else None,
+            correlation_id=envelope.correlation_id,
+            causation_id=envelope.causation_id,
+            dedupe_key=envelope.dedupe_key,
+            severity=envelope.severity,
+            tags=envelope.tags,
+            version=envelope.version,
         )
         await self._event_repo.save(record)
 
@@ -310,12 +524,25 @@ class EventDispatcher:
             self._ws_notifier.notify(
                 payload_type="events:triggered",
                 payload={
-                    "id": event_id,
-                    "event_type": event_type,
-                    "origin": origin,
+                    "id": envelope.id,
+                    "event_type": envelope.type,
+                    "origin": envelope.origin,
                     "event_data": safe_event_data,
-                    "triggered_at": triggered_at.isoformat(),
+                    "triggered_at": envelope.received_at.isoformat(),
                     "triggered_rules": safe_triggered_rules,
+                    "occurred_at": envelope.occurred_at.isoformat(),
+                    "source": envelope.source,
+                    "actor": (
+                        envelope.actor.model_dump(mode="json")
+                        if envelope.actor
+                        else None
+                    ),
+                    "correlation_id": envelope.correlation_id,
+                    "causation_id": envelope.causation_id,
+                    "dedupe_key": envelope.dedupe_key,
+                    "severity": envelope.severity,
+                    "tags": envelope.tags,
+                    "version": envelope.version,
                 },
             )
 

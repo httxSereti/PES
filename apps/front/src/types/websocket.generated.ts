@@ -51,6 +51,18 @@ export enum RampEndAction {
     SET_LEVEL = "set_level",
 }
 
+export interface ActorRef {
+    id?: string | null;
+    platform: string;
+    platform_id: string;
+    display_name?: string | null;
+    is_self: boolean;
+    is_bot: boolean;
+    roles: string[];
+    trust: number;
+    metadata: Record<string, unknown>;
+}
+
 export interface UnitLevelChanges {
     ch_A?: string | null;
     ch_B?: string | null;
@@ -689,6 +701,15 @@ export interface TriggeredEvent {
     event_data: Record<string, unknown>;
     triggered_at: string;
     triggered_rules: TriggeredRule[];
+    occurred_at?: string | null;
+    source?: string | null;
+    actor?: ActorRef | null;
+    correlation_id?: string | null;
+    causation_id?: string | null;
+    dedupe_key?: string | null;
+    severity: string;
+    tags: string[];
+    version: number;
 }
 
 export interface TriggeredRule {
