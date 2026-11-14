@@ -2,8 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 
 import { useWebSocketEvent } from "@/hooks/useWebSocket";
 import { useAppSelector } from "@/store/hooks";
-
-const API_URL = import.meta.env.VITE_API_URL;
+import { eventsFetch } from "@/lib/api";
 
 export interface ApprovalAction {
     action_type: string;
@@ -45,7 +44,7 @@ export function useApprovals(status: "pending" | "approved" | "rejected" | "expi
         setLoading(true);
         setError(null);
         try {
-            const response = await fetch(`${API_URL}/events/approvals?status=${status}`, {
+            const response = await eventsFetch(`/events/approvals?status=${status}`, {
                 headers: authHeaders(token),
             });
             if (!response.ok) throw new Error("Failed to load approvals");
@@ -71,7 +70,7 @@ export function useApprovals(status: "pending" | "approved" | "rejected" | "expi
             setLoading(true);
             setError(null);
             try {
-                const response = await fetch(`${API_URL}/events/approvals/${requestId}/${decision}`, {
+                const response = await eventsFetch(`/events/approvals/${requestId}/${decision}`, {
                     method: "POST",
                     headers: {
                         "Content-Type": "application/json",

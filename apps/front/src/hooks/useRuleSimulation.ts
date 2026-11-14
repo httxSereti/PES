@@ -1,8 +1,7 @@
 import { useCallback, useState } from "react";
 
 import { useAppSelector } from "@/store/hooks";
-
-const API_URL = import.meta.env.VITE_API_URL;
+import { eventsFetch } from "@/lib/api";
 
 export interface SimulatedAction {
     queue_item_id: string;
@@ -70,7 +69,7 @@ export function useRuleSimulation() {
             setError(null);
             setResult(null);
             try {
-                const response = await fetch(`${API_URL}/events/simulate`, {
+                const response = await eventsFetch(`/events/simulate`, {
                     method: "POST",
                     headers: {
                         Authorization: `Bearer ${token}`,

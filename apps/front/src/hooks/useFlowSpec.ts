@@ -1,8 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 
 import { useAppSelector } from "@/store/hooks";
-
-const API_URL = import.meta.env.VITE_API_URL;
+import { eventsFetch } from "@/lib/api";
 
 export interface FlowSpecNode {
     id: string;
@@ -47,7 +46,7 @@ export function useFlowSpec(ruleId: string | undefined) {
         setLoading(true);
         setError(null);
         try {
-            const response = await fetch(`${API_URL}/events/flows/${ruleId}/spec`, {
+            const response = await eventsFetch(`/events/flows/${ruleId}/spec`, {
                 headers: { Authorization: `Bearer ${token}` },
             });
             if (!response.ok) throw new Error("Flow not found");

@@ -6,14 +6,20 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, Field
 
-FlowNodeType = Literal["trigger.event", "logic.guard", "effect.action"]
-CompiledOpType = Literal["match_event", "eval_condition", "emit_action"]
+FlowNodeType = Literal[
+    "trigger.event", "logic.guard", "effect.action", "flow.call"
+]
+CompiledOpType = Literal[
+    "match_event", "eval_condition", "emit_action", "call_flow"
+]
 
 
 class FlowNode(BaseModel):
     id: str
     type: FlowNodeType
     config: dict[str, Any] = Field(default_factory=dict)
+    # Canvas layout. Kept outside `config` so the compiler ignores it.
+    position: dict[str, float] | None = None
 
 
 class FlowEdge(BaseModel):

@@ -3,7 +3,15 @@ from __future__ import annotations
 from datetime import datetime
 from typing import TYPE_CHECKING, List, Optional
 
-from sqlalchemy import Boolean, DateTime, Integer, JSON, String
+from sqlalchemy import (
+    Boolean,
+    DateTime,
+    ForeignKey,
+    Integer,
+    JSON,
+    String,
+    UniqueConstraint,
+)
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from database.base import Base
@@ -53,6 +61,10 @@ class TriggerRule(Base):
     # Approval gate: matched actions wait in `approval_requests`.
     requires_approval: Mapped[bool] = mapped_column(Boolean, default=False)
     approval_timeout_seconds: Mapped[int] = mapped_column(Integer, default=300)
+    # Last saved canvas graph and its version. `graph` is a serialized
+    # FlowSpec; `graph_version` matches TriggerRuleVersion.version.
+    graph: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)
+    graph_version: Mapped[int] = mapped_column(Integer, default=0)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     updated_at: Mapped[datetime] = mapped_column(
         DateTime, default=datetime.utcnow, onupdate=datetime.utcnow
@@ -81,3 +93,21 @@ class TriggerRule(Base):
         order_by="TriggerRuleEvent.sort_order",
         lazy="selectin",
     )
+
+
+class TriggerRuleVersion(Base):
+    """Immutable canvas graph snapshots for visual diff/restore."""
+
+    __tablename__ = "trigger_rule_versions"
+    __table_args__ = (
+        UniqueConstraint("rule_id", "version", name="uq_trigger_rule_version"),
+    )
+
+    id: Mapped[str] = mapped_column(String, primary_key=True)
+    rule_id: Mapped[str] = mapped_column(
+        ForeignKey("trigger_rules.id", ondelete="CASCADE"), index=True
+    )
+    version: Mapped[int] = mapped_column(Integer)
+    graph: Mapped[dict] = mapped_column(JSON, default=dict)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    created_by: Mapped[Optional[str]] = mapped_column(String, nullable=True)

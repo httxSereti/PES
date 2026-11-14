@@ -256,6 +256,8 @@ class Database:
                     "budget_per_actor": "BOOLEAN DEFAULT 0",
                     "requires_approval": "BOOLEAN DEFAULT 0",
                     "approval_timeout_seconds": "INTEGER DEFAULT 300",
+                    "graph": "JSON",
+                    "graph_version": "INTEGER DEFAULT 0",
                 }
                 for column, sql_type in rule_migrations.items():
                     if column not in rule_columns:

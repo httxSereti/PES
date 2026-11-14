@@ -1,8 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 
 import { useAppSelector } from "@/store/hooks";
-
-const API_URL = import.meta.env.VITE_API_URL;
+import { eventsFetch } from "@/lib/api";
 
 export interface FlowRunSummary {
     id: string;
@@ -72,7 +71,7 @@ export function useFlowRuns(limit = 50) {
         setLoading(true);
         setError(null);
         try {
-            const response = await fetch(`${API_URL}/events/runs?limit=${limit}`, {
+            const response = await eventsFetch(`/events/runs?limit=${limit}`, {
                 headers: authHeaders(token),
             });
             if (!response.ok) throw new Error("Failed to load flow runs");
@@ -102,7 +101,7 @@ export function useFlowRun(runId: string | undefined) {
         setLoading(true);
         setError(null);
         try {
-            const response = await fetch(`${API_URL}/events/runs/${runId}`, {
+            const response = await eventsFetch(`/events/runs/${runId}`, {
                 headers: authHeaders(token),
             });
             if (!response.ok) throw new Error("Flow run not found");
@@ -134,7 +133,7 @@ export function useEventReplay() {
             setError(null);
             setResult(null);
             try {
-                const response = await fetch(`${API_URL}/events/${eventId}/replay`, {
+                const response = await eventsFetch(`/events/${eventId}/replay`, {
                     method: "POST",
                     headers: authHeaders(token),
                 });

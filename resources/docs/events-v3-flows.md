@@ -1,6 +1,6 @@
 # Events v3 — PES Flow et télémétrie
 
-> Statut : phases 0 à 4 implémentées côté moteur ; phase 5 (durcissement) entamée. Canvas en lecture seule ; l'édition graphique drag-and-drop reste à venir.
+> Statut : phases 0 à 4 implémentées côté moteur ; phase 5 (durcissement) entamée ; canvas éditable, sous-flows et diff de versions livrés.
 > Portée : moteur d'événements, éditeur de flows, télémétrie, schéma WS, base SQLite.
 > Documents liés : [events-v2.md](events-v2.md), [events-v2-code.md](events-v2-code.md), [events-trigger-rules-audit.md](events-trigger-rules-audit.md).
 > Intégrations : [events-v3-integrations.md](events-v3-integrations.md) — catalogue séparé, volontairement exclu de la roadmap moteur.
@@ -72,7 +72,7 @@ La direction retenue est **Rules + Drawer (F)** + **Composer (G)**, pas le canva
 - endpoint `POST /api/events/simulate` étendu avec `draft_rule` pour le dry-run du brouillon ;
 - compilateur `FlowSpec` linéaire (`events/flows/`) et plan compilé renvoyé par la simulation.
 
-Limites assumées : conditions plates (AND/OR), pas encore d'édition graphique drag-and-drop. Ces éléments restent la cible des directions A/B, à brancher plus tard sur le même IR.
+Limites assumées : conditions plates (AND/OR). L'édition graphique est désormais livrée pour les flows linéaires, avec branches parallèles exclues.
 
 Fichiers phase 1 : `events/conditions.py`, `events/modifiers.py`, `events/flows/`, `form/condition-builder.tsx`, `form/action-amplifier-fields.tsx`, `form/flow-map.tsx`, `form/rule-preview.tsx`, `console/rule-flow-drawer.tsx`, `hooks/useRuleSimulation.ts`.
 
@@ -98,7 +98,7 @@ La phase 2 est branchée :
 - `GET /api/events/runs`, `GET /api/events/runs/{id}`, `GET /api/events/{id}/trace` ;
 - `POST /api/events/{id}/replay` pour le dry-run d'un événement passé ;
 - UI `/app/events/runs` et `/app/events/runs/{id}` avec timeline, ledger et replay.
-- Canvas de lecture seule `/app/events/flows/{id}/canvas` : rend le `FlowSpec` compilé (nœuds WHEN/IF/THEN, arêtes, warnings) sans permettre l'édition pour l'instant.
+- Canvas `/app/events/flows/{id}/canvas` : graphe `FlowSpec` éditable, sous-flows `flow.call`, versions et diff visuel.
 
 ### 1.5 Phase 3 — moteur avancé
 
@@ -133,7 +133,27 @@ EVENTS_V3_RETENTION_DAYS=30
 WEBHOOK_ALLOW_PRIVATE=false
 ```
 
-Les éléments restants sont l'édition graphique drag-and-drop (A/B), les sous-flows/versioning visuel et les connecteurs nominatifs.
+### 1.8 Canvas éditable, sous-flows et versions
+
+Le canvas `/app/events/flows/{id}/canvas` est maintenant éditable sans dépendance React Flow :
+
+- déplacement des nœuds, ajout/suppression, connexion par ports, suppression d'arête ;
+- inspecteur par nœud : événements du trigger, condition, action (type, payload JSON, durée, cumulatif, modificateurs), appel de sous-flow ;
+- bouton **Save & apply** : le graphe est validé, compilé puis réécrit dans la règle (`event_types`, `conditions`, `actions`) ; les cooldowns, budgets, approbations, labels et priorités sont conservés ;
+- **Rebuild from rule** régénère le canvas depuis la règle courante ;
+- **sous-flows** : un nœud `flow.call` référence une autre règle ; ses conditions et actions sont inlinées à l'application du graphe ;
+- **versions** : chaque sauvegarde crée une `trigger_rule_versions` immuable. Le panneau Versions permet de comparer deux versions (ou une version et la version courante), avec nœuds/arêtes ajoutés en vert, supprimés en rouge et modifiés en ambre, puis de restaurer une version.
+
+API :
+
+- `GET /api/events/rules/{id}/graph?from_rule=false`
+- `PUT /api/events/rules/{id}/graph` (`{"graph": FlowSpec, "apply": true}`)
+- `GET /api/events/rules/{id}/versions`
+- `GET /api/events/rules/{id}/versions/{version}`
+- `GET /api/events/rules/{id}/diff?from_version=&to_version=`
+- `POST /api/events/rules/{id}/versions/{version}/restore`
+
+Le canvas reste **linéaire** : une seule arête sortante par nœud, pas de branches parallèles. Les branches, les sous-flows récursifs et l'édition multi-utilisateur temps réel restent hors périmètre. Les connecteurs nominatifs nécessitent toujours leurs credentials/ToS propres.
 
 ---
 
@@ -1260,7 +1280,7 @@ Les `priority`, `enabled`, `labels` et `event_links` sont conservés. Les action
 | **4. SDK connecteurs** | manifest, transports, PES Link, pairing, santé, privacy modes, sandbox                                                                                                                                                                                                | 0           | un connecteur de test peut émettre un événement et recevoir une action               |
 | **5. Durcissement**    | tests de charge, revue sécurité, docs, migration legacy complète, observabilité                                                                                                                                                                                       | 1–4         | `EVENTS_V3_ENABLED=true` par défaut, rollback testé                                  |
 
-> Phase 1 livrée dans la direction **F + G** : conditions, amplificateurs, preview de brouillon et drawer de flow. Le compilateur `FlowSpec` existe désormais et alimente un canvas de lecture seule ; l'édition graphique drag-and-drop reste reportée.
+> Phase 1 livrée dans la direction **F + G** : conditions, amplificateurs, preview de brouillon et drawer de flow. Le compilateur `FlowSpec` alimente désormais un canvas éditable avec sous-flows et diff de versions.
 >
 > Phases 2 à 4 livrées : télémétrie/runs, fenêtres/cooldowns/budgets/approbations, modificateurs `clamp`/`repeat`/`delay`/`probability`, webhook générique entrant et sortant, manifestes de connecteurs.
 

@@ -11,6 +11,15 @@ rule (or a flow spec) into a small, explicit operation list.
 from __future__ import annotations
 
 from .compiler import compile_flow_spec, compile_trigger_rule
+from .graph import (
+    GraphAction,
+    GraphPlan,
+    GraphValidationError,
+    compile_graph,
+    diff_graphs,
+    ensure_positions,
+    graph_from_rule,
+)
 from .spec import CompiledFlow, CompiledOp, FlowEdge, FlowNode, FlowSpec
 
 __all__ = [
@@ -19,6 +28,13 @@ __all__ = [
     "FlowEdge",
     "FlowNode",
     "FlowSpec",
+    "GraphAction",
+    "GraphPlan",
+    "GraphValidationError",
     "compile_flow_spec",
+    "compile_graph",
     "compile_trigger_rule",
+    "diff_graphs",
+    "ensure_positions",
+    "graph_from_rule",
 ]

@@ -1,4 +1,4 @@
-from .trigger_rule import TriggerRule
+from .trigger_rule import TriggerRule, TriggerRuleVersion
 from .trigger_action import TriggerAction
 from .triggered_event import TriggeredEvent
 from .trigger_rule_event import TriggerRuleEvent
@@ -24,6 +24,7 @@ from .flow import (
 
 __all__ = [
     "TriggerRule",
+    "TriggerRuleVersion",
     "TriggerAction",
     "TriggeredEvent",
     "TriggerRuleEvent",

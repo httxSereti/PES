@@ -14,6 +14,7 @@ from database.models import (
     TriggerRule,
     TriggerRuleEvent,
     TriggerRuleLabel,
+    TriggerRuleVersion,
 )
 from events.enums import ActionType
 
@@ -454,6 +455,11 @@ class TriggerRuleRepo:
             rule = await session.get(TriggerRule, rule_id)
             if not rule:
                 return False
+            await session.execute(
+                delete(TriggerRuleVersion).where(
+                    TriggerRuleVersion.rule_id == rule_id
+                )
+            )
             await session.delete(rule)
             await session.commit()
             return True

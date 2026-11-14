@@ -103,20 +103,26 @@ def compile_flow_spec(spec: FlowSpec) -> CompiledFlow:
     """Topologically compile a flow spec into `match/eval/emit` operations."""
 
     warnings: list[str] = []
-    by_id = {node.id: node for node in spec.nodes}
-    if len(by_id) != len(spec.nodes):
+    nodes = [FlowNode.model_validate(raw) for raw in spec.nodes]
+    by_id = {node.id: node for node in nodes}
+    if len(by_id) != len(nodes):
         warnings.append("duplicate node ids")
 
     adjacency: dict[str, list[str]] = defaultdict(list)
-    indegree: dict[str, int] = {node.id: 0 for node in spec.nodes}
-    for edge in spec.edges:
+    indegree: dict[str, int] = {node.id: 0 for node in nodes}
+    for raw_edge in spec.edges:
+        edge = (
+            raw_edge
+            if isinstance(raw_edge, FlowEdge)
+            else FlowEdge.model_validate(raw_edge)
+        )
         if edge.source not in by_id or edge.target not in by_id:
             warnings.append(f"edge references an unknown node: {edge.source}->{edge.target}")
             continue
         adjacency[edge.source].append(edge.target)
         indegree[edge.target] += 1
 
-    queue = deque([node.id for node in spec.nodes if indegree[node.id] == 0])
+    queue = deque([node.id for node in nodes if indegree[node.id] == 0])
     ordered: list[str] = []
     while queue:
         node_id = queue.popleft()
@@ -167,6 +173,12 @@ def compile_flow_spec(spec: FlowSpec) -> CompiledFlow:
                 warnings.append(f"action {node.id} has no action_type")
                 continue
             ops.append(CompiledOp(op="emit_action", node_id=node.id, config=config))
+        elif node.type == "flow.call":
+            config = node.config or {}
+            if not config.get("rule_id"):
+                warnings.append(f"subflow {node.id} has no rule_id")
+                continue
+            ops.append(CompiledOp(op="call_flow", node_id=node.id, config=config))
         else:
             warnings.append(f"unknown node type: {node.type}")
 

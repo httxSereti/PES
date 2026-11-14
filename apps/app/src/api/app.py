@@ -11,6 +11,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from api.rest import admin, auth, logs, users
 from api.rest import events_v3 as events_v3_router
+from api.rest import flow_graphs as flow_graphs_router
 from api.rest import integrations as integrations_router
 from api.rest import trigger_rules as trigger_rules_router
 from api.ws.endpoint import router as ws_router
@@ -131,6 +132,7 @@ async def lifespan(app: FastAPI):
         NodeRun,
     )
     from database.models.approval import ApprovalRequest  # noqa: F401
+    from database.models.trigger_rule import TriggerRuleVersion  # noqa: F401
 
     async with db._engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
@@ -209,6 +211,7 @@ for integration_router in integration_registry.routers():
     app.include_router(integration_router)
 app.include_router(trigger_rules_router.router)
 app.include_router(events_v3_router.router)
+app.include_router(flow_graphs_router.router)
 app.include_router(ws_router)
 
 app.add_middleware(
