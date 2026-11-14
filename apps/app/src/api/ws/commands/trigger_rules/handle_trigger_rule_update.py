@@ -7,6 +7,7 @@ from api.ws.schema import CommandResult, TriggerRulesUpdateCommand
 from database.connection import Database
 from database.models import TriggerRule, TriggerRuleEvent
 from database.repositories.trigger_rule_repo import unique_event_types
+from events.conditions import ConditionSpec
 from integrations import integration_registry
 from store import Store
 from typings import Permission
@@ -52,6 +53,17 @@ async def handle_trigger_rule_update(
                 status="error", message=f"Unknown event_types: {unknown}"
             )
 
+    if msg.payload.conditions is not None:
+        try:
+            if len(msg.payload.conditions) > 50:
+                raise ValueError("A rule can have at most 50 conditions")
+            for condition in msg.payload.conditions:
+                ConditionSpec.model_validate(condition)
+        except Exception as exc:
+            return CommandResult(
+                status="error", message=f"Invalid conditions: {exc}"
+            )
+
     try:
         async with Database.get_instance().session_maker() as session:
             rule = await session.get(
@@ -76,6 +88,10 @@ async def handle_trigger_rule_update(
                 rule.enabled = enabled
             if priority is not None:
                 rule.priority = priority
+            if msg.payload.conditions is not None:
+                rule.conditions = msg.payload.conditions
+            if msg.payload.condition_mode is not None:
+                rule.condition_mode = msg.payload.condition_mode
             if event_types is not None:
                 rule.event_type = event_types[0]
                 rule.event_links = [

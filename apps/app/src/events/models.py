@@ -29,6 +29,8 @@ class QueueItem:
     snapshot_data: Optional[dict] = None  # Unit state backup for reverse
     trigger_action_id: Optional[str] = None
     trigger_rule_id: Optional[str] = None
+    # Serializable trace of the modifiers that fired for this item (e.g. ×2).
+    applied_modifiers: list[dict] = field(default_factory=list)
     # Event chain depth of the event that caused this item. Integration
     # actions that can emit an event propagate this to the resulting echo.
     causation_depth: int = 0

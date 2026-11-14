@@ -3,9 +3,51 @@ import { ActionType, type TriggerAction, type TriggerRule } from "@/types/events
 
 // ───────── Schema ─────────
 
+export const CONDITION_OPERATORS = [
+    "eq",
+    "neq",
+    "gt",
+    "gte",
+    "lt",
+    "lte",
+    "in",
+    "not_in",
+    "contains",
+    "icontains",
+    "starts_with",
+    "ends_with",
+    "matches",
+    "exists",
+    "between",
+    "length",
+    "is_null",
+] as const;
+
+export type ConditionOperator = (typeof CONDITION_OPERATORS)[number];
+
+export const conditionSchema = z.object({
+    field: z.string().trim().min(1, "Field is required"),
+    op: z.enum(CONDITION_OPERATORS),
+    value: z.string(),
+    case_sensitive: z.boolean().default(true),
+});
+
+export type ConditionValues = z.infer<typeof conditionSchema>;
+
+const amplifierDefaults = {
+    amplifier_enabled: false,
+    amplifier_factor: 2,
+    amplifier_fields: ["value", "duration", "pct", "level_pct", "duration_minutes"] as string[],
+    amplifier_condition: null as ConditionValues | null,
+};
+
 const baseAction = z.object({
     duration: z.coerce.number().int().min(-1, "Use -1 for no expiry"),
     cumulative: z.boolean(),
+    amplifier_enabled: z.boolean().default(false),
+    amplifier_factor: z.coerce.number().min(1).max(10).default(2),
+    amplifier_fields: z.array(z.string()).default([]),
+    amplifier_condition: conditionSchema.nullable().default(null),
 });
 
 /** Actions that run once and are finalized immediately (no duration). */
@@ -234,6 +276,8 @@ export const formSchema = z.object({
     priority: z.coerce.number().int().min(0).max(100),
     enabled: z.boolean(),
     labels: z.array(z.string().min(1)),
+    conditions: z.array(conditionSchema),
+    condition_mode: z.enum(["all", "any"]),
     actions: z.array(actionSchema).min(1, "Add at least one action."),
 });
 
@@ -242,9 +286,9 @@ export type ActionValues = z.infer<typeof actionSchema>;
 
 /** Default payload when adding or switching to an action type. */
 export function defaultAction(action_type: ActionType): ActionValues {
-    const base = { duration: -1, cumulative: false };
+    const base = { duration: -1, cumulative: false, ...amplifierDefaults };
     // One-shot actions never stay in the queue: zero duration + cumulative.
-    const oneShot = { duration: 0, cumulative: true };
+    const oneShot = { duration: 0, cumulative: true, ...amplifierDefaults };
     switch (action_type) {
         case ActionType.PROFILE:
             return { ...base, action_type, profile: "", level_pct: 100 };
@@ -370,12 +414,28 @@ export function defaultAction(action_type: ActionType): ActionValues {
     }
 }
 
+/** Extract the amplifier settings of a persisted action. */
+function actionAmplifierValues(action: TriggerAction) {
+    const modifiers = Array.isArray(action.modifiers) ? action.modifiers : [];
+    const scale = modifiers.find((modifier) => modifier?.type === "scale");
+    if (!scale) {
+        return amplifierDefaults;
+    }
+    return {
+        amplifier_enabled: true,
+        amplifier_factor: Number(scale.factor ?? 2),
+        amplifier_fields: Array.isArray(scale.fields) ? scale.fields.map(String) : [],
+        amplifier_condition: scale.when ? conditionToForm(scale.when as Record<string, unknown>) : null,
+    };
+}
+
 /** Map a persisted action's payload back onto the form's per-type fields. */
 export function actionToFormValues(action: TriggerAction): ActionValues {
     const p = action.payload ?? {};
+    const amplifier = actionAmplifierValues(action);
     const base = isOneShotAction(action.action_type)
-        ? { duration: 0, cumulative: true }
-        : { duration: action.duration ?? -1, cumulative: action.cumulative ?? false };
+        ? { duration: 0, cumulative: true, ...amplifier }
+        : { duration: action.duration ?? -1, cumulative: action.cumulative ?? false, ...amplifier };
     switch (action.action_type) {
         case ActionType.PROFILE:
             return {
@@ -657,6 +717,64 @@ export function actionSummary(action: ActionValues): string {
     }
 }
 
+function valueToString(value: unknown): string {
+    if (value === null || value === undefined) return "";
+    if (Array.isArray(value)) return value.map((item) => String(item)).join(", ");
+    if (typeof value === "boolean") return value ? "true" : "false";
+    return String(value);
+}
+
+export function conditionToForm(raw: Record<string, unknown>): ConditionValues {
+    const op = CONDITION_OPERATORS.includes(raw.op as ConditionOperator)
+        ? (raw.op as ConditionOperator)
+        : "eq";
+    return {
+        field: String(raw.field ?? ""),
+        op,
+        value: valueToString(raw.value),
+        case_sensitive: Boolean(raw.case_sensitive ?? true),
+    };
+}
+
+function parseConditionAtom(raw: string): unknown {
+    const value = raw.trim();
+    if (!value) return "";
+    if (value === "true") return true;
+    if (value === "false") return false;
+    if (value === "null") return null;
+    if (/^-?\d+(\.\d+)?$/.test(value)) return Number(value);
+    return value;
+}
+
+export function toConditionBody(condition: ConditionValues): Record<string, unknown> {
+    const value =
+        condition.op === "in" || condition.op === "not_in"
+            ? condition.value
+                  .split(",")
+                  .map((item) => parseConditionAtom(item))
+                  .filter((item) => item !== "")
+            : condition.op === "between"
+              ? condition.value
+                    .split(",")
+                    .slice(0, 2)
+                    .map((item) => parseConditionAtom(item))
+              : parseConditionAtom(condition.value);
+    return {
+        field: condition.field.trim(),
+        op: condition.op,
+        value,
+        case_sensitive: condition.case_sensitive,
+    };
+}
+
+export function conditionSummary(condition: ConditionValues): string {
+    const value =
+        condition.op === "exists" || condition.op === "is_null"
+            ? ""
+            : ` ${condition.value || "?"}`;
+    return `${condition.field || "field"} ${condition.op}${value}`;
+}
+
 /** Build form defaults from an existing rule (for the edit page). */
 export function ruleToFormValues(rule: TriggerRule): FormValues {
     return {
@@ -666,6 +784,10 @@ export function ruleToFormValues(rule: TriggerRule): FormValues {
         priority: rule.priority,
         enabled: rule.enabled,
         labels: rule.labels.map((l) => l.name),
+        conditions: (rule.conditions ?? []).map((condition) =>
+            conditionToForm(condition as Record<string, unknown>)
+        ),
+        condition_mode: rule.condition_mode === "any" ? "any" : "all",
         actions:
             rule.actions.length > 0
                 ? [...rule.actions].sort((a, b) => a.sort_order - b.sort_order).map(actionToFormValues)
@@ -676,6 +798,19 @@ export function ruleToFormValues(rule: TriggerRule): FormValues {
 /** Turn a validated action into the WS { action_type, payload, duration, cumulative, sort_order } body. */
 export function toActionBody(action: ActionValues, sort_order: number) {
     const { action_type, duration, cumulative } = action;
+    const modifiers =
+        action.amplifier_enabled && action.amplifier_fields.length > 0
+            ? [
+                  {
+                      type: "scale",
+                      factor: action.amplifier_factor,
+                      fields: action.amplifier_fields,
+                      when: action.amplifier_condition
+                          ? toConditionBody(action.amplifier_condition)
+                          : null,
+                  },
+              ]
+            : [];
     let payload: Record<string, unknown>;
     switch (action.action_type) {
         case ActionType.PROFILE:
@@ -810,5 +945,5 @@ export function toActionBody(action: ActionValues, sort_order: number) {
             if (action.node_id) payload["node_id"] = action.node_id;
             break;
     }
-    return { action_type, payload, duration, cumulative, sort_order };
+    return { action_type, payload, duration, cumulative, sort_order, modifiers };
 }

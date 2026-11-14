@@ -10,9 +10,12 @@ from cuid2 import cuid_wrapper
 from database.models.triggered_event import TriggeredEvent
 from database.repositories.actor_repo import ActorRepo
 from database.repositories.triggered_event_repo import TriggeredEventRepo
-from events.enums import QueueItemStatus
+from events.enums import ActionType, QueueItemStatus
 from events.envelope import ActorRef, EventEnvelope, actor_ref_from_payload, build_envelope
-from events.models import QueueItem, TriggerRule
+from events.conditions import build_condition_context, evaluate_conditions
+from events.flows import compile_trigger_rule
+from events.models import QueueItem, TriggerAction, TriggerRule
+from events.modifiers import apply_modifiers
 from events.queue import ActionQueue
 from events.redaction import redact_payload, redact_triggered_rules
 from events.registry import EventRegistry
@@ -104,7 +107,7 @@ class EventDispatcher:
         started = time.perf_counter()
         event_id = generate_id()
         v3_config = get_v3_config()
-        if actor is not None and (v3_config.enabled or v3_config.shadow_mode):
+        if actor is not None:
             actor = await self._resolve_actor(actor)
         plan = await self._build_plan(
             event_id=event_id,
@@ -175,8 +178,7 @@ class EventDispatcher:
         event_data = event_data or {}
         event_id = generate_id()
         triggered_at = datetime.now(UTC)
-        v3_config = get_v3_config()
-        if actor is not None and (v3_config.enabled or v3_config.shadow_mode):
+        if actor is not None:
             actor = await self._resolve_actor(actor)
 
         if not self._session_allows_event(event_type):
@@ -277,6 +279,7 @@ class EventDispatcher:
         tags: list[str] | None = None,
         chain_depth: int = 0,
         source_integration_id: str | None = None,
+        draft_rule: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
         """
         Evaluate the current rules for an event without side effects.
@@ -304,9 +307,22 @@ class EventDispatcher:
             severity=severity,
             tags=tags,
             check_known=True,
+            draft_rule=draft_rule,
+            include_unmatched=True,
         )
 
         envelope_dict = redact_payload(plan.envelope.model_dump(mode="json"))
+
+        compiled_flows = []
+        for rule in plan.rules:
+            try:
+                _, compiled = compile_trigger_rule(rule, [event_type])
+                compiled_flows.append(compiled.model_dump(mode="json"))
+            except Exception:
+                logger.exception(
+                    "[Dispatcher] Failed to compile simulated flow",
+                    rule_id=getattr(rule, "id", None),
+                )
 
         warnings: list[str] = []
         if plan.skipped_reason == "unknown_event":
@@ -320,7 +336,10 @@ class EventDispatcher:
         elif plan.skipped_reason == "no_rules":
             warnings.append("No enabled trigger rule matches this event")
         elif plan.rules and not plan.items:
-            warnings.append("Matching rules produced no enabled action")
+            if plan.summary and not any(rule.get("matched", True) for rule in plan.summary):
+                warnings.append("The rule conditions did not match this event")
+            else:
+                warnings.append("Matching rules produced no enabled action")
 
         return {
             "event": envelope_dict,
@@ -340,6 +359,7 @@ class EventDispatcher:
                     "display_name": item.display_name,
                     "trigger_rule_id": item.trigger_rule_id,
                     "trigger_action_id": item.trigger_action_id,
+                    "modifiers": item.applied_modifiers,
                 }
                 for item in plan.items
             ],
@@ -349,6 +369,7 @@ class EventDispatcher:
             },
             "warnings": warnings,
             "shadow": get_v3_config().shadow_mode,
+            "compiled": compiled_flows,
         }
 
     async def _build_plan(
@@ -368,6 +389,8 @@ class EventDispatcher:
         severity: str,
         tags: list[str] | None,
         check_known: bool = False,
+        draft_rule: dict[str, Any] | None = None,
+        include_unmatched: bool = False,
     ) -> EventPlan:
         received_at = datetime.now(UTC)
         envelope = build_envelope(
@@ -401,27 +424,81 @@ class EventDispatcher:
         if chain_depth >= _MAX_EVENT_CHAIN_DEPTH:
             return EventPlan(envelope=envelope, skipped_reason="chain_depth")
 
-        rules = await self._registry.get_rules_for_event(event_type)
+        context = build_condition_context(
+            event_data,
+            actor,
+            session=store.get_active_session(),
+        )
+
+        if draft_rule is not None:
+            rules = [self._draft_rule_from_payload(draft_rule, event_type)]
+        else:
+            rules = await self._registry.get_rules_for_event(event_type)
         if not rules:
             return EventPlan(envelope=envelope, skipped_reason="no_rules")
 
         queue_items: list[QueueItem] = []
         triggered_rules_summary: list[dict] = []
         for rule in rules:
+            matched = evaluate_conditions(
+                getattr(rule, "conditions", []) or [],
+                getattr(rule, "condition_mode", "all") or "all",
+                context,
+            )
             items = self._rule_to_queue_items(
                 rule,
                 origin,
+                context=context,
                 source_integration_id=source_integration_id,
                 chain_depth=chain_depth,
+                conditions_matched=matched,
             )
             queue_items.extend(items)
-            triggered_rules_summary.append(self._build_rule_summary(rule, items))
+            if matched or items or include_unmatched:
+                triggered_rules_summary.append(
+                    self._build_rule_summary(rule, items, matched=matched)
+                )
 
         return EventPlan(
             envelope=envelope,
             rules=rules,
             items=queue_items,
             summary=triggered_rules_summary,
+        )
+
+    def _draft_rule_from_payload(
+        self, draft: dict[str, Any], event_type: str
+    ) -> TriggerRule:
+        """Build a transient rule for the Composer dry-run (never persisted)."""
+
+        actions: list[TriggerAction] = []
+        for index, raw in enumerate(draft.get("actions") or []):
+            action_type = raw.get("action_type")
+            if isinstance(action_type, str):
+                action_type = ActionType(action_type)
+            actions.append(
+                TriggerAction(
+                    id=f"draft-action-{index}",
+                    trigger_rule_id="draft-rule",
+                    action_type=action_type,
+                    payload=raw.get("payload") or {},
+                    duration=int(raw.get("duration", -1)),
+                    cumulative=bool(raw.get("cumulative", False)),
+                    sort_order=int(raw.get("sort_order", index)),
+                    modifiers=raw.get("modifiers") or [],
+                )
+            )
+
+        return TriggerRule(
+            id="draft-rule",
+            event_type=event_type,
+            name=draft.get("name") or "Draft rule",
+            description=draft.get("description"),
+            enabled=True,
+            priority=0,
+            conditions=draft.get("conditions") or [],
+            condition_mode=draft.get("condition_mode") or "all",
+            actions=actions,
         )
 
     def _active_session_id(self) -> str | None:
@@ -451,6 +528,7 @@ class EventDispatcher:
             update={
                 "id": resolved.id,
                 "display_name": actor.display_name or resolved.display_name,
+                "is_blocked": resolved.is_blocked,
             }
         )
 
@@ -551,7 +629,13 @@ class EventDispatcher:
         secret_fields = definition.secret_fields if definition else ()
         return redact_payload(payload, secret_fields)
 
-    def _build_rule_summary(self, rule: TriggerRule, queue_items: list[QueueItem]) -> dict:
+    def _build_rule_summary(
+        self,
+        rule: TriggerRule,
+        queue_items: list[QueueItem],
+        *,
+        matched: bool = True,
+    ) -> dict:
         """
         Build a serializable summary of a TriggerRule and its resulting QueueItems
         for storage in TriggeredEvent.triggered_rules and WS payloads.
@@ -560,6 +644,9 @@ class EventDispatcher:
             "rule_id": rule.id,
             "rule_name": rule.name,
             "priority": rule.priority,
+            "matched": matched,
+            "conditions": getattr(rule, "conditions", []) or [],
+            "condition_mode": getattr(rule, "condition_mode", "all") or "all",
             "actions": [
                 {
                     "queue_item_id": item.id,
@@ -571,6 +658,7 @@ class EventDispatcher:
                     "payload": self._redacted_action_payload(
                         item.action_type.value, item.payload
                     ),
+                    "modifiers": item.applied_modifiers,
                 }
                 for item in queue_items
                 if item.trigger_rule_id == rule.id
@@ -619,8 +707,10 @@ class EventDispatcher:
         rule: TriggerRule,
         origin: str,
         *,
+        context: dict | None = None,
         source_integration_id: str | None = None,
         chain_depth: int = 0,
+        conditions_matched: bool | None = None,
     ) -> list[QueueItem]:
         """
         Convert a TriggerRule's actions into QueueItems.
@@ -630,6 +720,15 @@ class EventDispatcher:
         Actions from the integration whose echo caused this event are also
         skipped: they are the feedback edge that would close the loop.
         """
+        if conditions_matched is None:
+            conditions_matched = evaluate_conditions(
+                getattr(rule, "conditions", []) or [],
+                getattr(rule, "condition_mode", "all") or "all",
+                context or {},
+            )
+        if not conditions_matched:
+            return []
+
         items = []
         for action in rule.actions:
             action_id = (
@@ -654,14 +753,20 @@ class EventDispatcher:
                 continue
             definition = self._integrations.get_action(action_id)
             one_shot = bool(definition and definition.one_shot)
+            payload, duration, applied_modifiers = apply_modifiers(
+                action.payload or {},
+                action.duration,
+                getattr(action, "modifiers", []) or [],
+                context or {},
+            )
             item = QueueItem(
                 id=generate_id(),
                 action_type=action.action_type,
-                payload=action.payload,
+                payload=payload,
                 # A one-shot action must not block the rest of the rule for
                 # an arbitrary duration: run it once, concurrently, and let
                 # the queue finalize it on the next tick.
-                duration=0 if one_shot else action.duration,
+                duration=0 if one_shot else duration,
                 cumulative=True if one_shot else action.cumulative,
                 priority=rule.priority,
                 status=QueueItemStatus.WAITING,
@@ -670,6 +775,7 @@ class EventDispatcher:
                 trigger_action_id=action.id,
                 trigger_rule_id=rule.id,
                 causation_depth=chain_depth + 1,
+                applied_modifiers=applied_modifiers,
                 created_at=datetime.now(),
             )
             items.append(item)

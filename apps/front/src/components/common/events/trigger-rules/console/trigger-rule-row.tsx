@@ -7,6 +7,7 @@ import {
     MoreVertical,
     Pencil,
     Trash2,
+    Workflow,
 } from "lucide-react";
 
 import { Button } from "@pes/ui/components/button";
@@ -37,6 +38,7 @@ export interface RuleInteractionProps {
     onToggleEnabled: () => void;
     onDuplicate: () => void;
     onDelete: () => void;
+    onPreviewFlow: () => void;
 }
 
 function RuleLabelChips({ labels }: { labels: TriggerRuleLabel[] }) {
@@ -102,10 +104,12 @@ function RuleMenu({
     rule,
     onDuplicate,
     onDelete,
+    onPreviewFlow,
 }: {
     rule: TriggerRule;
     onDuplicate: () => void;
     onDelete: () => void;
+    onPreviewFlow: () => void;
 }) {
     return (
         <DropdownMenu>
@@ -129,6 +133,16 @@ function RuleMenu({
                     Rule
                 </DropdownMenuLabel>
                 <DropdownMenuSeparator />
+                <DropdownMenuItem onSelect={onPreviewFlow}>
+                    <Workflow className="mr-2 h-3.5 w-3.5" />
+                    Flow preview
+                </DropdownMenuItem>
+                <DropdownMenuItem asChild>
+                    <Link to={`/app/events/flows/${rule.id}`}>
+                        <Workflow className="mr-2 h-3.5 w-3.5" />
+                        Flow editor
+                    </Link>
+                </DropdownMenuItem>
                 <DropdownMenuItem asChild>
                     <Link to={`/app/events/trigger-rules/${rule.id}/edit`}>
                         <Pencil className="mr-2 h-3.5 w-3.5" />
@@ -175,10 +189,12 @@ function RuleDetail({
     rule,
     stats,
     onDuplicate,
+    onPreviewFlow,
 }: {
     rule: TriggerRule;
     stats?: RuleFiringStats;
     onDuplicate: () => void;
+    onPreviewFlow: () => void;
 }) {
     const types = eventTypesOf(rule);
     const detailButton = "gap-1.5 text-xs shadow-none";
@@ -188,6 +204,16 @@ function RuleDetail({
             <div className="flex flex-wrap items-center justify-between gap-2">
                 <DetailMeta rule={rule} stats={stats} />
                 <div className="flex flex-wrap items-center gap-1">
+                    <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        className={detailButton}
+                        onClick={onPreviewFlow}
+                    >
+                        <Workflow />
+                        Flow preview
+                    </Button>
                     <Button asChild variant="outline" size="sm" className={detailButton}>
                         <Link to={`/app/events/trigger-rules/${rule.id}/edit`}>
                             <Pencil />
@@ -251,6 +277,7 @@ export function RuleRow({
     onToggleEnabled,
     onDuplicate,
     onDelete,
+    onPreviewFlow,
 }: RuleInteractionProps) {
     const types = eventTypesOf(rule);
     const detailId = `rule-detail-${rule.id}`;
@@ -322,14 +349,14 @@ export function RuleRow({
                 </td>
 
                 <td className="py-2.5 pr-4 text-right align-top">
-                    <RuleMenu rule={rule} onDuplicate={onDuplicate} onDelete={onDelete} />
+                    <RuleMenu rule={rule} onDuplicate={onDuplicate} onDelete={onDelete} onPreviewFlow={onPreviewFlow} />
                 </td>
             </tr>
 
             {expanded && (
                 <tr id={detailId} className="border-b border-border/60 bg-muted/15">
                     <td colSpan={7} className="px-4 py-4 lg:pl-16">
-                        <RuleDetail rule={rule} stats={stats} onDuplicate={onDuplicate} />
+                        <RuleDetail rule={rule} stats={stats} onDuplicate={onDuplicate} onPreviewFlow={onPreviewFlow} />
                     </td>
                 </tr>
             )}
@@ -345,6 +372,7 @@ export function RuleCard({
     onToggleEnabled,
     onDuplicate,
     onDelete,
+    onPreviewFlow,
 }: RuleInteractionProps) {
     const types = eventTypesOf(rule);
     const detailId = `rule-card-detail-${rule.id}`;
@@ -382,7 +410,7 @@ export function RuleCard({
                     onCheckedChange={onToggleEnabled}
                     aria-label={`${rule.enabled ? "Disable" : "Enable"} ${rule.name}`}
                 />
-                <RuleMenu rule={rule} onDuplicate={onDuplicate} onDelete={onDelete} />
+                <RuleMenu rule={rule} onDuplicate={onDuplicate} onDelete={onDelete} onPreviewFlow={onPreviewFlow} />
             </div>
 
             <div className="mt-2 space-y-1.5">
@@ -421,7 +449,7 @@ export function RuleCard({
 
             {expanded && (
                 <div id={detailId} className="mt-3 border-t border-border/50 pt-3">
-                    <RuleDetail rule={rule} stats={stats} onDuplicate={onDuplicate} />
+                    <RuleDetail rule={rule} stats={stats} onDuplicate={onDuplicate} onPreviewFlow={onPreviewFlow} />
                 </div>
             )}
         </div>

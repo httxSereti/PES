@@ -17,6 +17,8 @@ def _serialize_rule(rule) -> dict:
         "description": rule.description,
         "enabled": rule.enabled,
         "priority": rule.priority,
+        "conditions": rule.conditions or [],
+        "condition_mode": rule.condition_mode or "all",
         "actions": [_serialize_action(a) for a in rule.actions],
         "labels": [_serialize_label(a) for a in rule.labels],
         "created_at": to_utc_iso(rule.created_at),
@@ -35,6 +37,7 @@ def _serialize_action(action) -> dict:
         "duration": action.duration,
         "cumulative": action.cumulative,
         "sort_order": action.sort_order,
+        "modifiers": action.modifiers or [],
     }
 
 

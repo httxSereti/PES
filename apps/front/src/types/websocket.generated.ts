@@ -58,6 +58,7 @@ export interface ActorRef {
     display_name?: string | null;
     is_self: boolean;
     is_bot: boolean;
+    is_blocked: boolean;
     roles: string[];
     trust: number;
     metadata: Record<string, unknown>;
@@ -109,6 +110,8 @@ export interface TriggerRuleUpdatePayload {
     event_types?: string[] | null;
     enabled?: boolean | null;
     priority?: number | null;
+    conditions?: Record<string, unknown>[] | null;
+    condition_mode?: 'all' | 'any' | null;
 }
 
 export interface TriggerRuleDraft {
@@ -118,6 +121,8 @@ export interface TriggerRuleDraft {
     description?: string | null;
     enabled: boolean;
     priority: number;
+    conditions: Record<string, unknown>[];
+    condition_mode: 'all' | 'any';
     actions: TriggerActionDraft[];
     labels: string[];
 }
@@ -128,6 +133,7 @@ export interface TriggerActionDraft {
     duration: number;
     cumulative: boolean;
     sort_order: number;
+    modifiers: Record<string, unknown>[];
 }
 
 export interface TriggerRuleDeletePayload {
@@ -504,6 +510,8 @@ export interface TriggerRule {
     description: string | null;
     enabled: boolean;
     priority: number;
+    conditions: Record<string, unknown>[];
+    condition_mode: 'all' | 'any';
     actions: TriggerAction[];
     labels: TriggerRuleLabel[];
     created_at?: string | null;
@@ -518,6 +526,7 @@ export interface TriggerAction {
     duration: number;
     cumulative: boolean;
     sort_order: number;
+    modifiers: Record<string, unknown>[];
 }
 
 export interface TriggerRuleLabel {
@@ -727,6 +736,7 @@ export interface TriggeredAction {
     duration: number;
     cumulative: boolean;
     payload: Record<string, unknown>;
+    modifiers: Record<string, unknown>[];
 }
 
 export interface QueueStatus {

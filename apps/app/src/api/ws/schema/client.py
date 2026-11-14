@@ -185,6 +185,8 @@ class TriggerRuleUpdatePayload(WireModel):
     event_types: list[str] | None = None
     enabled: bool | None = None
     priority: int | None = None
+    conditions: list[dict[str, Any]] | None = None
+    condition_mode: Literal["all", "any"] | None = None
 
 
 class TriggerRulesUpdateCommand(ClientMessage):
@@ -198,6 +200,7 @@ class TriggerActionDraft(WireModel):
     duration: int = -1
     cumulative: bool = False
     sort_order: int = 0
+    modifiers: list[dict[str, Any]] = Field(default_factory=list)
 
 
 class TriggerRuleDraft(WireModel):
@@ -208,6 +211,8 @@ class TriggerRuleDraft(WireModel):
     description: str | None = None
     enabled: bool = True
     priority: int = 0
+    conditions: list[dict[str, Any]] = Field(default_factory=list)
+    condition_mode: Literal["all", "any"] = "all"
     actions: list[TriggerActionDraft] = []
     labels: list[str] = []
 

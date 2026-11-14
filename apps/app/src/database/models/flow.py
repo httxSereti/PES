@@ -144,7 +144,7 @@ class EffectLedger(Base):
     target: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)
     params_before: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)
     params_after: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)
-    modifiers: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)
+    modifiers: Mapped[Optional[list]] = mapped_column(JSON, nullable=True)
     clamp: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)
     blocked_reason: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     status: Mapped[str] = mapped_column(String, default="planned")

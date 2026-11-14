@@ -33,6 +33,7 @@ import { TokenComposer } from "./token-composer";
 import { DurationInput } from "./duration-input";
 import { MagicNumberInput } from "./magic-number-input";
 import { LovenseActionFields } from "./lovense-action-fields";
+import ActionAmplifierFields from "./action-amplifier-fields";
 
 export default function TriggerRuleActionFields({
     index,
@@ -789,6 +790,12 @@ export default function TriggerRuleActionFields({
                                 />
                             </>
                         )}
+
+                        <ActionAmplifierFields
+                            index={index}
+                            control={control}
+                            actionType={actionType}
+                        />
                     </FieldGroup>
                 </div>
             )}

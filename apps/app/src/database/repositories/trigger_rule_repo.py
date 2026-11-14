@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import List, Optional
 
 from cuid2 import cuid_wrapper
@@ -29,6 +29,7 @@ class TriggerActionSpec:
     duration: int = -1
     cumulative: bool = False
     sort_order: int = 0
+    modifiers: list[dict] = field(default_factory=list)
 
 
 def _build_event_links(event_types: List[str]) -> List[TriggerRuleEvent]:
@@ -50,6 +51,7 @@ def _build_actions(
             duration=spec.duration,
             cumulative=spec.cumulative,
             sort_order=spec.sort_order,
+            modifiers=spec.modifiers,
         )
         for spec in specs
     ]
@@ -177,6 +179,8 @@ class TriggerRuleRepo:
         description: Optional[str] = None,
         enabled: bool = True,
         priority: int = 0,
+        conditions: Optional[List[dict]] = None,
+        condition_mode: str = "all",
     ) -> TriggerRule:
         """Create a new trigger rule bound to one or more event types."""
         types = unique_event_types(event_types)
@@ -190,6 +194,8 @@ class TriggerRuleRepo:
             description=description,
             enabled=enabled,
             priority=priority,
+            conditions=conditions or [],
+            condition_mode=condition_mode,
             event_links=[
                 TriggerRuleEvent(event_type=event_type, sort_order=index)
                 for index, event_type in enumerate(types)
@@ -211,6 +217,8 @@ class TriggerRuleRepo:
         priority: int,
         actions: List[TriggerActionSpec],
         labels: List[str],
+        conditions: Optional[List[dict]] = None,
+        condition_mode: str = "all",
     ) -> tuple[TriggerRule, List[TriggerRuleLabel]]:
         """
         Create a rule, its actions and its labels in one transaction.
@@ -231,6 +239,8 @@ class TriggerRuleRepo:
                 description=description,
                 enabled=enabled,
                 priority=priority,
+                conditions=conditions or [],
+                condition_mode=condition_mode,
                 event_links=_build_event_links(types),
                 actions=_build_actions(rule_id, actions),
             )
@@ -253,6 +263,8 @@ class TriggerRuleRepo:
         description: Optional[str] = None,
         enabled: Optional[bool] = None,
         priority: Optional[int] = None,
+        conditions: Optional[List[dict]] = None,
+        condition_mode: Optional[str] = None,
         event_types: Optional[List[str]] = None,
     ) -> Optional[TriggerRule]:
         """Update a trigger rule. Only provided fields are updated."""
@@ -277,6 +289,10 @@ class TriggerRuleRepo:
                 rule.enabled = enabled
             if priority is not None:
                 rule.priority = priority
+            if conditions is not None:
+                rule.conditions = conditions
+            if condition_mode is not None:
+                rule.condition_mode = condition_mode
             if types is not None:
                 rule.event_type = types[0]
                 # Delete the old links before inserting the new ones: their
@@ -302,6 +318,8 @@ class TriggerRuleRepo:
         priority: int,
         actions: List[TriggerActionSpec],
         labels: List[str],
+        conditions: Optional[List[dict]] = None,
+        condition_mode: str = "all",
     ) -> tuple[Optional[TriggerRule], List[TriggerRuleLabel]]:
         """
         Update a rule and fully replace its actions/labels in one transaction.
@@ -331,6 +349,8 @@ class TriggerRuleRepo:
             rule.description = description
             rule.enabled = enabled
             rule.priority = priority
+            rule.conditions = conditions or []
+            rule.condition_mode = condition_mode
             rule.event_type = types[0]
 
             # Flush the deletes first so the inserts below cannot race the

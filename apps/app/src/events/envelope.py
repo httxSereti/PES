@@ -27,6 +27,7 @@ class ActorRef(BaseModel):
     display_name: str | None = None
     is_self: bool = False
     is_bot: bool = False
+    is_blocked: bool = False
     roles: list[str] = Field(default_factory=list)
     trust: float = 0.5
     # `metadata` is fine on a pydantic model; only SQLAlchemy reserves it.

@@ -21,12 +21,22 @@ import TriggerRuleActionFields from "./trigger-rule-action-fields";
 import TriggerRuleLabelSelect from "./trigger-rule-label-select";
 import { ActionExplorer } from "./action-explorer";
 import { EventSelection } from "./event-explorer";
+import ConditionBuilder from "./condition-builder";
+import RulePreview from "./rule-preview";
 import { SwitchRow } from "./switch-row";
-import { actionSummary, defaultAction, formSchema, ruleToFormValues, toActionBody, type FormValues } from "./schema";
+import { actionSummary, defaultAction, formSchema, ruleToFormValues, toActionBody, toConditionBody, type FormValues } from "./schema";
 
 const BACK_PATH = "/app/events/trigger-rules";
 
-export default function TriggerRuleForm({ rule }: { rule?: TriggerRule }) {
+export default function TriggerRuleForm({
+    rule,
+    mode = "rule",
+}: {
+    rule?: TriggerRule;
+    mode?: "rule" | "flow";
+}) {
+    const isFlow = mode === "flow";
+    const backPath = isFlow ? "/app/events/flows" : BACK_PATH;
     const dispatch = useAppDispatch();
     const navigate = useNavigate();
     const { sendCommand } = useWebSocket();
@@ -53,6 +63,8 @@ export default function TriggerRuleForm({ rule }: { rule?: TriggerRule }) {
                   priority: 0,
                   enabled: true,
                   labels: [],
+                  conditions: [],
+                  condition_mode: "all",
                   actions: [defaultAction(ActionType.LEVEL)],
               },
     });
@@ -124,6 +136,8 @@ export default function TriggerRuleForm({ rule }: { rule?: TriggerRule }) {
                 enabled: values.enabled,
                 priority: values.priority,
                 labels: values.labels,
+                conditions: values.conditions.map(toConditionBody),
+                condition_mode: values.condition_mode,
                 actions: values.actions.map((action, i) => toActionBody(action, i)),
             };
 
@@ -143,16 +157,16 @@ export default function TriggerRuleForm({ rule }: { rule?: TriggerRule }) {
                 dispatch(triggerRuleAdded(result.rule));
             }
 
-            toast.success(`Trigger rule '${values.name}' ${isEdit ? "updated" : "created"}`, {
+            toast.success(`${isFlow ? "Flow" : "Trigger rule"} '${values.name}' ${isEdit ? "updated" : "created"}`, {
                 description: `${values.actions.length} action${values.actions.length > 1 ? "s" : ""} on ${values.event_types.length} event${values.event_types.length > 1 ? "s" : ""}`,
                 position: "bottom-right",
             });
 
-            navigate(BACK_PATH);
+            navigate(backPath);
         } catch (err) {
             const message = err instanceof Error ? err.message : "An error has occurred";
             setApiError(message);
-            toast.error(`Failed to ${isEdit ? "update" : "create"} trigger rule`, {
+            toast.error(`Failed to ${isEdit ? "update" : "create"} ${isFlow ? "flow" : "trigger rule"}`, {
                 description: message,
                 position: "top-right",
             });
@@ -167,18 +181,22 @@ export default function TriggerRuleForm({ rule }: { rule?: TriggerRule }) {
                 <div className="flex flex-wrap items-end justify-between gap-3">
                     <div>
                         <p className="font-mono text-[9px] uppercase tracking-widest text-muted-foreground/40">
-                            Trigger rules / {isEdit ? "Edit" : "New"}
+                            {isFlow ? `Flows / ${isEdit ? "Edit" : "New"}` : `Trigger rules / ${isEdit ? "Edit" : "New"}`}
                         </p>
                         <h1 className="text-xl font-semibold tracking-tight">
-                            {isEdit ? "Edit trigger rule" : "New trigger rule"}
+                            {isFlow ? "Flow editor" : isEdit ? "Edit trigger rule" : "New trigger rule"}
                         </h1>
                         <p className="text-xs text-muted-foreground/60">
-                            Pick one or more events, then compose the action chain.
+                            {isFlow
+                                ? "Conditions, actions and modifiers in one page."
+                                : "Pick one or more events, then compose the action chain."}
                         </p>
                     </div>
                     <div className="flex items-center gap-1.5 font-mono text-[10px] text-muted-foreground/50">
                         <span className="size-1.5 rounded-full bg-amber-500" />
-                        {isEdit ? "Editing rule · unsaved changes" : "Draft · not saved yet"}
+                        {isEdit
+                            ? `Editing ${isFlow ? "flow" : "rule"} · unsaved changes`
+                            : "Draft · not saved yet"}
                     </div>
                 </div>
 
@@ -220,7 +238,29 @@ export default function TriggerRuleForm({ rule }: { rule?: TriggerRule }) {
                                 <div className="flex items-center justify-between gap-2">
                                     <div>
                                         <CardTitle className="font-mono text-[10px] uppercase tracking-widest text-muted-foreground/50">
-                                            02 · Then do this
+                                            02 · If these conditions match
+                                        </CardTitle>
+                                        <p className="mt-1 text-xs text-muted-foreground/60">
+                                            Optional guards evaluated before any action. Leave empty to always run.
+                                        </p>
+                                    </div>
+                                    <span className="shrink-0 font-mono text-[9px] text-muted-foreground/40">
+                                        {form.watch("conditions").length} condition
+                                        {form.watch("conditions").length === 1 ? "" : "s"}
+                                    </span>
+                                </div>
+                            </CardHeader>
+                            <CardContent>
+                                <ConditionBuilder control={form.control} />
+                            </CardContent>
+                        </Card>
+
+                        <Card className="gap-2 py-4">
+                            <CardHeader className="pb-1">
+                                <div className="flex items-center justify-between gap-2">
+                                    <div>
+                                        <CardTitle className="font-mono text-[10px] uppercase tracking-widest text-muted-foreground/50">
+                                            03 · Then do this
                                         </CardTitle>
                                         <p className="mt-1 text-xs text-muted-foreground/60">
                                             Actions run top to bottom.
@@ -381,6 +421,16 @@ export default function TriggerRuleForm({ rule }: { rule?: TriggerRule }) {
                                             </span>
                                         </div>
                                         <div className="flex items-center justify-between gap-3">
+                                            <span className="text-muted-foreground/40">IF</span>
+                                            <span>
+                                                {form.watch("conditions").length === 0
+                                                    ? "always"
+                                                    : `${form.watch("conditions").length} condition${
+                                                          form.watch("conditions").length === 1 ? "" : "s"
+                                                      }`}
+                                            </span>
+                                        </div>
+                                        <div className="flex items-center justify-between gap-3">
                                             <span className="text-muted-foreground/40">THEN</span>
                                             <span>
                                                 {fields.length} action
@@ -394,12 +444,14 @@ export default function TriggerRuleForm({ rule }: { rule?: TriggerRule }) {
                                     </div>
                                 </div>
 
+                                <RulePreview values={form.watch()} />
+
                                 <div className="hidden gap-2 pt-2 xl:flex">
                                     <Button
                                         type="button"
                                         variant="ghost"
                                         className="flex-1"
-                                        onClick={() => navigate(BACK_PATH)}
+                                        onClick={() => navigate(backPath)}
                                         disabled={isSubmitting}
                                     >
                                         Cancel

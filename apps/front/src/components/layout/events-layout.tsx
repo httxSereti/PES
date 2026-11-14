@@ -1,7 +1,7 @@
 import { useAppSelector } from "@/store/hooks";
 import { useEffect, useMemo, useRef } from "react";
 import { Link, Navigate, Outlet, useLocation } from "react-router";
-import { Activity, History, LayoutDashboard, Plus, Zap } from "lucide-react";
+import { Activity, History, LayoutDashboard, Plus, Workflow, Zap } from "lucide-react";
 import { Button } from "@pes/ui/components/button";
 import { triggerRulesSelectors } from "@/store/slices/triggerRulesSlice";
 
@@ -9,6 +9,7 @@ const TABS = [
     { to: "/app/events", label: "Dashboard", icon: LayoutDashboard, end: true },
     { to: "/app/events/triggered", label: "Triggered Events", icon: Activity, end: false },
     { to: "/app/events/trigger-rules", label: "Trigger Rules", icon: Zap, end: false },
+    { to: "/app/events/flows", label: "Flows", icon: Workflow, end: false },
     { to: "/app/events/trigger-rules/triggered", label: "Rule History", icon: History, end: true },
 ] as const;
 
@@ -44,6 +45,7 @@ export default function EventsLayout() {
     const tabCounts: Record<string, number> = {
         "/app/events/triggered": events.length,
         "/app/events/trigger-rules": rulesCount,
+        "/app/events/flows": rulesCount,
         "/app/events/trigger-rules/triggered": firedRulesCount,
     };
 

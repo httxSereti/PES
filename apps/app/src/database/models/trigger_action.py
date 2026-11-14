@@ -20,6 +20,8 @@ class TriggerAction(Base):
     duration: Mapped[int] = mapped_column(Integer, default=-1)
     cumulative: Mapped[bool] = mapped_column(Boolean, default=False)
     sort_order: Mapped[int] = mapped_column(Integer, default=0)
+    # Declarative modifiers (scale/repeat/...) applied at dispatch time.
+    modifiers: Mapped[list] = mapped_column(JSON, default=list)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
 
     # Relationships

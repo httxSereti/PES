@@ -22,6 +22,7 @@ import {
 import type { TriggerRule } from "@/types";
 
 import { RuleCard, RuleRow } from "./trigger-rule-row";
+import RuleFlowDrawer from "./rule-flow-drawer";
 import {
     TriggerRulesToolbar,
     type RuleSort,
@@ -72,6 +73,7 @@ export default function TriggerRulesConsole() {
     const [source, setSource] = useState("all");
     const [sort, setSort] = useState<RuleSort>("priority");
     const [expandedId, setExpandedId] = useState<string | null>(null);
+    const [previewRule, setPreviewRule] = useState<TriggerRule | null>(null);
     const [deleteTarget, setDeleteTarget] = useState<TriggerRule | null>(null);
     const [deleting, setDeleting] = useState(false);
 
@@ -251,6 +253,8 @@ export default function TriggerRulesConsole() {
                     enabled: false,
                     priority: rule.priority,
                     labels: rule.labels.map((label) => label.name),
+                    conditions: rule.conditions ?? [],
+                    condition_mode: rule.condition_mode ?? "all",
                     actions: [...rule.actions]
                         .sort((a, b) => a.sort_order - b.sort_order)
                         .map((action, index) => ({
@@ -258,6 +262,7 @@ export default function TriggerRulesConsole() {
                             payload: action.payload,
                             duration: action.duration,
                             cumulative: action.cumulative,
+                            modifiers: action.modifiers ?? [],
                             sort_order: index,
                         })),
                 });
@@ -318,6 +323,7 @@ export default function TriggerRulesConsole() {
         onToggleEnabled: () => void toggleEnabled(rule),
         onDuplicate: () => void duplicateRule(rule),
         onDelete: () => setDeleteTarget(rule),
+        onPreviewFlow: () => setPreviewRule(rule),
     });
 
     return (
@@ -418,9 +424,12 @@ export default function TriggerRulesConsole() {
                 busy={deleting}
                 onConfirm={() => void confirmDelete()}
             />
+
+            <RuleFlowDrawer rule={previewRule} onClose={() => setPreviewRule(null)} />
         </div>
     );
 }
+
 
 function EmptyState() {
     return (

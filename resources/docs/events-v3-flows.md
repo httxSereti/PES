@@ -1,6 +1,6 @@
 # Events v3 — PES Flow et télémétrie
 
-> Statut : phase 0 implémentée (enveloppe, acteurs, tables flow/runs/ledger, simulation, shadow) ; phases 1+ à implémenter.
+> Statut : phases 0 et 1 (F + G) implémentées ; compilateur de graphe et éditeur canvas à venir.
 > Portée : moteur d'événements, éditeur de flows, télémétrie, schéma WS, base SQLite.
 > Documents liés : [events-v2.md](events-v2.md), [events-v2-code.md](events-v2-code.md), [events-trigger-rules-audit.md](events-trigger-rules-audit.md).
 > Intégrations : [events-v3-integrations.md](events-v3-integrations.md) — catalogue séparé, volontairement exclu de la roadmap moteur.
@@ -58,7 +58,23 @@ Le socle backend est en place :
 
 Fichiers principaux : `events/envelope.py`, `events/v3/`, `database/models/actor.py`, `database/models/flow.py`, `database/repositories/actor_repo.py`, `database/repositories/flow_repo.py`, `api/rest/events_v3.py`.
 
-Les phases 1+ (compilateur de flows, éditeur visuel, planner, UI de télémétrie) restent à faire.
+Les éléments non couverts par F+G (compilateur de graphe, éditeur canvas, planner complet, UI de télémétrie) restent à faire.
+
+### 1.2 État d'implémentation — phase 1 (F + G)
+
+La direction retenue est **Rules + Drawer (F)** + **Composer (G)**, pas le canvas. La phase 1 livre donc une version linéaire, incrémentale, sur le modèle `TriggerRule` existant :
+
+- conditions JSON (`trigger_rules.conditions`, `condition_mode`) évaluées avant les actions ;
+- amplificateurs (`trigger_actions.modifiers`) de type `scale`, avec condition optionnelle ;
+- formulaire Composer : builder de conditions, bloc amplificateur par action, preview live ;
+- routes d'éditeur dédiées : `/app/events/flows/new` et `/app/events/flows/:id` ;
+- drawer « Flow preview » depuis la liste des règles ;
+- endpoint `POST /api/events/simulate` étendu avec `draft_rule` pour le dry-run du brouillon ;
+- compilateur `FlowSpec` linéaire (`events/flows/`) et plan compilé renvoyé par la simulation.
+
+Limites assumées : conditions plates (AND/OR), modificateur `scale` uniquement, pas encore de `FlowSpec`/compilateur de graphe ni d'éditeur canvas. Ces éléments restent la cible des directions A/B, à brancher plus tard sur le même IR.
+
+Fichiers phase 1 : `events/conditions.py`, `events/modifiers.py`, `events/flows/`, `form/condition-builder.tsx`, `form/action-amplifier-fields.tsx`, `form/rule-preview.tsx`, `console/rule-flow-drawer.tsx`, `hooks/useRuleSimulation.ts`.
 
 ---
 
@@ -819,6 +835,8 @@ Content-Type: application/json
 
 La réponse contient `event` (enveloppe), `matched`, `skipped_reason`, `rules`, `queue_items`, `counts` et `warnings`. `GET /api/events/v3/status` expose les flags `enabled`, `shadow_mode` et `max_workers`.
 
+Le body accepte aussi `draft_rule` (`{ conditions, condition_mode, actions }`) : le Composer l'utilise pour un dry-run sans persister la règle.
+
 ### 8.2 WebSocket
 
 - `flows:load` / `flows:loaded`
@@ -851,15 +869,15 @@ Ne jamais éditer `*.generated.ts` à la main.
 
 ### 9.1 Routes
 
-| Route                       | Contenu                           |
-| --------------------------- | --------------------------------- |
-| `/app/events/flows`         | liste des flows, filtres, statuts |
-| `/app/events/flows/new`     | créer un flow                     |
-| `/app/events/flows/:flowId` | éditeur visuel                    |
-| `/app/events/runs`          | liste des runs                    |
-| `/app/events/runs/:runId`   | trace complète                    |
-| `/app/events/telemetry`     | métriques, alertes, dead-letter   |
-| `/app/events/trigger-rules` | mode simple existant              |
+| Route                       | Contenu                         |
+| --------------------------- | ------------------------------- |
+| `/app/events/flows`         | liste des flows (cartes)        |
+| `/app/events/flows/new`     | créer un flow                   |
+| `/app/events/flows/:id`     | éditeur Composer                |
+| `/app/events/runs`          | liste des runs                  |
+| `/app/events/runs/:runId`   | trace complète                  |
+| `/app/events/telemetry`     | métriques, alertes, dead-letter |
+| `/app/events/trigger-rules` | mode simple existant            |
 
 ### 9.2 Éditeur
 
@@ -1062,6 +1080,7 @@ ALTER TABLE triggered_events ADD COLUMN version INTEGER DEFAULT 1;
 -- trigger_rules
 ALTER TABLE trigger_rules ADD COLUMN flow_id TEXT;
 ALTER TABLE trigger_rules ADD COLUMN conditions JSON;
+ALTER TABLE trigger_rules ADD COLUMN condition_mode TEXT DEFAULT 'all';
 ALTER TABLE trigger_rules ADD COLUMN window_spec JSON;
 ALTER TABLE trigger_rules ADD COLUMN cooldown_spec JSON;
 ALTER TABLE trigger_rules ADD COLUMN budget_spec JSON;
@@ -1075,6 +1094,7 @@ ALTER TABLE trigger_rules ADD COLUMN schema_version INTEGER DEFAULT 1;
 ALTER TABLE trigger_actions ADD COLUMN delay_seconds INTEGER DEFAULT 0;
 ALTER TABLE trigger_actions ADD COLUMN condition JSON;
 ALTER TABLE trigger_actions ADD COLUMN clamp_spec JSON;
+ALTER TABLE trigger_actions ADD COLUMN modifiers JSON;
 ```
 
 Index recommandés :
@@ -1174,6 +1194,8 @@ Les `priority`, `enabled`, `labels` et `event_links` sont conservés. Les action
 | **3. Flows avancés**   | fenêtres/agrégats, cooldowns, budgets, approbations, subflows, diff de versions, atomicité                                                                                                                                                                            | 1, 2        | une règle « 10 réactions en 5 min » et une règle « max 3/heure/acteur » fonctionnent |
 | **4. SDK connecteurs** | manifest, transports, PES Link, pairing, santé, privacy modes, sandbox                                                                                                                                                                                                | 0           | un connecteur de test peut émettre un événement et recevoir une action               |
 | **5. Durcissement**    | tests de charge, revue sécurité, docs, migration legacy complète, observabilité                                                                                                                                                                                       | 1–4         | `EVENTS_V3_ENABLED=true` par défaut, rollback testé                                  |
+
+> Phase 1 livrée dans la direction **F + G** : conditions, amplificateurs, preview de brouillon et drawer de flow. Le compilateur `FlowSpec`/éditeur canvas est reporté à une phase ultérieure.
 
 ### 12.1 MVP concret
 

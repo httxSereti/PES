@@ -242,6 +242,34 @@ class Database:
                         )
                     )
 
+            result = await conn.execute(text("PRAGMA table_info(trigger_rules)"))
+            rule_columns = {row[1] for row in result.fetchall()}
+            if rule_columns:
+                rule_migrations = {
+                    "conditions": "JSON",
+                    "condition_mode": "VARCHAR DEFAULT 'all'",
+                }
+                for column, sql_type in rule_migrations.items():
+                    if column not in rule_columns:
+                        await conn.execute(
+                            text(
+                                "ALTER TABLE trigger_rules "
+                                f"ADD COLUMN {column} {sql_type}"
+                            )
+                        )
+                        logger.info(f"[Database] Added trigger_rules.{column}")
+
+            result = await conn.execute(text("PRAGMA table_info(trigger_actions)"))
+            action_columns = {row[1] for row in result.fetchall()}
+            if action_columns and "modifiers" not in action_columns:
+                await conn.execute(
+                    text(
+                        "ALTER TABLE trigger_actions "
+                        "ADD COLUMN modifiers JSON"
+                    )
+                )
+                logger.info("[Database] Added trigger_actions.modifiers")
+
     @property
     def session_maker(self) -> async_sessionmaker:
         return self._session_maker

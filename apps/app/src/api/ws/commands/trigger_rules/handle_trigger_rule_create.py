@@ -10,6 +10,8 @@ from database.repositories.trigger_rule_repo import (
     unique_event_types,
 )
 from events.enums import ActionType
+from events.conditions import ConditionSpec
+from events.modifiers import ScaleModifier
 from integrations import integration_registry
 from typings import Permission
 
@@ -57,12 +59,28 @@ async def handle_trigger_rule_create(
                 message=f"Invalid action_type. Must be one of: {[t.value for t in ActionType]}",
             )
 
+    try:
+        if len(msg.payload.conditions) > 50:
+            raise ValueError("A rule can have at most 50 conditions")
+        for condition in msg.payload.conditions:
+            ConditionSpec.model_validate(condition)
+        for action in actions:
+            if len(action.modifiers) > 20:
+                raise ValueError("An action can have at most 20 modifiers")
+            for modifier in action.modifiers:
+                ScaleModifier.model_validate(modifier)
+    except Exception as exc:
+        return CommandResult(
+            status="error", message=f"Invalid conditions/modifiers: {exc}"
+        )
+
     action_specs = [
         TriggerActionSpec(
             action_type=action.action_type,
             payload=action.payload,
             duration=action.duration,
             cumulative=action.cumulative,
+            modifiers=action.modifiers,
             # old dict fallback: an omitted sort_order meant "use the index"
             sort_order=(
                 action.sort_order
@@ -84,6 +102,8 @@ async def handle_trigger_rule_create(
             priority=msg.payload.priority,
             actions=action_specs,
             labels=labels,
+            conditions=msg.payload.conditions,
+            condition_mode=msg.payload.condition_mode,
         )
         # The repository returns the fully loaded rule for serialization.
         serialized = _serialize_rule(rule)

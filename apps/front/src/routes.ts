@@ -25,6 +25,12 @@ export default [
                 route("new", "pages/app/events/trigger-rules/new.tsx"),
                 route(":id/edit", "pages/app/events/trigger-rules/edit.tsx"),
             ]),
+
+            ...prefix("flows", [
+                index("pages/app/events/flows/index.tsx"),
+                route("new", "pages/app/events/flows/new.tsx"),
+                route(":id", "pages/app/events/flows/edit.tsx"),
+            ]),
         ]),
 
         route("training", "components/layout/training-layout.tsx", [

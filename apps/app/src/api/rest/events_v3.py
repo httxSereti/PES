@@ -7,19 +7,37 @@ would-be queue items without persisting or enqueueing anything.
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Any
+from typing import Any, Literal
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 
 from api.helpers import require_permission
 from events.dispatcher import EventDispatcher
+from events.enums import ActionType
 from events.envelope import ActorRef
 from events.v3 import get_v3_config
 from integrations import integration_registry
 from typings import Permission
 
 router = APIRouter(prefix="/api", tags=["events-v3"])
+
+
+class DraftActionBody(BaseModel):
+    action_type: ActionType
+    payload: dict[str, Any] = Field(default_factory=dict)
+    duration: int = -1
+    cumulative: bool = False
+    sort_order: int = 0
+    modifiers: list[dict[str, Any]] = Field(default_factory=list)
+
+
+class DraftRuleBody(BaseModel):
+    name: str = "Draft rule"
+    description: str | None = None
+    conditions: list[dict[str, Any]] = Field(default_factory=list)
+    condition_mode: Literal["all", "any"] = "all"
+    actions: list[DraftActionBody] = Field(default_factory=list)
 
 
 class SimulateEventBody(BaseModel):
@@ -35,6 +53,7 @@ class SimulateEventBody(BaseModel):
     tags: list[str] = Field(default_factory=list)
     chain_depth: int = 0
     source_integration_id: str | None = None
+    draft_rule: DraftRuleBody | None = None
 
 
 def _dispatcher() -> EventDispatcher:
@@ -79,6 +98,7 @@ async def simulate_event(
         tags=body.tags,
         chain_depth=body.chain_depth,
         source_integration_id=body.source_integration_id,
+        draft_rule=body.draft_rule.model_dump() if body.draft_rule else None,
     )
 
 

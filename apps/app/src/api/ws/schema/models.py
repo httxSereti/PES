@@ -132,6 +132,7 @@ class TriggerAction(WireModel):
     duration: int
     cumulative: bool
     sort_order: int
+    modifiers: list[dict[str, Any]] = Field(default_factory=list)
 
 
 class TriggerRule(WireModel):
@@ -143,6 +144,8 @@ class TriggerRule(WireModel):
     description: str | None
     enabled: bool
     priority: int
+    conditions: list[dict[str, Any]] = Field(default_factory=list)
+    condition_mode: Literal["all", "any"] = "all"
     actions: list[TriggerAction]
     labels: list[TriggerRuleLabel]
     # nullable for legacy rows created before the columns existed
@@ -158,6 +161,7 @@ class TriggeredAction(WireModel):
     duration: int
     cumulative: bool
     payload: dict[str, Any]
+    modifiers: list[dict[str, Any]] = Field(default_factory=list)
 
 
 class TriggeredRule(WireModel):

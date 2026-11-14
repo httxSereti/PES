@@ -46,6 +46,7 @@ class ShadowRecorder:
                 "display_name": item.display_name,
                 "trigger_rule_id": item.trigger_rule_id,
                 "trigger_action_id": item.trigger_action_id,
+                "modifiers": item.applied_modifiers,
             }
             for item in plan.items
         ]
@@ -68,7 +69,7 @@ class ShadowRecorder:
                 target={},
                 params_before=redact_payload(item.payload),
                 params_after=None,
-                modifiers=None,
+                modifiers=item.applied_modifiers or None,
                 clamp=None,
                 blocked_reason=None,
                 status="planned",
