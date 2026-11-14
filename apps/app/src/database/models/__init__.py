@@ -12,6 +12,7 @@ from .edging_program import EdgingProgram
 from .app_session import AppSession
 from .lovense import LovenseDevice, LovenseNode, LovensePattern, LovenseRun
 from .actor import Actor, ActorIdentity, ActorStats
+from .approval import ApprovalRequest
 from .flow import (
     EffectLedger,
     FlowDef,
@@ -41,6 +42,7 @@ __all__ = [
     "Actor",
     "ActorIdentity",
     "ActorStats",
+    "ApprovalRequest",
     "FlowDef",
     "FlowVersion",
     "FlowTriggerIndex",

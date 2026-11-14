@@ -41,6 +41,18 @@ class TriggerRule(Base):
     # "all" (AND) or "any" (OR); empty means the rule always matches.
     conditions: Mapped[list] = mapped_column(JSON, default=list)
     condition_mode: Mapped[str] = mapped_column(String, default="all")
+    cooldown_seconds: Mapped[int] = mapped_column(Integer, default=0)
+    # Aggregate window: require `window_count` matching events inside
+    # `window_seconds` before the rule fires (0 disables the gate).
+    window_count: Mapped[int] = mapped_column(Integer, default=0)
+    window_seconds: Mapped[int] = mapped_column(Integer, default=0)
+    # Budget: at most `budget_count` fires per `budget_window_seconds`.
+    budget_count: Mapped[int] = mapped_column(Integer, default=0)
+    budget_window_seconds: Mapped[int] = mapped_column(Integer, default=3600)
+    budget_per_actor: Mapped[bool] = mapped_column(Boolean, default=False)
+    # Approval gate: matched actions wait in `approval_requests`.
+    requires_approval: Mapped[bool] = mapped_column(Boolean, default=False)
+    approval_timeout_seconds: Mapped[int] = mapped_column(Integer, default=300)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     updated_at: Mapped[datetime] = mapped_column(
         DateTime, default=datetime.utcnow, onupdate=datetime.utcnow

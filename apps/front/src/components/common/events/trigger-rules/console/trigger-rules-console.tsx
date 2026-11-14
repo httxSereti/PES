@@ -255,6 +255,14 @@ export default function TriggerRulesConsole() {
                     labels: rule.labels.map((label) => label.name),
                     conditions: rule.conditions ?? [],
                     condition_mode: rule.condition_mode ?? "all",
+                    cooldown_seconds: rule.cooldown_seconds ?? 0,
+                    window_count: rule.window_count ?? 0,
+                    window_seconds: rule.window_seconds ?? 0,
+                    budget_count: rule.budget_count ?? 0,
+                    budget_window_seconds: rule.budget_window_seconds ?? 3600,
+                    budget_per_actor: rule.budget_per_actor ?? false,
+                    requires_approval: rule.requires_approval ?? false,
+                    approval_timeout_seconds: rule.approval_timeout_seconds ?? 300,
                     actions: [...rule.actions]
                         .sort((a, b) => a.sort_order - b.sort_order)
                         .map((action, index) => ({

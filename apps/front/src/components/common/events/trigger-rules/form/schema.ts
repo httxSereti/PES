@@ -39,6 +39,15 @@ const amplifierDefaults = {
     amplifier_factor: 2,
     amplifier_fields: ["value", "duration", "pct", "level_pct", "duration_minutes"] as string[],
     amplifier_condition: null as ConditionValues | null,
+    clamp_enabled: false,
+    clamp_max: 100,
+    delay_enabled: false,
+    delay_seconds: 0,
+    repeat_enabled: false,
+    repeat_count: 2,
+    repeat_interval_seconds: 0,
+    probability_enabled: false,
+    probability_pct: 100,
 };
 
 const baseAction = z.object({
@@ -48,6 +57,15 @@ const baseAction = z.object({
     amplifier_factor: z.coerce.number().min(1).max(10).default(2),
     amplifier_fields: z.array(z.string()).default([]),
     amplifier_condition: conditionSchema.nullable().default(null),
+    clamp_enabled: z.boolean().default(false),
+    clamp_max: z.coerce.number().min(0).max(100000).default(100),
+    delay_enabled: z.boolean().default(false),
+    delay_seconds: z.coerce.number().int().min(0).max(3600).default(0),
+    repeat_enabled: z.boolean().default(false),
+    repeat_count: z.coerce.number().int().min(2).max(10).default(2),
+    repeat_interval_seconds: z.coerce.number().int().min(0).max(3600).default(0),
+    probability_enabled: z.boolean().default(false),
+    probability_pct: z.coerce.number().int().min(0).max(100).default(100),
 });
 
 /** Actions that run once and are finalized immediately (no duration). */
@@ -66,6 +84,7 @@ const ONE_SHOT_ACTIONS = new Set<ActionType>([
     ActionType.LOVENSE_SET_CAP,
     ActionType.LOVENSE_ASSIGN,
     ActionType.LOVENSE_RECONNECT,
+    ActionType.WEBHOOK_SEND,
 ]);
 
 export function isOneShotAction(actionType: ActionType): boolean {
@@ -82,6 +101,14 @@ function payloadTags(value: unknown): string {
     if (Array.isArray(value)) return value.map(String).join(", ");
     if (typeof value === "string") return value;
     return "";
+}
+
+function parseJsonValue(text: string, fallback: unknown): unknown {
+    try {
+        return JSON.parse(text);
+    } catch {
+        return fallback;
+    }
 }
 
 function lovenseMode(
@@ -267,6 +294,14 @@ export const actionSchema = z.discriminatedUnion("action_type", [
         action_type: z.literal(ActionType.LOVENSE_RECONNECT),
         node_id: z.string(),
     }),
+    baseAction.extend({
+        action_type: z.literal(ActionType.WEBHOOK_SEND),
+        url: z.string().min(1, "URL is required"),
+        method: z.enum(["POST", "PUT", "PATCH"]),
+        body_json: z.string(),
+        headers_json: z.string(),
+        timeout_seconds: z.coerce.number().int().min(1).max(15),
+    }),
 ]);
 
 export const formSchema = z.object({
@@ -275,6 +310,14 @@ export const formSchema = z.object({
     event_types: z.array(z.string().min(1)).min(1, "Select at least one event."),
     priority: z.coerce.number().int().min(0).max(100),
     enabled: z.boolean(),
+    cooldown_seconds: z.coerce.number().int().min(0).max(86400),
+    window_count: z.coerce.number().int().min(0).max(100),
+    window_seconds: z.coerce.number().int().min(0).max(86400),
+    budget_count: z.coerce.number().int().min(0).max(1000),
+    budget_window_seconds: z.coerce.number().int().min(1).max(604800),
+    budget_per_actor: z.boolean(),
+    requires_approval: z.boolean(),
+    approval_timeout_seconds: z.coerce.number().int().min(30).max(86400),
     labels: z.array(z.string().min(1)),
     conditions: z.array(conditionSchema),
     condition_mode: z.enum(["all", "any"]),
@@ -411,6 +454,16 @@ export function defaultAction(action_type: ActionType): ActionValues {
             };
         case ActionType.LOVENSE_RECONNECT:
             return { ...oneShot, action_type, node_id: "" };
+        case ActionType.WEBHOOK_SEND:
+            return {
+                ...oneShot,
+                action_type,
+                url: "",
+                method: "POST",
+                body_json: "{}",
+                headers_json: "{}",
+                timeout_seconds: 10,
+            };
     }
 }
 
@@ -418,14 +471,25 @@ export function defaultAction(action_type: ActionType): ActionValues {
 function actionAmplifierValues(action: TriggerAction) {
     const modifiers = Array.isArray(action.modifiers) ? action.modifiers : [];
     const scale = modifiers.find((modifier) => modifier?.type === "scale");
-    if (!scale) {
-        return amplifierDefaults;
-    }
+    const clamp = modifiers.find((modifier) => modifier?.type === "clamp");
+    const delay = modifiers.find((modifier) => modifier?.type === "delay");
+    const repeat = modifiers.find((modifier) => modifier?.type === "repeat");
+    const probability = modifiers.find((modifier) => modifier?.type === "probability");
     return {
-        amplifier_enabled: true,
-        amplifier_factor: Number(scale.factor ?? 2),
-        amplifier_fields: Array.isArray(scale.fields) ? scale.fields.map(String) : [],
-        amplifier_condition: scale.when ? conditionToForm(scale.when as Record<string, unknown>) : null,
+        ...amplifierDefaults,
+        amplifier_enabled: Boolean(scale),
+        amplifier_factor: Number(scale?.factor ?? 2),
+        amplifier_fields: Array.isArray(scale?.fields) ? scale.fields.map(String) : [],
+        amplifier_condition: scale?.when ? conditionToForm(scale.when as Record<string, unknown>) : null,
+        clamp_enabled: Boolean(clamp),
+        clamp_max: Number(clamp?.max ?? 100),
+        delay_enabled: Boolean(delay),
+        delay_seconds: Number(delay?.seconds ?? 0),
+        repeat_enabled: Boolean(repeat),
+        repeat_count: Number(repeat?.count ?? 2),
+        repeat_interval_seconds: Number(repeat?.interval_seconds ?? 0),
+        probability_enabled: Boolean(probability),
+        probability_pct: Math.round(Number(probability?.probability ?? 1) * 100),
     };
 }
 
@@ -645,6 +709,16 @@ export function actionToFormValues(action: TriggerAction): ActionValues {
                 action_type: ActionType.LOVENSE_RECONNECT,
                 node_id: String(p["node_id"] ?? ""),
             };
+        case ActionType.WEBHOOK_SEND:
+            return {
+                ...base,
+                action_type: ActionType.WEBHOOK_SEND,
+                url: String(p["url"] ?? ""),
+                method: p["method"] === "PUT" || p["method"] === "PATCH" ? p["method"] : "POST",
+                body_json: JSON.stringify(p["body"] ?? {}, null, 2),
+                headers_json: JSON.stringify(p["headers"] ?? {}, null, 2),
+                timeout_seconds: Number(p["timeout_seconds"] ?? 10),
+            };
         default:
             return defaultAction(ActionType.LEVEL);
     }
@@ -712,6 +786,8 @@ export function actionSummary(action: ActionValues): string {
             return `${action.alias || "alias"} · ${action.new_tags || "no tags"}`;
         case ActionType.LOVENSE_RECONNECT:
             return action.node_id || "Every node";
+        case ActionType.WEBHOOK_SEND:
+            return action.url ? `${action.method} ${action.url}` : "Configure URL";
         default:
             return "Configure action";
     }
@@ -783,6 +859,14 @@ export function ruleToFormValues(rule: TriggerRule): FormValues {
         event_types: rule.event_types?.length > 0 ? rule.event_types : rule.event_type ? [rule.event_type] : [],
         priority: rule.priority,
         enabled: rule.enabled,
+        cooldown_seconds: rule.cooldown_seconds ?? 0,
+        window_count: rule.window_count ?? 0,
+        window_seconds: rule.window_seconds ?? 0,
+        budget_count: rule.budget_count ?? 0,
+        budget_window_seconds: rule.budget_window_seconds ?? 3600,
+        budget_per_actor: rule.budget_per_actor ?? false,
+        requires_approval: rule.requires_approval ?? false,
+        approval_timeout_seconds: rule.approval_timeout_seconds ?? 300,
         labels: rule.labels.map((l) => l.name),
         conditions: (rule.conditions ?? []).map((condition) =>
             conditionToForm(condition as Record<string, unknown>)
@@ -798,19 +882,54 @@ export function ruleToFormValues(rule: TriggerRule): FormValues {
 /** Turn a validated action into the WS { action_type, payload, duration, cumulative, sort_order } body. */
 export function toActionBody(action: ActionValues, sort_order: number) {
     const { action_type, duration, cumulative } = action;
-    const modifiers =
-        action.amplifier_enabled && action.amplifier_fields.length > 0
-            ? [
-                  {
-                      type: "scale",
-                      factor: action.amplifier_factor,
-                      fields: action.amplifier_fields,
-                      when: action.amplifier_condition
-                          ? toConditionBody(action.amplifier_condition)
-                          : null,
-                  },
-              ]
-            : [];
+    const modifiers: Array<Record<string, unknown>> = [];
+    if (action.amplifier_enabled && action.amplifier_fields.length > 0) {
+        modifiers.push({
+            type: "scale",
+            factor: action.amplifier_factor,
+            fields: action.amplifier_fields,
+            when: action.amplifier_condition ? toConditionBody(action.amplifier_condition) : null,
+        });
+    }
+    if (action.clamp_enabled) {
+        modifiers.push({
+            type: "clamp",
+            max: action.clamp_max,
+            fields: [
+                "value",
+                "pct",
+                "level_pct",
+                "duration_minutes",
+                "max_pct",
+                "scale_pct",
+                "seconds",
+                "duration",
+            ],
+            when: null,
+        });
+    }
+    if (action.repeat_enabled) {
+        modifiers.push({
+            type: "repeat",
+            count: action.repeat_count,
+            interval_seconds: action.repeat_interval_seconds,
+            when: null,
+        });
+    }
+    if (action.delay_enabled) {
+        modifiers.push({
+            type: "delay",
+            seconds: action.delay_seconds,
+            when: null,
+        });
+    }
+    if (action.probability_enabled) {
+        modifiers.push({
+            type: "probability",
+            probability: action.probability_pct / 100,
+            when: null,
+        });
+    }
     let payload: Record<string, unknown>;
     switch (action.action_type) {
         case ActionType.PROFILE:
@@ -943,6 +1062,15 @@ export function toActionBody(action: ActionValues, sort_order: number) {
         case ActionType.LOVENSE_RECONNECT:
             payload = {};
             if (action.node_id) payload["node_id"] = action.node_id;
+            break;
+        case ActionType.WEBHOOK_SEND:
+            payload = {
+                url: action.url,
+                method: action.method,
+                body: parseJsonValue(action.body_json, {}),
+                headers: parseJsonValue(action.headers_json, {}),
+                timeout_seconds: action.timeout_seconds,
+            };
             break;
     }
     return { action_type, payload, duration, cumulative, sort_order, modifiers };

@@ -23,6 +23,10 @@ class TriggeredEventRepo:
             session.add(event)
             await session.commit()
 
+    async def get_by_id(self, event_id: str) -> TriggeredEvent | None:
+        async with self._db.session_maker() as session:
+            return await session.get(TriggeredEvent, event_id)
+
     async def get_recent(self, limit: int = 1000) -> List[TriggeredEvent]:
         """
         Return the most recent `limit` events, ordered oldest-first

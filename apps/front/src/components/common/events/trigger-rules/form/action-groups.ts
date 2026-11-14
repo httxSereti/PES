@@ -356,6 +356,23 @@ const FALLBACK_ACTIONS: Record<string, Omit<ActionCatalogEntry, "id">> = {
         oneShot: true,
         payloadSchema: { node_id: "Optional node id" },
     },
+    [ActionType.WEBHOOK_SEND]: {
+        label: "Send webhook",
+        description: "Send a JSON request to an external webhook URL.",
+        integrationId: "webhook",
+        integrationName: "Webhook",
+        group: "Webhooks",
+        enabled: true,
+        reversible: false,
+        oneShot: true,
+        payloadSchema: {
+            url: "Destination URL",
+            method: "POST, PUT or PATCH",
+            body: "JSON request body",
+            headers: "Optional headers",
+            timeout_seconds: "1-15 seconds",
+        },
+    },
 };
 
 export function fallbackAction(id: string): ActionCatalogEntry {

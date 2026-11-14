@@ -11,7 +11,7 @@ from database.repositories.trigger_rule_repo import (
 )
 from events.enums import ActionType
 from events.conditions import ConditionSpec
-from events.modifiers import ScaleModifier
+from events.modifiers import validate_modifier
 from integrations import integration_registry
 from typings import Permission
 
@@ -68,7 +68,7 @@ async def handle_trigger_rule_create(
             if len(action.modifiers) > 20:
                 raise ValueError("An action can have at most 20 modifiers")
             for modifier in action.modifiers:
-                ScaleModifier.model_validate(modifier)
+                validate_modifier(modifier)
     except Exception as exc:
         return CommandResult(
             status="error", message=f"Invalid conditions/modifiers: {exc}"
@@ -104,6 +104,14 @@ async def handle_trigger_rule_create(
             labels=labels,
             conditions=msg.payload.conditions,
             condition_mode=msg.payload.condition_mode,
+            cooldown_seconds=msg.payload.cooldown_seconds,
+            window_count=msg.payload.window_count,
+            window_seconds=msg.payload.window_seconds,
+            budget_count=msg.payload.budget_count,
+            budget_window_seconds=msg.payload.budget_window_seconds,
+            budget_per_actor=msg.payload.budget_per_actor,
+            requires_approval=msg.payload.requires_approval,
+            approval_timeout_seconds=msg.payload.approval_timeout_seconds,
         )
         # The repository returns the fully loaded rule for serialization.
         serialized = _serialize_rule(rule)

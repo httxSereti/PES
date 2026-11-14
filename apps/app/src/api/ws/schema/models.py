@@ -146,6 +146,14 @@ class TriggerRule(WireModel):
     priority: int
     conditions: list[dict[str, Any]] = Field(default_factory=list)
     condition_mode: Literal["all", "any"] = "all"
+    cooldown_seconds: int = 0
+    window_count: int = 0
+    window_seconds: int = 0
+    budget_count: int = 0
+    budget_window_seconds: int = 3600
+    budget_per_actor: bool = False
+    requires_approval: bool = False
+    approval_timeout_seconds: int = 300
     actions: list[TriggerAction]
     labels: list[TriggerRuleLabel]
     # nullable for legacy rows created before the columns existed

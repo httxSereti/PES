@@ -1,6 +1,6 @@
 # Events v3 — Intégrations et connecteurs
 
-> Statut : catalogue de proposition, non implémenté.
+> Statut : connecteur générique implémenté (entrant + sortant) ; connecteurs nominatifs à brancher au cas par cas.
 > Portée : sources d'événements, actions exposées, transports, priorités, risques.
 > Ce document est **séparé du plan moteur** : [events-v3-flows.md](events-v3-flows.md) décrit le Flow Engine, la télémétrie et le Safety Governor, pas les intégrations.
 > Documents liés : [events-v2.md](events-v2.md), [events-v2-code.md](events-v2-code.md), [integrations.md](integrations.md), [lovense.md](lovense.md).
@@ -521,6 +521,26 @@ C'est l'intégration la plus rentable côté jouets : un seul connecteur couvre 
 | **Calendar (Google/CalDAV)**    | début/fin de session planifiée                          |
 
 Le **webhook générique** est le connecteur à livrer en premier : il couvre la longue traîne sans code, avec mapping JSONPath/Jinja, HMAC et replay window.
+
+### 10.1 Webhook générique (implémenté)
+
+```http
+POST /webhooks/generic
+X-PES-Token: <GENERIC_WEBHOOK_TOKEN>
+Content-Type: application/json
+
+{
+  "event": "deploy_finished",
+  "source": "ci",
+  "payload": { "branch": "main" }
+}
+```
+
+Le body est aplati dans `event_data` : les règles voient `payload.event`, `payload.source`, `payload.payload.branch`, etc. L'événement normalisé est `webhook.received`. Le token est obligatoire et lu depuis `GENERIC_WEBHOOK_TOKEN`. `GET /webhooks/generic/health` expose l'état et le compteur de réceptions.
+
+Le connecteur expose aussi une action **`WEBHOOK_SEND`** : une règle peut envoyer `{ url, method, body, headers, timeout_seconds }` vers un webhook externe (Discord, Slack, n8n, maison). Seules les URL http(s) sont acceptées ; les adresses privées/loopback sont bloquées sauf `WEBHOOK_ALLOW_PRIVATE=true`.
+
+Enfin, `GET /api/integrations/manifests` et `GET /api/integrations/{id}/manifest` publient les manifestes de connecteurs (events, actions, settings, `health`, `manifest_version`).
 
 ---
 

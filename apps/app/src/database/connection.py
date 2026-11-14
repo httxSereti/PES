@@ -248,6 +248,14 @@ class Database:
                 rule_migrations = {
                     "conditions": "JSON",
                     "condition_mode": "VARCHAR DEFAULT 'all'",
+                    "cooldown_seconds": "INTEGER DEFAULT 0",
+                    "window_count": "INTEGER DEFAULT 0",
+                    "window_seconds": "INTEGER DEFAULT 0",
+                    "budget_count": "INTEGER DEFAULT 0",
+                    "budget_window_seconds": "INTEGER DEFAULT 3600",
+                    "budget_per_actor": "BOOLEAN DEFAULT 0",
+                    "requires_approval": "BOOLEAN DEFAULT 0",
+                    "approval_timeout_seconds": "INTEGER DEFAULT 300",
                 }
                 for column, sql_type in rule_migrations.items():
                     if column not in rule_columns:

@@ -18,6 +18,13 @@ export default [
         route("events", "components/layout/events-layout.tsx", [
             index("pages/app/events/dashboard.tsx"),
             route("triggered", "pages/app/events/triggered-events.tsx"),
+            route("telemetry", "pages/app/events/telemetry.tsx"),
+            route("approvals", "pages/app/events/approvals.tsx"),
+
+            ...prefix("runs", [
+                index("pages/app/events/runs/index.tsx"),
+                route(":id", "pages/app/events/runs/detail.tsx"),
+            ]),
 
             ...prefix("trigger-rules", [
                 index("pages/app/events/trigger-rules/index.tsx"),
@@ -30,6 +37,7 @@ export default [
                 index("pages/app/events/flows/index.tsx"),
                 route("new", "pages/app/events/flows/new.tsx"),
                 route(":id", "pages/app/events/flows/edit.tsx"),
+                route(":id/canvas", "pages/app/events/flows/canvas.tsx"),
             ]),
         ]),
 

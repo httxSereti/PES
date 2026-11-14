@@ -38,6 +38,9 @@ class ActionType(str, Enum):
     LOVENSE_ASSIGN = "LOVENSE_ASSIGN"
     LOVENSE_RECONNECT = "LOVENSE_RECONNECT"
 
+    # Generic outbound webhook connector
+    WEBHOOK_SEND = "WEBHOOK_SEND"
+
 
 class QueueItemStatus(str, Enum):
     """Status of an item in the action queue."""

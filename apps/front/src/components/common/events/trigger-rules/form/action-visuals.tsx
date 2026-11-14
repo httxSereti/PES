@@ -9,6 +9,7 @@ import {
     Pause,
     Percent,
     Play,
+    Send,
     Shield,
     ShieldAlert,
     Shuffle,
@@ -56,6 +57,7 @@ const ACTION_ICONS: Record<string, LucideIcon> = {
     [ActionType.LOVENSE_SET_CAP]: Percent,
     [ActionType.LOVENSE_ASSIGN]: Layers,
     [ActionType.LOVENSE_RECONNECT]: Activity,
+    [ActionType.WEBHOOK_SEND]: Send,
 };
 
 export function actionIcon(type: string): LucideIcon {

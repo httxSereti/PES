@@ -1,6 +1,6 @@
 # Events v3 — PES Flow et télémétrie
 
-> Statut : phases 0 et 1 (F + G) implémentées ; compilateur de graphe et éditeur canvas à venir.
+> Statut : phases 0 à 4 implémentées côté moteur ; phase 5 (durcissement) entamée. Canvas en lecture seule ; l'édition graphique drag-and-drop reste à venir.
 > Portée : moteur d'événements, éditeur de flows, télémétrie, schéma WS, base SQLite.
 > Documents liés : [events-v2.md](events-v2.md), [events-v2-code.md](events-v2-code.md), [events-trigger-rules-audit.md](events-trigger-rules-audit.md).
 > Intégrations : [events-v3-integrations.md](events-v3-integrations.md) — catalogue séparé, volontairement exclu de la roadmap moteur.
@@ -52,13 +52,13 @@ Le socle backend est en place :
 - Migrations additives de `triggered_events` (`occurred_at`, `source`, `actor_id`, `correlation_id`, `causation_id`, `dedupe_key`, `severity`, `tags`, `version`).
 - `POST /api/events/simulate` : dry-run d'un événement contre les règles actives, sans queue ni écriture.
 - `GET /api/events/v3/status` : flags de rollout.
-- `EVENTS_V3_ENABLED`, `EVENTS_V3_SHADOW_MODE`, `EVENTS_V3_MAX_WORKERS`.
+- `EVENTS_V3_ENABLED`, `EVENTS_V3_SHADOW_MODE`, `EVENTS_V3_TELEMETRY`, `EVENTS_V3_MAX_WORKERS`.
 - Shadow mode : le plan legacy est enregistré dans `flow_runs` + `effect_ledger` sans modifier l'exécution.
 - Les messages `events:triggered` et l'historique exposent les nouveaux champs d'enveloppe.
 
 Fichiers principaux : `events/envelope.py`, `events/v3/`, `database/models/actor.py`, `database/models/flow.py`, `database/repositories/actor_repo.py`, `database/repositories/flow_repo.py`, `api/rest/events_v3.py`.
 
-Les éléments non couverts par F+G (compilateur de graphe, éditeur canvas, planner complet, UI de télémétrie) restent à faire.
+Les briques F+G sont désormais couvertes ; le planner complet et l'éditeur canvas restent des chantiers séparés.
 
 ### 1.2 État d'implémentation — phase 1 (F + G)
 
@@ -72,9 +72,68 @@ La direction retenue est **Rules + Drawer (F)** + **Composer (G)**, pas le canva
 - endpoint `POST /api/events/simulate` étendu avec `draft_rule` pour le dry-run du brouillon ;
 - compilateur `FlowSpec` linéaire (`events/flows/`) et plan compilé renvoyé par la simulation.
 
-Limites assumées : conditions plates (AND/OR), modificateur `scale` uniquement, pas encore de `FlowSpec`/compilateur de graphe ni d'éditeur canvas. Ces éléments restent la cible des directions A/B, à brancher plus tard sur le même IR.
+Limites assumées : conditions plates (AND/OR), pas encore d'édition graphique drag-and-drop. Ces éléments restent la cible des directions A/B, à brancher plus tard sur le même IR.
 
-Fichiers phase 1 : `events/conditions.py`, `events/modifiers.py`, `events/flows/`, `form/condition-builder.tsx`, `form/action-amplifier-fields.tsx`, `form/rule-preview.tsx`, `console/rule-flow-drawer.tsx`, `hooks/useRuleSimulation.ts`.
+Fichiers phase 1 : `events/conditions.py`, `events/modifiers.py`, `events/flows/`, `form/condition-builder.tsx`, `form/action-amplifier-fields.tsx`, `form/flow-map.tsx`, `form/rule-preview.tsx`, `console/rule-flow-drawer.tsx`, `hooks/useRuleSimulation.ts`.
+
+### 1.3 Télémétrie locale
+
+Une première page `/app/events/telemetry` expose les métriques du buffer d'événements : débit sur 12 minutes, top events, top règles, actions, taux de match et inspecteur d'événement (payload + règles + modificateurs). Une page `/app/events/runs` liste les runs serveur persistés (`flow_runs`, `node_runs`, `effect_ledger`) avec replay dry-run.
+
+Activer l'enregistrement serveur :
+
+```dotenv
+EVENTS_V3_TELEMETRY=true
+```
+
+Le stockage `flow_runs` / `node_runs` / `effect_ledger` reste la source de la trace complète.
+
+### 1.4 Phase 2 — télémétrie serveur
+
+La phase 2 est branchée :
+
+- `EVENTS_V3_TELEMETRY=true` enregistre un `flow_run` par règle évaluée ;
+- `node_runs` trace le trigger, les conditions et les actions ;
+- `effect_ledger` conserve payload avant/après, modificateurs et item de queue ;
+- `GET /api/events/runs`, `GET /api/events/runs/{id}`, `GET /api/events/{id}/trace` ;
+- `POST /api/events/{id}/replay` pour le dry-run d'un événement passé ;
+- UI `/app/events/runs` et `/app/events/runs/{id}` avec timeline, ledger et replay.
+- Canvas de lecture seule `/app/events/flows/{id}/canvas` : rend le `FlowSpec` compilé (nœuds WHEN/IF/THEN, arêtes, warnings) sans permettre l'édition pour l'instant.
+
+### 1.5 Phase 3 — moteur avancé
+
+Le dispatcher applique désormais, dans l'ordre : fenêtre d'agrégation → cooldown → budget.
+
+- **Fenêtre d'agrégation** (`window_count`, `window_seconds`) : une règle ne tire qu'après N événements correspondants dans la fenêtre. Le burst est consommé une seule fois.
+- **Cooldown** (`cooldown_seconds`) : délai minimum entre deux tirs.
+- **Budget** (`budget_count`, `budget_window_seconds`, `budget_per_actor`) : plafond glissant par règle ou par acteur.
+- **Approbations** (`requires_approval`, `approval_timeout_seconds`) : les actions ne sont pas mises en queue ; une `ApprovalRequest` est créée et visible dans `/app/events/approvals`. Un admin approuve (les items sont alors enfilés) ou refuse. API : `GET /api/events/approvals`, `POST /api/events/approvals/{id}/approve`, `POST /api/events/approvals/{id}/reject`.
+- **Modificateurs** : `scale`, `clamp` (réduction uniquement), `repeat`, `delay`, `probability`. `repeat` et `delay` produisent des `QueueItem` avec `not_before`, honoré par `ActionQueue.tick()`.
+- Les dry-runs (`simulate`, replay, preview) n'incrémentent ni cooldown, ni fenêtre, ni budget.
+
+Tables : `trigger_rules` (colonnes additives), `approval_requests`.
+
+### 1.6 Phase 4 — SDK connecteurs
+
+- **Webhook générique entrant** : `POST /webhooks/generic` (`X-PES-Token`), événement `webhook.received`, santé `GET /webhooks/generic/health`.
+- **Action sortante** `WEBHOOK_SEND` : `POST`/`PUT`/`PATCH` JSON vers une URL http(s), timeout borné, en-têtes optionnels. Les adresses privées/loopback sont bloquées sauf `WEBHOOK_ALLOW_PRIVATE=true`.
+- **Manifestes** : `GET /api/integrations/manifests` et `GET /api/integrations/{id}/manifest` exposent events/actions/settings + `health` + `manifest_version` pour les auteurs de connecteurs.
+- Les connecteurs nominatifs (Discord, Reddit, X, plateformes NSFW) restent à brancher au cas par cas : credentials, quotas et ToS propres à chaque service.
+
+### 1.7 Phase 5 — durcissement
+
+- **Dédup entrante** : `dedupe_key` (webhooks, sources) est mémorisé pendant `EVENTS_V3_DEDUPE_TTL_SECONDS` (300 s par défaut). Un doublon est ignoré avant toute écriture.
+- **Rétention** : `EVENTS_V3_RETENTION_DAYS` supprime au démarrage les runs, nœuds, effets et approbations plus anciens (0 = conservation illimitée).
+- Les erreurs de télémétrie/approbation ne cassent jamais le pipeline legacy ; une approbation qui ne peut pas être persistée ne déclenche jamais ses actions.
+
+```dotenv
+EVENTS_V3_TELEMETRY=true
+EVENTS_V3_DEDUPE_TTL_SECONDS=300
+EVENTS_V3_RETENTION_DAYS=30
+WEBHOOK_ALLOW_PRIVATE=false
+```
+
+Les éléments restants sont l'édition graphique drag-and-drop (A/B), les sous-flows/versioning visuel et les connecteurs nominatifs.
 
 ---
 
@@ -815,6 +874,9 @@ Le niveau est configurable par flow et par type d'événement. Les valeurs de n�
 | `GET /api/flows/{id}/runs`                    | runs du flow                  |
 | `GET /api/runs/{id}`                          | trace complète                |
 | `GET /api/events/{id}/trace`                  | trace d'un événement          |
+| `GET /api/events/runs`                        | runs serveur récents          |
+| `GET /api/events/runs/{id}`                   | trace complète d'un run       |
+| `POST /api/events/{id}/replay`                | replay dry-run                |
 | `GET /api/telemetry/metrics`                  | métriques agrégées            |
 | `GET /api/telemetry/dead-letter`              | dead-letter                   |
 | `POST /api/telemetry/dead-letter/{id}/replay` | rejouer                       |
@@ -1081,6 +1143,7 @@ ALTER TABLE triggered_events ADD COLUMN version INTEGER DEFAULT 1;
 ALTER TABLE trigger_rules ADD COLUMN flow_id TEXT;
 ALTER TABLE trigger_rules ADD COLUMN conditions JSON;
 ALTER TABLE trigger_rules ADD COLUMN condition_mode TEXT DEFAULT 'all';
+ALTER TABLE trigger_rules ADD COLUMN cooldown_seconds INTEGER DEFAULT 0;
 ALTER TABLE trigger_rules ADD COLUMN window_spec JSON;
 ALTER TABLE trigger_rules ADD COLUMN cooldown_spec JSON;
 ALTER TABLE trigger_rules ADD COLUMN budget_spec JSON;
@@ -1130,12 +1193,14 @@ CREATE INDEX IF NOT EXISTS ix_triggered_events_correlation
 ```dotenv
 EVENTS_V3_ENABLED=false
 EVENTS_V3_SHADOW_MODE=true
+EVENTS_V3_TELEMETRY=false
 EVENTS_V3_MAX_WORKERS=4
 ```
 
 - `EVENTS_V3_ENABLED=false` : le dispatcher utilise uniquement les règles legacy.
 - `EVENTS_V3_SHADOW_MODE=true` : les flows sont évalués, les runs sont tracés, mais aucun effet n'est enqueued. On compare avec les règles legacy.
 - `EVENTS_V3_ENABLED=true` : les flows publiés sont exécutés ; les règles legacy non converties continuent de fonctionner.
+- `EVENTS_V3_TELEMETRY=true` : chaque évaluation de règle écrit un `flow_run`, ses `node_runs` et son `effect_ledger`.
 
 ### 11.2 Migration des règles legacy
 
@@ -1195,7 +1260,9 @@ Les `priority`, `enabled`, `labels` et `event_links` sont conservés. Les action
 | **4. SDK connecteurs** | manifest, transports, PES Link, pairing, santé, privacy modes, sandbox                                                                                                                                                                                                | 0           | un connecteur de test peut émettre un événement et recevoir une action               |
 | **5. Durcissement**    | tests de charge, revue sécurité, docs, migration legacy complète, observabilité                                                                                                                                                                                       | 1–4         | `EVENTS_V3_ENABLED=true` par défaut, rollback testé                                  |
 
-> Phase 1 livrée dans la direction **F + G** : conditions, amplificateurs, preview de brouillon et drawer de flow. Le compilateur `FlowSpec`/éditeur canvas est reporté à une phase ultérieure.
+> Phase 1 livrée dans la direction **F + G** : conditions, amplificateurs, preview de brouillon et drawer de flow. Le compilateur `FlowSpec` existe désormais et alimente un canvas de lecture seule ; l'édition graphique drag-and-drop reste reportée.
+>
+> Phases 2 à 4 livrées : télémétrie/runs, fenêtres/cooldowns/budgets/approbations, modificateurs `clamp`/`repeat`/`delay`/`probability`, webhook générique entrant et sortant, manifestes de connecteurs.
 
 ### 12.1 MVP concret
 

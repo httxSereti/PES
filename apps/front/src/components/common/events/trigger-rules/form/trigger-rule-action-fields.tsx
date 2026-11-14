@@ -17,6 +17,7 @@ import { Button } from "@pes/ui/components/button";
 import { Field, FieldContent, FieldDescription, FieldError, FieldGroup, FieldLabel } from "@pes/ui/components/field";
 import { cn } from "@pes/ui/lib/utils";
 import { Input } from "@pes/ui/components/input";
+import { Textarea } from "@pes/ui/components/textarea";
 import { Separator } from "@pes/ui/components/separator";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@pes/ui/components/select";
 
@@ -393,6 +394,99 @@ export default function TriggerRuleActionFields({
                         )}
 
                         <Separator />
+
+                        {actionType === ActionType.WEBHOOK_SEND && (
+                            <div className="space-y-3">
+                                <Controller
+                                    name={`actions.${index}.url`}
+                                    control={control}
+                                    render={({ field, fieldState }) => (
+                                        <Field data-invalid={fieldState.invalid}>
+                                            <FieldLabel>Webhook URL</FieldLabel>
+                                            <FieldDescription>
+                                                http/https only. Private and loopback addresses are blocked unless
+                                                WEBHOOK_ALLOW_PRIVATE=true.
+                                            </FieldDescription>
+                                            <Input
+                                                {...field}
+                                                aria-invalid={fieldState.invalid}
+                                                placeholder="https://discord.com/api/webhooks/…"
+                                                autoComplete="off"
+                                            />
+                                            {fieldState.invalid && <FieldError errors={[fieldState.error]} />}
+                                        </Field>
+                                    )}
+                                />
+                                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                                    <Controller
+                                        name={`actions.${index}.method`}
+                                        control={control}
+                                        render={({ field }) => (
+                                            <Field>
+                                                <FieldLabel>Method</FieldLabel>
+                                                <Select value={field.value} onValueChange={field.onChange}>
+                                                    <SelectTrigger>
+                                                        <SelectValue />
+                                                    </SelectTrigger>
+                                                    <SelectContent>
+                                                        <SelectItem value="POST">POST</SelectItem>
+                                                        <SelectItem value="PUT">PUT</SelectItem>
+                                                        <SelectItem value="PATCH">PATCH</SelectItem>
+                                                    </SelectContent>
+                                                </Select>
+                                            </Field>
+                                        )}
+                                    />
+                                    <Controller
+                                        name={`actions.${index}.timeout_seconds`}
+                                        control={control}
+                                        render={({ field, fieldState }) => (
+                                            <Field data-invalid={fieldState.invalid}>
+                                                <FieldLabel>Timeout (seconds)</FieldLabel>
+                                                <Input
+                                                    {...field}
+                                                    type="number"
+                                                    min={1}
+                                                    max={15}
+                                                    aria-invalid={fieldState.invalid}
+                                                />
+                                                {fieldState.invalid && <FieldError errors={[fieldState.error]} />}
+                                            </Field>
+                                        )}
+                                    />
+                                </div>
+                                <Controller
+                                    name={`actions.${index}.body_json`}
+                                    control={control}
+                                    render={({ field, fieldState }) => (
+                                        <Field data-invalid={fieldState.invalid}>
+                                            <FieldLabel>JSON body</FieldLabel>
+                                            <Textarea
+                                                {...field}
+                                                className="min-h-24 font-mono text-[11px]"
+                                                aria-invalid={fieldState.invalid}
+                                            />
+                                            {fieldState.invalid && <FieldError errors={[fieldState.error]} />}
+                                        </Field>
+                                    )}
+                                />
+                                <Controller
+                                    name={`actions.${index}.headers_json`}
+                                    control={control}
+                                    render={({ field, fieldState }) => (
+                                        <Field data-invalid={fieldState.invalid}>
+                                            <FieldLabel>Headers (JSON)</FieldLabel>
+                                            <Textarea
+                                                {...field}
+                                                className="min-h-16 font-mono text-[11px]"
+                                                aria-invalid={fieldState.invalid}
+                                            />
+                                            {fieldState.invalid && <FieldError errors={[fieldState.error]} />}
+                                        </Field>
+                                    )}
+                                />
+                            </div>
+                        )}
 
                         {actionType === ActionType.PURYFI_SET_ENABLED && (
                             <Controller

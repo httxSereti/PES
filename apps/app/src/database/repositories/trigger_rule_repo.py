@@ -181,6 +181,14 @@ class TriggerRuleRepo:
         priority: int = 0,
         conditions: Optional[List[dict]] = None,
         condition_mode: str = "all",
+        cooldown_seconds: int = 0,
+        window_count: int = 0,
+        window_seconds: int = 0,
+        budget_count: int = 0,
+        budget_window_seconds: int = 3600,
+        budget_per_actor: bool = False,
+        requires_approval: bool = False,
+        approval_timeout_seconds: int = 300,
     ) -> TriggerRule:
         """Create a new trigger rule bound to one or more event types."""
         types = unique_event_types(event_types)
@@ -196,6 +204,14 @@ class TriggerRuleRepo:
             priority=priority,
             conditions=conditions or [],
             condition_mode=condition_mode,
+            cooldown_seconds=cooldown_seconds,
+            window_count=window_count,
+            window_seconds=window_seconds,
+            budget_count=budget_count,
+            budget_window_seconds=budget_window_seconds,
+            budget_per_actor=budget_per_actor,
+            requires_approval=requires_approval,
+            approval_timeout_seconds=approval_timeout_seconds,
             event_links=[
                 TriggerRuleEvent(event_type=event_type, sort_order=index)
                 for index, event_type in enumerate(types)
@@ -219,6 +235,14 @@ class TriggerRuleRepo:
         labels: List[str],
         conditions: Optional[List[dict]] = None,
         condition_mode: str = "all",
+        cooldown_seconds: int = 0,
+        window_count: int = 0,
+        window_seconds: int = 0,
+        budget_count: int = 0,
+        budget_window_seconds: int = 3600,
+        budget_per_actor: bool = False,
+        requires_approval: bool = False,
+        approval_timeout_seconds: int = 300,
     ) -> tuple[TriggerRule, List[TriggerRuleLabel]]:
         """
         Create a rule, its actions and its labels in one transaction.
@@ -241,6 +265,14 @@ class TriggerRuleRepo:
                 priority=priority,
                 conditions=conditions or [],
                 condition_mode=condition_mode,
+                cooldown_seconds=cooldown_seconds,
+                window_count=window_count,
+                window_seconds=window_seconds,
+                budget_count=budget_count,
+                budget_window_seconds=budget_window_seconds,
+                budget_per_actor=budget_per_actor,
+                requires_approval=requires_approval,
+                approval_timeout_seconds=approval_timeout_seconds,
                 event_links=_build_event_links(types),
                 actions=_build_actions(rule_id, actions),
             )
@@ -265,6 +297,14 @@ class TriggerRuleRepo:
         priority: Optional[int] = None,
         conditions: Optional[List[dict]] = None,
         condition_mode: Optional[str] = None,
+        cooldown_seconds: Optional[int] = None,
+        window_count: Optional[int] = None,
+        window_seconds: Optional[int] = None,
+        budget_count: Optional[int] = None,
+        budget_window_seconds: Optional[int] = None,
+        budget_per_actor: Optional[bool] = None,
+        requires_approval: Optional[bool] = None,
+        approval_timeout_seconds: Optional[int] = None,
         event_types: Optional[List[str]] = None,
     ) -> Optional[TriggerRule]:
         """Update a trigger rule. Only provided fields are updated."""
@@ -293,6 +333,22 @@ class TriggerRuleRepo:
                 rule.conditions = conditions
             if condition_mode is not None:
                 rule.condition_mode = condition_mode
+            if cooldown_seconds is not None:
+                rule.cooldown_seconds = cooldown_seconds
+            if window_count is not None:
+                rule.window_count = window_count
+            if window_seconds is not None:
+                rule.window_seconds = window_seconds
+            if budget_count is not None:
+                rule.budget_count = budget_count
+            if budget_window_seconds is not None:
+                rule.budget_window_seconds = budget_window_seconds
+            if budget_per_actor is not None:
+                rule.budget_per_actor = budget_per_actor
+            if requires_approval is not None:
+                rule.requires_approval = requires_approval
+            if approval_timeout_seconds is not None:
+                rule.approval_timeout_seconds = approval_timeout_seconds
             if types is not None:
                 rule.event_type = types[0]
                 # Delete the old links before inserting the new ones: their
@@ -320,6 +376,14 @@ class TriggerRuleRepo:
         labels: List[str],
         conditions: Optional[List[dict]] = None,
         condition_mode: str = "all",
+        cooldown_seconds: int = 0,
+        window_count: int = 0,
+        window_seconds: int = 0,
+        budget_count: int = 0,
+        budget_window_seconds: int = 3600,
+        budget_per_actor: bool = False,
+        requires_approval: bool = False,
+        approval_timeout_seconds: int = 300,
     ) -> tuple[Optional[TriggerRule], List[TriggerRuleLabel]]:
         """
         Update a rule and fully replace its actions/labels in one transaction.
@@ -351,6 +415,14 @@ class TriggerRuleRepo:
             rule.priority = priority
             rule.conditions = conditions or []
             rule.condition_mode = condition_mode
+            rule.cooldown_seconds = cooldown_seconds
+            rule.window_count = window_count
+            rule.window_seconds = window_seconds
+            rule.budget_count = budget_count
+            rule.budget_window_seconds = budget_window_seconds
+            rule.budget_per_actor = budget_per_actor
+            rule.requires_approval = requires_approval
+            rule.approval_timeout_seconds = approval_timeout_seconds
             rule.event_type = types[0]
 
             # Flush the deletes first so the inserts below cannot race the

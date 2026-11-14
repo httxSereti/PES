@@ -3,7 +3,7 @@ import { useNavigate } from "react-router";
 import { Controller, useFieldArray, useForm, type Resolver } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { toast } from "sonner";
-import { PlusSquare, Power, Save } from "lucide-react";
+import { PlusSquare, Power, Save, ShieldCheck, Timer } from "lucide-react";
 
 import { Button } from "@pes/ui/components/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@pes/ui/components/card";
@@ -22,6 +22,7 @@ import TriggerRuleLabelSelect from "./trigger-rule-label-select";
 import { ActionExplorer } from "./action-explorer";
 import { EventSelection } from "./event-explorer";
 import ConditionBuilder from "./condition-builder";
+import FlowMap from "./flow-map";
 import RulePreview from "./rule-preview";
 import { SwitchRow } from "./switch-row";
 import { actionSummary, defaultAction, formSchema, ruleToFormValues, toActionBody, toConditionBody, type FormValues } from "./schema";
@@ -62,6 +63,14 @@ export default function TriggerRuleForm({
                   event_types: [],
                   priority: 0,
                   enabled: true,
+                  cooldown_seconds: 0,
+                  window_count: 0,
+                  window_seconds: 0,
+                  budget_count: 0,
+                  budget_window_seconds: 3600,
+                  budget_per_actor: false,
+                  requires_approval: false,
+                  approval_timeout_seconds: 300,
                   labels: [],
                   conditions: [],
                   condition_mode: "all",
@@ -75,6 +84,7 @@ export default function TriggerRuleForm({
     });
     const watchedActions = form.watch("actions");
     const watchedEventTypes = form.watch("event_types");
+    const watchedConditions = form.watch("conditions") ?? [];
     const watchedLabels = form.watch("labels");
     const isSubmitting = form.formState.isSubmitting;
     const actionsError = form.formState.errors.actions?.root ?? form.formState.errors.actions;
@@ -135,6 +145,14 @@ export default function TriggerRuleForm({
                 description: values.description || null,
                 enabled: values.enabled,
                 priority: values.priority,
+                cooldown_seconds: values.cooldown_seconds,
+                window_count: values.window_count,
+                window_seconds: values.window_seconds,
+                budget_count: values.budget_count,
+                budget_window_seconds: values.budget_window_seconds,
+                budget_per_actor: values.budget_per_actor,
+                requires_approval: values.requires_approval,
+                approval_timeout_seconds: values.approval_timeout_seconds,
                 labels: values.labels,
                 conditions: values.conditions.map(toConditionBody),
                 condition_mode: values.condition_mode,
@@ -199,6 +217,14 @@ export default function TriggerRuleForm({
                             : "Draft · not saved yet"}
                     </div>
                 </div>
+
+                <FlowMap
+                    eventTypes={watchedEventTypes}
+                    conditions={watchedConditions}
+                    actions={(watchedActions ?? []).map(
+                        (action) => action ?? defaultAction(ActionType.LEVEL)
+                    )}
+                />
 
                 <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_340px]">
                     <div className="order-2 min-w-0 space-y-4 xl:order-1">
@@ -377,6 +403,158 @@ export default function TriggerRuleForm({
                                             </Field>
                                         )}
                                     />
+                                    <Controller
+                                        name="cooldown_seconds"
+                                        control={form.control}
+                                        render={({ field, fieldState }) => (
+                                            <Field data-invalid={fieldState.invalid}>
+                                                <FieldLabel>Cooldown (seconds)</FieldLabel>
+                                                <FieldDescription>
+                                                    Minimum time between two fires of this rule. 0 = no cooldown.
+                                                </FieldDescription>
+                                                <Input
+                                                    {...field}
+                                                    type="number"
+                                                    min={0}
+                                                    max={86400}
+                                                    aria-invalid={fieldState.invalid}
+                                                    placeholder="0"
+                                                />
+                                                {fieldState.invalid && <FieldError errors={[fieldState.error]} />}
+                                            </Field>
+                                        )}
+                                    />
+                                    <div className="grid gap-3 sm:grid-cols-2">
+                                        <Controller
+                                            name="window_count"
+                                            control={form.control}
+                                            render={({ field, fieldState }) => (
+                                                <Field data-invalid={fieldState.invalid}>
+                                                    <FieldLabel>Window: events required</FieldLabel>
+                                                    <FieldDescription>
+                                                        Fire only after N matching events. 0 = disabled.
+                                                    </FieldDescription>
+                                                    <Input
+                                                        {...field}
+                                                        type="number"
+                                                        min={0}
+                                                        max={100}
+                                                        aria-invalid={fieldState.invalid}
+                                                        placeholder="0"
+                                                    />
+                                                    {fieldState.invalid && <FieldError errors={[fieldState.error]} />}
+                                                </Field>
+                                            )}
+                                        />
+                                        <Controller
+                                            name="window_seconds"
+                                            control={form.control}
+                                            render={({ field, fieldState }) => (
+                                                <Field data-invalid={fieldState.invalid}>
+                                                    <FieldLabel>Window duration (seconds)</FieldLabel>
+                                                    <FieldDescription>
+                                                        Time span used to count matching events.
+                                                    </FieldDescription>
+                                                    <Input
+                                                        {...field}
+                                                        type="number"
+                                                        min={0}
+                                                        max={86400}
+                                                        aria-invalid={fieldState.invalid}
+                                                        placeholder="0"
+                                                    />
+                                                    {fieldState.invalid && <FieldError errors={[fieldState.error]} />}
+                                                </Field>
+                                            )}
+                                        />
+                                        <Controller
+                                            name="budget_count"
+                                            control={form.control}
+                                            render={({ field, fieldState }) => (
+                                                <Field data-invalid={fieldState.invalid}>
+                                                    <FieldLabel>Budget: max fires</FieldLabel>
+                                                    <FieldDescription>
+                                                        Maximum fires per budget window. 0 = unlimited.
+                                                    </FieldDescription>
+                                                    <Input
+                                                        {...field}
+                                                        type="number"
+                                                        min={0}
+                                                        max={1000}
+                                                        aria-invalid={fieldState.invalid}
+                                                        placeholder="0"
+                                                    />
+                                                    {fieldState.invalid && <FieldError errors={[fieldState.error]} />}
+                                                </Field>
+                                            )}
+                                        />
+                                        <Controller
+                                            name="budget_window_seconds"
+                                            control={form.control}
+                                            render={({ field, fieldState }) => (
+                                                <Field data-invalid={fieldState.invalid}>
+                                                    <FieldLabel>Budget window (seconds)</FieldLabel>
+                                                    <FieldDescription>
+                                                        Rolling window for the fire budget.
+                                                    </FieldDescription>
+                                                    <Input
+                                                        {...field}
+                                                        type="number"
+                                                        min={1}
+                                                        max={604800}
+                                                        aria-invalid={fieldState.invalid}
+                                                        placeholder="3600"
+                                                    />
+                                                    {fieldState.invalid && <FieldError errors={[fieldState.error]} />}
+                                                </Field>
+                                            )}
+                                        />
+                                    </div>
+                                    <Controller
+                                        name="budget_per_actor"
+                                        control={form.control}
+                                        render={({ field }) => (
+                                            <SwitchRow
+                                                icon={Timer}
+                                                label="Budget per actor"
+                                                description="Track the budget separately for each actor"
+                                                checked={field.value}
+                                                onCheckedChange={field.onChange}
+                                            />
+                                        )}
+                                    />
+                                    <Controller
+                                        name="requires_approval"
+                                        control={form.control}
+                                        render={({ field }) => (
+                                            <SwitchRow
+                                                icon={ShieldCheck}
+                                                label="Require approval"
+                                                description="Matched actions wait for an admin decision"
+                                                checked={field.value}
+                                                onCheckedChange={field.onChange}
+                                            />
+                                        )}
+                                    />
+                                    {form.watch("requires_approval") && (
+                                        <Controller
+                                            name="approval_timeout_seconds"
+                                            control={form.control}
+                                            render={({ field, fieldState }) => (
+                                                <Field data-invalid={fieldState.invalid}>
+                                                    <FieldLabel>Approval timeout (seconds)</FieldLabel>
+                                                    <Input
+                                                        {...field}
+                                                        type="number"
+                                                        min={30}
+                                                        max={86400}
+                                                        aria-invalid={fieldState.invalid}
+                                                    />
+                                                    {fieldState.invalid && <FieldError errors={[fieldState.error]} />}
+                                                </Field>
+                                            )}
+                                        />
+                                    )}
                                     <Controller
                                         name="enabled"
                                         control={form.control}

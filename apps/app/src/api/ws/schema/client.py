@@ -187,6 +187,14 @@ class TriggerRuleUpdatePayload(WireModel):
     priority: int | None = None
     conditions: list[dict[str, Any]] | None = None
     condition_mode: Literal["all", "any"] | None = None
+    cooldown_seconds: int | None = None
+    window_count: int | None = None
+    window_seconds: int | None = None
+    budget_count: int | None = None
+    budget_window_seconds: int | None = None
+    budget_per_actor: bool | None = None
+    requires_approval: bool | None = None
+    approval_timeout_seconds: int | None = None
 
 
 class TriggerRulesUpdateCommand(ClientMessage):
@@ -213,6 +221,14 @@ class TriggerRuleDraft(WireModel):
     priority: int = 0
     conditions: list[dict[str, Any]] = Field(default_factory=list)
     condition_mode: Literal["all", "any"] = "all"
+    cooldown_seconds: int = 0
+    window_count: int = 0
+    window_seconds: int = 0
+    budget_count: int = 0
+    budget_window_seconds: int = 3600
+    budget_per_actor: bool = False
+    requires_approval: bool = False
+    approval_timeout_seconds: int = 300
     actions: list[TriggerActionDraft] = []
     labels: list[str] = []
 

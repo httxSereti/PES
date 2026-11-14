@@ -1,7 +1,7 @@
 import { Controller, useWatch, type Control } from "react-hook-form";
-import { SlidersHorizontal } from "lucide-react";
+import { Dices, Repeat2, Shield, SlidersHorizontal, Timer } from "lucide-react";
 
-import { Field, FieldDescription, FieldLabel } from "@pes/ui/components/field";
+import { Field, FieldDescription, FieldError, FieldLabel } from "@pes/ui/components/field";
 import { Input } from "@pes/ui/components/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@pes/ui/components/select";
 
@@ -55,6 +55,10 @@ export default function ActionAmplifierFields({
 }) {
     const enabled = useWatch({ control, name: `actions.${index}.amplifier_enabled` });
     const condition = useWatch({ control, name: `actions.${index}.amplifier_condition` });
+    const clampEnabled = useWatch({ control, name: `actions.${index}.clamp_enabled` });
+    const delayEnabled = useWatch({ control, name: `actions.${index}.delay_enabled` });
+    const repeatEnabled = useWatch({ control, name: `actions.${index}.repeat_enabled` });
+    const probabilityEnabled = useWatch({ control, name: `actions.${index}.probability_enabled` });
     const options = fieldsForAction(actionType);
 
     return (
@@ -213,6 +217,163 @@ export default function ActionAmplifierFields({
                     )}
                 </>
             )}
+
+            <div className="space-y-3 border-t border-border/60 pt-3">
+                <p className="font-mono text-[8px] uppercase tracking-widest text-muted-foreground/40">
+                    Advanced modifiers
+                </p>
+
+                <Controller
+                    name={`actions.${index}.clamp_enabled`}
+                    control={control}
+                    render={({ field }) => (
+                        <SwitchRow
+                            icon={Shield}
+                            label="Clamp"
+                            description="Cap numeric fields, never increase them"
+                            checked={field.value}
+                            onCheckedChange={field.onChange}
+                        />
+                    )}
+                />
+                {clampEnabled && (
+                    <Controller
+                        name={`actions.${index}.clamp_max`}
+                        control={control}
+                        render={({ field, fieldState }) => (
+                            <Field data-invalid={fieldState.invalid}>
+                                <FieldLabel>Maximum value</FieldLabel>
+                                <Input
+                                    {...field}
+                                    type="number"
+                                    min={0}
+                                    max={100000}
+                                    aria-invalid={fieldState.invalid}
+                                />
+                                {fieldState.invalid && <FieldError errors={[fieldState.error]} />}
+                            </Field>
+                        )}
+                    />
+                )}
+
+                <Controller
+                    name={`actions.${index}.delay_enabled`}
+                    control={control}
+                    render={({ field }) => (
+                        <SwitchRow
+                            icon={Timer}
+                            label="Delay"
+                            description="Postpone the action in the queue"
+                            checked={field.value}
+                            onCheckedChange={field.onChange}
+                        />
+                    )}
+                />
+                {delayEnabled && (
+                    <Controller
+                        name={`actions.${index}.delay_seconds`}
+                        control={control}
+                        render={({ field, fieldState }) => (
+                            <Field data-invalid={fieldState.invalid}>
+                                <FieldLabel>Delay (seconds)</FieldLabel>
+                                <Input
+                                    {...field}
+                                    type="number"
+                                    min={0}
+                                    max={3600}
+                                    aria-invalid={fieldState.invalid}
+                                />
+                                {fieldState.invalid && <FieldError errors={[fieldState.error]} />}
+                            </Field>
+                        )}
+                    />
+                )}
+
+                <Controller
+                    name={`actions.${index}.repeat_enabled`}
+                    control={control}
+                    render={({ field }) => (
+                        <SwitchRow
+                            icon={Repeat2}
+                            label="Repeat"
+                            description="Duplicate the action with an optional interval"
+                            checked={field.value}
+                            onCheckedChange={field.onChange}
+                        />
+                    )}
+                />
+                {repeatEnabled && (
+                    <div className="grid gap-3 sm:grid-cols-2">
+                        <Controller
+                            name={`actions.${index}.repeat_count`}
+                            control={control}
+                            render={({ field, fieldState }) => (
+                                <Field data-invalid={fieldState.invalid}>
+                                    <FieldLabel>Repeat count</FieldLabel>
+                                    <Input
+                                        {...field}
+                                        type="number"
+                                        min={2}
+                                        max={10}
+                                        aria-invalid={fieldState.invalid}
+                                    />
+                                    {fieldState.invalid && <FieldError errors={[fieldState.error]} />}
+                                </Field>
+                            )}
+                        />
+                        <Controller
+                            name={`actions.${index}.repeat_interval_seconds`}
+                            control={control}
+                            render={({ field, fieldState }) => (
+                                <Field data-invalid={fieldState.invalid}>
+                                    <FieldLabel>Interval (seconds)</FieldLabel>
+                                    <Input
+                                        {...field}
+                                        type="number"
+                                        min={0}
+                                        max={3600}
+                                        aria-invalid={fieldState.invalid}
+                                    />
+                                    {fieldState.invalid && <FieldError errors={[fieldState.error]} />}
+                                </Field>
+                            )}
+                        />
+                    </div>
+                )}
+
+                <Controller
+                    name={`actions.${index}.probability_enabled`}
+                    control={control}
+                    render={({ field }) => (
+                        <SwitchRow
+                            icon={Dices}
+                            label="Chance"
+                            description="Only run the action with a given probability"
+                            checked={field.value}
+                            onCheckedChange={field.onChange}
+                        />
+                    )}
+                />
+                {probabilityEnabled && (
+                    <Controller
+                        name={`actions.${index}.probability_pct`}
+                        control={control}
+                        render={({ field, fieldState }) => (
+                            <Field data-invalid={fieldState.invalid}>
+                                <FieldLabel>Probability (%)</FieldLabel>
+                                <Input
+                                    {...field}
+                                    type="number"
+                                    min={0}
+                                    max={100}
+                                    aria-invalid={fieldState.invalid}
+                                />
+                                {fieldState.invalid && <FieldError errors={[fieldState.error]} />}
+                            </Field>
+                        )}
+                    />
+                )}
+            </div>
         </div>
     );
 }

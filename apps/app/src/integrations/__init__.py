@@ -26,6 +26,7 @@ from .lovense import LovenseIntegration
 from .puryfi import PuryFiIntegration
 from .registry import IntegrationRegistry
 from .settings_store import IntegrationSettingsStore
+from .webhook import GenericWebhookIntegration
 
 
 def build_default_registry() -> IntegrationRegistry:
@@ -37,6 +38,7 @@ def build_default_registry() -> IntegrationRegistry:
     registry.register(ChasterIntegration())
     registry.register(PuryFiIntegration())
     registry.register(LovenseIntegration())
+    registry.register(GenericWebhookIntegration())
     return registry
 
 

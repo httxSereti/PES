@@ -6,7 +6,7 @@ from collections import defaultdict, deque
 from typing import Any
 
 from events.conditions import ConditionSpec
-from events.modifiers import ScaleModifier
+from events.modifiers import validate_modifier
 
 from .spec import CompiledFlow, CompiledOp, FlowEdge, FlowNode, FlowSpec
 
@@ -19,7 +19,9 @@ def _compile_action(action: Any) -> dict[str, Any]:
     modifiers: list[dict[str, Any]] = []
     for raw in getattr(action, "modifiers", []) or []:
         try:
-            modifiers.append(ScaleModifier.model_validate(raw).model_dump(mode="json"))
+            modifiers.append(
+                validate_modifier(raw).model_dump(mode="json")
+            )
         except Exception:
             # Invalid modifiers are ignored at execution time too; keep the
             # compiler permissive and surface a warning via the caller.

@@ -35,6 +35,10 @@ class QueueItem:
     # actions that can emit an event propagate this to the resulting echo.
     causation_depth: int = 0
     created_at: datetime = field(default_factory=datetime.now)
+    # Delay modifier: the queue must not start this item before this time.
+    not_before: Optional[datetime] = None
+    iteration: int = 0
+    repeat_count: int = 1
     started_at: Optional[datetime] = None
     completed_at: Optional[datetime] = None
     # Monotonic clock values for scheduling (in-memory only). They start when

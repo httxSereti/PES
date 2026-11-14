@@ -92,6 +92,22 @@ async def handle_trigger_rule_update(
                 rule.conditions = msg.payload.conditions
             if msg.payload.condition_mode is not None:
                 rule.condition_mode = msg.payload.condition_mode
+            if msg.payload.cooldown_seconds is not None:
+                rule.cooldown_seconds = msg.payload.cooldown_seconds
+            if msg.payload.window_count is not None:
+                rule.window_count = msg.payload.window_count
+            if msg.payload.window_seconds is not None:
+                rule.window_seconds = msg.payload.window_seconds
+            if msg.payload.budget_count is not None:
+                rule.budget_count = msg.payload.budget_count
+            if msg.payload.budget_window_seconds is not None:
+                rule.budget_window_seconds = msg.payload.budget_window_seconds
+            if msg.payload.budget_per_actor is not None:
+                rule.budget_per_actor = msg.payload.budget_per_actor
+            if msg.payload.requires_approval is not None:
+                rule.requires_approval = msg.payload.requires_approval
+            if msg.payload.approval_timeout_seconds is not None:
+                rule.approval_timeout_seconds = msg.payload.approval_timeout_seconds
             if event_types is not None:
                 rule.event_type = event_types[0]
                 rule.event_links = [

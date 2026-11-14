@@ -34,7 +34,10 @@ class V3Config:
 
     enabled: bool = False
     shadow_mode: bool = False
+    telemetry: bool = False
     max_workers: int = 4
+    dedupe_ttl_seconds: int = 300
+    retention_days: int = 0
 
 
 def get_v3_config() -> V3Config:
@@ -43,5 +46,8 @@ def get_v3_config() -> V3Config:
     return V3Config(
         enabled=_env_bool("EVENTS_V3_ENABLED", False),
         shadow_mode=_env_bool("EVENTS_V3_SHADOW_MODE", False),
+        telemetry=_env_bool("EVENTS_V3_TELEMETRY", False),
         max_workers=max(1, _env_int("EVENTS_V3_MAX_WORKERS", 4)),
+        dedupe_ttl_seconds=max(0, _env_int("EVENTS_V3_DEDUPE_TTL_SECONDS", 300)),
+        retention_days=max(0, _env_int("EVENTS_V3_RETENTION_DAYS", 0)),
     )

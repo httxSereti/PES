@@ -2,11 +2,11 @@
 
 from __future__ import annotations
 
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from typing import Iterable
 
 from cuid2 import cuid_wrapper
-from sqlalchemy import delete, select
+from sqlalchemy import delete, func, select
 from sqlalchemy.orm import selectinload
 
 from database.connection import Database
@@ -231,3 +231,44 @@ class FlowRepo:
             stmt = stmt.limit(limit).offset(offset)
             result = await session.execute(stmt)
             return list(result.scalars().all())
+
+    async def prune_runs(self, retention_days: int) -> int:
+        """Delete runs (and their nodes/effects) older than the retention window."""
+        if retention_days <= 0:
+            return 0
+        cutoff = datetime.now(UTC) - timedelta(days=retention_days)
+        async with self._db.session_maker() as session:
+            old_runs = select(FlowRun.id).where(FlowRun.started_at < cutoff)
+            count = int(
+                await session.scalar(
+                    select(func.count())
+                    .select_from(FlowRun)
+                    .where(FlowRun.started_at < cutoff)
+                )
+                or 0
+            )
+            if count == 0:
+                return 0
+            await session.execute(
+                delete(EffectLedger).where(EffectLedger.run_id.in_(old_runs))
+            )
+            await session.execute(
+                delete(NodeRun).where(NodeRun.run_id.in_(old_runs))
+            )
+            await session.execute(delete(FlowRun).where(FlowRun.started_at < cutoff))
+            await session.commit()
+            return count
+
+    async def prune_approvals(self, retention_days: int) -> int:
+        """Delete old approval requests (all statuses) beyond retention."""
+        if retention_days <= 0:
+            return 0
+        from database.models.approval import ApprovalRequest
+
+        cutoff = datetime.now(UTC) - timedelta(days=retention_days)
+        async with self._db.session_maker() as session:
+            result = await session.execute(
+                delete(ApprovalRequest).where(ApprovalRequest.requested_at < cutoff)
+            )
+            await session.commit()
+            return int(result.rowcount or 0)

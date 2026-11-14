@@ -1,5 +1,5 @@
 import { Link } from "react-router";
-import { ArrowLeft } from "lucide-react";
+import { ArrowLeft, Workflow } from "lucide-react";
 
 import { Button } from "@pes/ui/components/button";
 
@@ -16,6 +16,14 @@ export default function FlowEditorPage({ rule }: { rule?: TriggerRule }) {
                         Back to flows
                     </Link>
                 </Button>
+                {rule && (
+                    <Button asChild variant="outline" size="sm">
+                        <Link to={`/app/events/flows/${rule.id}/canvas`}>
+                            <Workflow className="mr-1.5 size-3.5" />
+                            Canvas view
+                        </Link>
+                    </Button>
+                )}
             </div>
             <TriggerRuleForm key={rule?.id ?? "new"} rule={rule} mode="flow" />
         </div>

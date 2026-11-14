@@ -1,7 +1,9 @@
 from __future__ import annotations
 
+import copy
 import time
-from datetime import UTC, datetime
+from collections import deque
+from datetime import UTC, datetime, timedelta
 from typing import Any, TYPE_CHECKING
 
 import structlog
@@ -9,6 +11,7 @@ from cuid2 import cuid_wrapper
 
 from database.models.triggered_event import TriggeredEvent
 from database.repositories.actor_repo import ActorRepo
+from database.repositories.approval_repo import ApprovalRepo
 from database.repositories.triggered_event_repo import TriggeredEventRepo
 from events.enums import ActionType, QueueItemStatus
 from events.envelope import ActorRef, EventEnvelope, actor_ref_from_payload, build_envelope
@@ -19,7 +22,14 @@ from events.modifiers import apply_modifiers
 from events.queue import ActionQueue
 from events.redaction import redact_payload, redact_triggered_rules
 from events.registry import EventRegistry
-from events.v3 import EventPlan, ShadowRecorder, get_v3_config
+from events.serialization import queue_item_to_dict
+from events.v3 import (
+    ApprovalDraft,
+    EventPlan,
+    ShadowRecorder,
+    TelemetryRecorder,
+    get_v3_config,
+)
 from integrations import integration_registry
 from integrations.base import IntegrationKind
 from store import Store
@@ -57,6 +67,8 @@ class EventDispatcher:
         event_repo: TriggeredEventRepo | None = None,
         shadow_recorder: ShadowRecorder | None = None,
         actor_repo: ActorRepo | None = None,
+        telemetry_recorder: TelemetryRecorder | None = None,
+        approval_repo: ApprovalRepo | None = None,
     ):
         EventDispatcher._instance = self
         self._registry = registry
@@ -66,6 +78,14 @@ class EventDispatcher:
         self._integrations = integrations or integration_registry
         self._shadow = shadow_recorder or ShadowRecorder()
         self._actors = actor_repo or ActorRepo()
+        self._telemetry = telemetry_recorder or TelemetryRecorder()
+        self._approvals = approval_repo or ApprovalRepo()
+        # In-memory rate-limit state, keyed by rule id. Resets on restart.
+        self._cooldowns: dict[str, float] = {}
+        self._window_hits: dict[str, deque[float]] = {}
+        self._budget_hits: dict[str, deque[float]] = {}
+        # Dedupe stage: source key -> monotonic first-seen time.
+        self._dedupe_seen: dict[str, float] = {}
 
     async def dispatch(
         self,
@@ -107,6 +127,13 @@ class EventDispatcher:
         started = time.perf_counter()
         event_id = generate_id()
         v3_config = get_v3_config()
+        if dedupe_key and self._is_duplicate(dedupe_key):
+            logger.debug(
+                "[Dispatcher] Duplicate event ignored",
+                event_type=event_type,
+                dedupe_key=dedupe_key,
+            )
+            return
         if actor is not None:
             actor = await self._resolve_actor(actor)
         plan = await self._build_plan(
@@ -143,12 +170,15 @@ class EventDispatcher:
             return
 
         await self._save_and_notify(plan.envelope, plan.summary)
+        await self._save_approvals(plan)
 
         if plan.items:
             self._queue.enqueue(plan.items)
 
         if v3_config.shadow_mode:
             await self._record_shadow(plan, started)
+
+        await self._record_telemetry(plan, started)
 
     async def dispatch_direct(
         self,
@@ -176,6 +206,13 @@ class EventDispatcher:
         the item summary so it shows up in the event history.
         """
         event_data = event_data or {}
+        if dedupe_key and self._is_duplicate(dedupe_key):
+            logger.debug(
+                "[Dispatcher] Duplicate direct event ignored",
+                event_type=event_type,
+                dedupe_key=dedupe_key,
+            )
+            return
         event_id = generate_id()
         triggered_at = datetime.now(UTC)
         if actor is not None:
@@ -309,6 +346,7 @@ class EventDispatcher:
             check_known=True,
             draft_rule=draft_rule,
             include_unmatched=True,
+            apply_limits=False,
         )
 
         envelope_dict = redact_payload(plan.envelope.model_dump(mode="json"))
@@ -335,6 +373,8 @@ class EventDispatcher:
             warnings.append("The event chain depth limit is reached")
         elif plan.skipped_reason == "no_rules":
             warnings.append("No enabled trigger rule matches this event")
+        elif plan.approvals:
+            warnings.append("Matched actions are waiting for approval")
         elif plan.rules and not plan.items:
             if plan.summary and not any(rule.get("matched", True) for rule in plan.summary):
                 warnings.append("The rule conditions did not match this event")
@@ -363,9 +403,29 @@ class EventDispatcher:
                 }
                 for item in plan.items
             ],
+            "approvals": [
+                {
+                    "rule_id": draft.rule_id,
+                    "rule_name": draft.rule_name,
+                    "timeout_seconds": draft.timeout_seconds,
+                    "actions": [
+                        {
+                            "action_type": item.action_type.value,
+                            "payload": self._redacted_action_payload(
+                                item.action_type.value, item.payload
+                            ),
+                            "duration": item.duration,
+                            "cumulative": item.cumulative,
+                        }
+                        for item in draft.items
+                    ],
+                }
+                for draft in plan.approvals
+            ],
             "counts": {
                 "rules": len(plan.rules),
                 "actions": len(plan.items),
+                "approvals": len(plan.approvals),
             },
             "warnings": warnings,
             "shadow": get_v3_config().shadow_mode,
@@ -391,6 +451,7 @@ class EventDispatcher:
         check_known: bool = False,
         draft_rule: dict[str, Any] | None = None,
         include_unmatched: bool = False,
+        apply_limits: bool = True,
     ) -> EventPlan:
         received_at = datetime.now(UTC)
         envelope = build_envelope(
@@ -438,13 +499,29 @@ class EventDispatcher:
             return EventPlan(envelope=envelope, skipped_reason="no_rules")
 
         queue_items: list[QueueItem] = []
+        approvals: list[ApprovalDraft] = []
         triggered_rules_summary: list[dict] = []
+        rule_results: list[dict] = []
         for rule in rules:
             matched = evaluate_conditions(
                 getattr(rule, "conditions", []) or [],
                 getattr(rule, "condition_mode", "all") or "all",
                 context,
             )
+            gate_reason: str | None = None
+            gate_details: dict[str, Any] = {}
+            if matched:
+                gate_reason, gate_details = self._rule_gate_reason(
+                    rule, context, apply_limits=apply_limits
+                )
+            if gate_reason is not None:
+                rule_summary = self._build_rule_summary(rule, [], matched=False)
+                rule_summary["skipped_reason"] = gate_reason
+                rule_summary["gate"] = gate_details
+                rule_results.append(rule_summary)
+                if include_unmatched:
+                    triggered_rules_summary.append(rule_summary)
+                continue
             items = self._rule_to_queue_items(
                 rule,
                 origin,
@@ -453,18 +530,132 @@ class EventDispatcher:
                 chain_depth=chain_depth,
                 conditions_matched=matched,
             )
-            queue_items.extend(items)
-            if matched or items or include_unmatched:
-                triggered_rules_summary.append(
-                    self._build_rule_summary(rule, items, matched=matched)
+            if items and getattr(rule, "requires_approval", False):
+                rule_summary = self._build_rule_summary(rule, items, matched=matched)
+                rule_summary["skipped_reason"] = "pending_approval"
+                if gate_details:
+                    rule_summary["gate"] = gate_details
+                approvals.append(
+                    ApprovalDraft(
+                        rule_id=rule.id,
+                        rule_name=rule.name,
+                        timeout_seconds=int(
+                            getattr(rule, "approval_timeout_seconds", 300) or 300
+                        ),
+                        items=items,
+                        summary=rule_summary,
+                    )
                 )
+                rule_results.append(rule_summary)
+                triggered_rules_summary.append(rule_summary)
+                continue
+            queue_items.extend(items)
+            rule_summary = self._build_rule_summary(rule, items, matched=matched)
+            if gate_details:
+                rule_summary["gate"] = gate_details
+            rule_results.append(rule_summary)
+            if matched or items or include_unmatched:
+                triggered_rules_summary.append(rule_summary)
 
         return EventPlan(
             envelope=envelope,
             rules=rules,
             items=queue_items,
             summary=triggered_rules_summary,
+            approvals=approvals,
+            rule_results=rule_results,
         )
+
+    def _is_duplicate(self, dedupe_key: str) -> bool:
+        """In-memory dedupe window keyed by the source's stable event id."""
+        ttl = max(0, get_v3_config().dedupe_ttl_seconds)
+        if ttl <= 0:
+            return False
+        now = time.monotonic()
+        if len(self._dedupe_seen) > 4096:
+            cutoff = now - ttl
+            self._dedupe_seen = {
+                key: seen for key, seen in self._dedupe_seen.items() if seen >= cutoff
+            }
+        last_seen = self._dedupe_seen.get(dedupe_key)
+        if last_seen is not None and now - last_seen < ttl:
+            return True
+        self._dedupe_seen[dedupe_key] = now
+        return False
+
+    @staticmethod
+    def _actor_key(context: dict[str, Any]) -> str:
+        actor = context.get("actor") or {}
+        if not isinstance(actor, dict):
+            return "anonymous"
+        return str(
+            actor.get("id")
+            or actor.get("platform_id")
+            or actor.get("display_name")
+            or "anonymous"
+        )
+
+    def _rule_gate_reason(
+        self,
+        rule: TriggerRule,
+        context: dict[str, Any],
+        *,
+        apply_limits: bool,
+    ) -> tuple[str | None, dict[str, Any]]:
+        """
+        Evaluate window, cooldown and budget gates for one matched rule.
+
+        Returns `(skip_reason, details)`. Window hits are only consumed once
+        every gate passes, so a cooldown or budget block does not lose the
+        accumulated burst.
+        """
+        if not apply_limits:
+            return None, {}
+
+        now = time.monotonic()
+        details: dict[str, Any] = {}
+
+        window_count = int(getattr(rule, "window_count", 0) or 0)
+        window_seconds = int(getattr(rule, "window_seconds", 0) or 0)
+        window_hits: deque[float] | None = None
+        if window_count > 0 and window_seconds > 0:
+            window_hits = self._window_hits.setdefault(rule.id, deque())
+            cutoff = now - window_seconds
+            while window_hits and window_hits[0] < cutoff:
+                window_hits.popleft()
+            window_hits.append(now)
+            details["window_hits"] = len(window_hits)
+            if len(window_hits) < window_count:
+                return "window_pending", details
+
+        cooldown = int(getattr(rule, "cooldown_seconds", 0) or 0)
+        if cooldown > 0:
+            last_fired = self._cooldowns.get(rule.id, 0.0)
+            if last_fired and now - last_fired < cooldown:
+                return "cooldown", details
+
+        budget_count = int(getattr(rule, "budget_count", 0) or 0)
+        budget_window = max(1, int(getattr(rule, "budget_window_seconds", 3600) or 3600))
+        budget_key = rule.id
+        budget_hits: deque[float] | None = None
+        if budget_count > 0:
+            if getattr(rule, "budget_per_actor", False):
+                budget_key = f"{rule.id}:{self._actor_key(context)}"
+            budget_hits = self._budget_hits.setdefault(budget_key, deque())
+            cutoff = now - budget_window
+            while budget_hits and budget_hits[0] < cutoff:
+                budget_hits.popleft()
+            details["budget_used"] = len(budget_hits)
+            if len(budget_hits) >= budget_count:
+                return "budget_exhausted", details
+
+        if window_hits is not None:
+            window_hits.clear()
+        if cooldown > 0:
+            self._cooldowns[rule.id] = now
+        if budget_hits is not None:
+            budget_hits.append(now)
+        return None, details
 
     def _draft_rule_from_payload(
         self, draft: dict[str, Any], event_type: str
@@ -532,6 +723,35 @@ class EventDispatcher:
             }
         )
 
+    async def _save_approvals(self, plan: EventPlan) -> None:
+        for draft in plan.approvals:
+            try:
+                request = await self._approvals.create(
+                    event_id=plan.envelope.id,
+                    rule_id=draft.rule_id,
+                    rule_name=draft.rule_name,
+                    items=[queue_item_to_dict(item) for item in draft.items],
+                    summary=draft.summary,
+                    timeout_seconds=draft.timeout_seconds,
+                )
+            except Exception:
+                # Approval is a safety gate: if it cannot be persisted, the
+                # actions must not be enqueued either.
+                logger.exception(
+                    "[Dispatcher] Failed to create approval request",
+                    event_id=plan.envelope.id,
+                    rule_id=draft.rule_id,
+                )
+                continue
+            if self._ws_notifier is not None:
+                try:
+                    self._ws_notifier.notify(
+                        "approvals:update",
+                        {"status": "ok", "id": request.id, "action": "created"},
+                    )
+                except Exception:
+                    pass
+
     async def _record_shadow(self, plan: EventPlan, started: float) -> None:
         try:
             latency_ms = int((time.perf_counter() - started) * 1000)
@@ -540,6 +760,18 @@ class EventDispatcher:
             # Shadow telemetry must never break the legacy pipeline.
             logger.exception(
                 "[Dispatcher] Shadow recording failed",
+                event_id=plan.envelope.id,
+                event_type=plan.envelope.type,
+            )
+
+    async def _record_telemetry(self, plan: EventPlan, started: float) -> None:
+        try:
+            latency_ms = int((time.perf_counter() - started) * 1000)
+            await self._telemetry.record(plan, latency_ms=latency_ms)
+        except Exception:
+            # Telemetry must never break the event pipeline.
+            logger.exception(
+                "[Dispatcher] Telemetry recording failed",
                 event_id=plan.envelope.id,
                 event_type=plan.envelope.type,
             )
@@ -647,6 +879,14 @@ class EventDispatcher:
             "matched": matched,
             "conditions": getattr(rule, "conditions", []) or [],
             "condition_mode": getattr(rule, "condition_mode", "all") or "all",
+            "cooldown_seconds": getattr(rule, "cooldown_seconds", 0) or 0,
+            "window_count": getattr(rule, "window_count", 0) or 0,
+            "window_seconds": getattr(rule, "window_seconds", 0) or 0,
+            "budget_count": getattr(rule, "budget_count", 0) or 0,
+            "budget_window_seconds": getattr(rule, "budget_window_seconds", 3600)
+            or 3600,
+            "budget_per_actor": bool(getattr(rule, "budget_per_actor", False)),
+            "requires_approval": bool(getattr(rule, "requires_approval", False)),
             "actions": [
                 {
                     "queue_item_id": item.id,
@@ -753,30 +993,53 @@ class EventDispatcher:
                 continue
             definition = self._integrations.get_action(action_id)
             one_shot = bool(definition and definition.one_shot)
-            payload, duration, applied_modifiers = apply_modifiers(
+            outcome = apply_modifiers(
                 action.payload or {},
                 action.duration,
                 getattr(action, "modifiers", []) or [],
                 context or {},
             )
-            item = QueueItem(
-                id=generate_id(),
-                action_type=action.action_type,
-                payload=payload,
-                # A one-shot action must not block the rest of the rule for
-                # an arbitrary duration: run it once, concurrently, and let
-                # the queue finalize it on the next tick.
-                duration=0 if one_shot else duration,
-                cumulative=True if one_shot else action.cumulative,
-                priority=rule.priority,
-                status=QueueItemStatus.WAITING,
-                origin=origin,
-                display_name=f"{rule.name}: {action.action_type.value}",
-                trigger_action_id=action.id,
-                trigger_rule_id=rule.id,
-                causation_depth=chain_depth + 1,
-                applied_modifiers=applied_modifiers,
-                created_at=datetime.now(),
-            )
-            items.append(item)
+            if outcome.blocked_reason:
+                logger.debug(
+                    f"[Dispatcher] Action '{action_id}' blocked by modifier",
+                    rule=rule.name,
+                    origin=origin,
+                    reason=outcome.blocked_reason,
+                )
+                continue
+            repeat = 1 if one_shot else max(1, outcome.repeat)
+            if one_shot and outcome.repeat > 1:
+                outcome.applied.append(
+                    {"type": "repeat", "ignored": "one_shot", "count": outcome.repeat}
+                )
+            for iteration in range(repeat):
+                delay = outcome.delay_seconds + (
+                    iteration * outcome.repeat_interval_seconds
+                )
+                not_before = (
+                    datetime.now() + timedelta(seconds=delay) if delay > 0 else None
+                )
+                item = QueueItem(
+                    id=generate_id(),
+                    action_type=action.action_type,
+                    payload=copy.deepcopy(outcome.payload),
+                    # A one-shot action must not block the rest of the rule for
+                    # an arbitrary duration: run it once, concurrently, and let
+                    # the queue finalize it on the next tick.
+                    duration=0 if one_shot else outcome.duration,
+                    cumulative=True if one_shot else action.cumulative,
+                    priority=rule.priority,
+                    status=QueueItemStatus.WAITING,
+                    origin=origin,
+                    display_name=f"{rule.name}: {action.action_type.value}",
+                    trigger_action_id=action.id,
+                    trigger_rule_id=rule.id,
+                    causation_depth=chain_depth + 1,
+                    applied_modifiers=list(outcome.applied),
+                    created_at=datetime.now(),
+                    not_before=not_before,
+                    iteration=iteration,
+                    repeat_count=repeat,
+                )
+                items.append(item)
         return items

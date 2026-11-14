@@ -32,6 +32,7 @@ export enum ActionType {
     LOVENSE_SET_CAP = "LOVENSE_SET_CAP",
     LOVENSE_ASSIGN = "LOVENSE_ASSIGN",
     LOVENSE_RECONNECT = "LOVENSE_RECONNECT",
+    WEBHOOK_SEND = "WEBHOOK_SEND",
 }
 
 export enum RampMode {
@@ -112,6 +113,14 @@ export interface TriggerRuleUpdatePayload {
     priority?: number | null;
     conditions?: Record<string, unknown>[] | null;
     condition_mode?: 'all' | 'any' | null;
+    cooldown_seconds?: number | null;
+    window_count?: number | null;
+    window_seconds?: number | null;
+    budget_count?: number | null;
+    budget_window_seconds?: number | null;
+    budget_per_actor?: boolean | null;
+    requires_approval?: boolean | null;
+    approval_timeout_seconds?: number | null;
 }
 
 export interface TriggerRuleDraft {
@@ -123,6 +132,14 @@ export interface TriggerRuleDraft {
     priority: number;
     conditions: Record<string, unknown>[];
     condition_mode: 'all' | 'any';
+    cooldown_seconds: number;
+    window_count: number;
+    window_seconds: number;
+    budget_count: number;
+    budget_window_seconds: number;
+    budget_per_actor: boolean;
+    requires_approval: boolean;
+    approval_timeout_seconds: number;
     actions: TriggerActionDraft[];
     labels: string[];
 }
@@ -512,6 +529,14 @@ export interface TriggerRule {
     priority: number;
     conditions: Record<string, unknown>[];
     condition_mode: 'all' | 'any';
+    cooldown_seconds: number;
+    window_count: number;
+    window_seconds: number;
+    budget_count: number;
+    budget_window_seconds: number;
+    budget_per_actor: boolean;
+    requires_approval: boolean;
+    approval_timeout_seconds: number;
     actions: TriggerAction[];
     labels: TriggerRuleLabel[];
     created_at?: string | null;
@@ -1850,6 +1875,12 @@ export interface EventsTriggeredMessage {
     payload: TriggeredEvent;
 }
 
+export interface ApprovalsUpdateMessage {
+    id?: string | null;
+    type: 'approvals:update';
+    payload: Record<string, unknown>;
+}
+
 export interface QueueUpdateMessage {
     id?: string | null;
     type: 'queue:update';
@@ -2224,6 +2255,7 @@ export type WebSocketServerMessage =
     | CoreStopMessage
     | EventsHistoryMessage
     | EventsTriggeredMessage
+    | ApprovalsUpdateMessage
     | QueueUpdateMessage
     | ProfilesLoadMessage
     | ProfilesSavedMessage

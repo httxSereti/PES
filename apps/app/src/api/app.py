@@ -82,6 +82,9 @@ async def lifespan(app: FastAPI):
         "[Events v3] rollout flags",
         enabled=v3_config.enabled,
         shadow_mode=v3_config.shadow_mode,
+        telemetry=v3_config.telemetry,
+        dedupe_ttl_seconds=v3_config.dedupe_ttl_seconds,
+        retention_days=v3_config.retention_days,
         max_workers=v3_config.max_workers,
     )
     ws_notifier.setup(loop)
@@ -127,11 +130,25 @@ async def lifespan(app: FastAPI):
         FlowVersion,
         NodeRun,
     )
+    from database.models.approval import ApprovalRequest  # noqa: F401
 
     async with db._engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
 
     await db.ensure_schema()
+
+    if v3_config.retention_days > 0:
+        from database.repositories.flow_repo import FlowRepo
+
+        repo = FlowRepo(db)
+        pruned_runs = await repo.prune_runs(v3_config.retention_days)
+        pruned_approvals = await repo.prune_approvals(v3_config.retention_days)
+        logger.info(
+            "[Events v3] retention cleanup",
+            runs=pruned_runs,
+            approvals=pruned_approvals,
+            retention_days=v3_config.retention_days,
+        )
 
     # Any training session still marked running belongs to a previous process
     # (crash or restart): close it so it no longer blocks new sessions.

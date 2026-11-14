@@ -235,6 +235,14 @@ class EventsTriggeredMessage(ServerMessage):
     payload: TriggeredEvent
 
 
+@server_message(audience=Permission.READ_EVENTS)
+class ApprovalsUpdateMessage(ServerMessage):
+    """An approval request was created, approved or rejected."""
+
+    type: Literal["approvals:update"] = "approvals:update"
+    payload: dict[str, Any]
+
+
 # ─────────────────────────────── Queue ───────────────────────────────
 
 

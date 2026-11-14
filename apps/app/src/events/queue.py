@@ -153,10 +153,12 @@ class ActionQueue:
             return
 
         with self._lock:
+            wall_now = datetime.now()
             waiting = [
                 item
                 for item in self._items
                 if item.status == QueueItemStatus.WAITING
+                and (item.not_before is None or item.not_before <= wall_now)
             ]
             has_non_cumulative_running = any(
                 item.status == QueueItemStatus.RUNNING and not item.cumulative
@@ -341,6 +343,8 @@ class ActionQueue:
         skipped = False
         with self._lock:
             if item.status != QueueItemStatus.WAITING or not self._is_queued(item):
+                return False
+            if item.not_before is not None and item.not_before > datetime.now():
                 return False
             # The integration or action may have been disabled while this item
             # was waiting, so re-check at claim time and drop it instead of
