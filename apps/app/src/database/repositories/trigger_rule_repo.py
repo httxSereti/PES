@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import fnmatch
 from dataclasses import dataclass, field
 from typing import List, Optional
 
@@ -121,7 +122,11 @@ class TriggerRuleRepo:
             return list(result.scalars().all())
 
     async def get_enabled_rules(self, event_type: str) -> List[TriggerRule]:
-        """Get only enabled rules for an event type, with their actions."""
+        """Get only enabled rules for an event type, with their actions.
+
+        Exact links are matched in SQL. Wildcard links (`sensor_*`,
+        `chaster.*`, ...) are loaded separately and filtered with fnmatch.
+        """
         async with self._db.session_maker() as session:
             stmt = (
                 select(TriggerRule)
@@ -135,7 +140,43 @@ class TriggerRuleRepo:
                 .order_by(TriggerRule.priority.desc())
             )
             result = await session.execute(stmt)
-            return list(result.scalars().all())
+            rules = list(result.scalars().all())
+
+            wildcard_stmt = (
+                select(TriggerRule)
+                .options(
+                    selectinload(TriggerRule.actions),
+                    selectinload(TriggerRule.labels),
+                    selectinload(TriggerRule.event_links),
+                )
+                .where(TriggerRule.enabled)
+                .where(
+                    or_(
+                        TriggerRule.event_type.contains("*"),
+                        TriggerRule.event_type.contains("?"),
+                        TriggerRule.event_links.any(
+                            or_(
+                                TriggerRuleEvent.event_type.contains("*"),
+                                TriggerRuleEvent.event_type.contains("?"),
+                            )
+                        ),
+                    )
+                )
+                .order_by(TriggerRule.priority.desc())
+            )
+            wildcard_result = await session.execute(wildcard_stmt)
+            known = {rule.id for rule in rules}
+            for rule in wildcard_result.scalars().all():
+                if rule.id in known:
+                    continue
+                if any(
+                    fnmatch.fnmatch(event_type, pattern)
+                    for pattern in rule_event_types(rule)
+                ):
+                    rules.append(rule)
+
+            rules.sort(key=lambda rule: rule.priority, reverse=True)
+            return rules
 
     async def get_rule(self, rule_id: str) -> Optional[TriggerRule]:
         """Get a single rule by ID with its actions."""

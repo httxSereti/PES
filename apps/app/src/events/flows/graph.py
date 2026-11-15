@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections import deque
 from dataclasses import dataclass, field
 from typing import Any, Iterable
 
@@ -57,6 +58,67 @@ def graph_from_rule(rule: Any, event_types: Iterable[str]) -> FlowSpec:
     return ensure_positions(spec)
 
 
+def graph_event_types(spec: FlowSpec) -> list[str]:
+    """Event patterns declared by trigger nodes (runtime indexing)."""
+    patterns: list[str] = []
+    for node in spec.nodes:
+        if node.type == "trigger.webhook":
+            raw = node.config.get("event_types") or node.config.get("event_type")
+            patterns.extend(
+                raw if isinstance(raw, list) else [raw or "webhook.received"]
+            )
+        elif node.type == "trigger.event":
+            raw = (
+                node.config.get("event_types")
+                or node.config.get("event_type")
+                or node.config.get("event")
+            )
+            if isinstance(raw, list):
+                patterns.extend(raw)
+            elif raw:
+                patterns.append(raw)
+    return list(dict.fromkeys(str(pattern).strip() for pattern in patterns if str(pattern).strip()))
+
+
+def validate_graph(spec: FlowSpec) -> list[str]:
+    """Structural validation for DAG graphs, including branching flows."""
+    warnings: list[str] = []
+    if len(spec.nodes) > _MAX_NODES:
+        raise GraphValidationError(f"a graph can have at most {_MAX_NODES} nodes")
+    by_id = {node.id: node for node in spec.nodes}
+    if len(by_id) != len(spec.nodes):
+        raise GraphValidationError("duplicate node ids")
+    if not any(node.type.startswith("trigger.") for node in spec.nodes):
+        raise GraphValidationError("a flow needs at least one trigger node")
+
+    outgoing: dict[str, list[FlowEdge]] = {node_id: [] for node_id in by_id}
+    incoming: dict[str, int] = {node_id: 0 for node_id in by_id}
+    for raw_edge in spec.edges:
+        edge = FlowEdge.model_validate(raw_edge)
+        if edge.source not in by_id or edge.target not in by_id:
+            raise GraphValidationError(
+                f"edge references an unknown node: {edge.source}->{edge.target}"
+            )
+        outgoing[edge.source].append(edge)
+        incoming[edge.target] += 1
+
+    queue = deque([node_id for node_id, count in incoming.items() if count == 0])
+    seen = 0
+    while queue:
+        node_id = queue.popleft()
+        seen += 1
+        for edge in outgoing[node_id]:
+            incoming[edge.target] -= 1
+            if incoming[edge.target] == 0:
+                queue.append(edge.target)
+    if seen != len(by_id):
+        raise GraphValidationError("the graph contains a cycle")
+
+    if not spec.edges:
+        warnings.append("flow has no edges")
+    return warnings
+
+
 def _ordered_nodes(spec: FlowSpec, *, strict: bool) -> list[FlowNode]:
     by_id = {node.id: node for node in spec.nodes}
     if len(by_id) != len(spec.nodes):
@@ -88,13 +150,13 @@ def _ordered_nodes(spec: FlowSpec, *, strict: bool) -> list[FlowNode]:
         if len(targets) > 1:
             raise GraphValidationError(
                 f"node '{node_id}' has multiple outgoing edges; "
-                "canvas editing currently supports linear flows"
+                "legacy TriggerRule conversion supports linear flows only"
             )
     for node_id, sources in incoming.items():
         if len(sources) > 1:
             raise GraphValidationError(
                 f"node '{node_id}' has multiple incoming edges; "
-                "canvas editing currently supports linear flows"
+                "legacy TriggerRule conversion supports linear flows only"
             )
 
     ordered: list[FlowNode] = [trigger]

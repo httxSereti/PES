@@ -12,11 +12,15 @@ from cuid2 import cuid_wrapper
 from database.models.triggered_event import TriggeredEvent
 from database.repositories.actor_repo import ActorRepo
 from database.repositories.approval_repo import ApprovalRepo
+from database.repositories.trigger_rule_graph_repo import TriggerRuleGraphRepo
+from database.repositories.trigger_rule_repo import TriggerRuleRepo, rule_event_types
 from database.repositories.triggered_event_repo import TriggeredEventRepo
 from events.enums import ActionType, QueueItemStatus
 from events.envelope import ActorRef, EventEnvelope, actor_ref_from_payload, build_envelope
 from events.conditions import build_condition_context, evaluate_conditions
-from events.flows import compile_trigger_rule
+from events.flows import FlowSpec, compile_trigger_rule, graph_from_rule
+from events.flows.expressions import render_value
+from events.flows.runtime import FlowEffect, FlowGateState, FlowRuntime, FlowRuntimeResult
 from events.models import QueueItem, TriggerAction, TriggerRule
 from events.modifiers import apply_modifiers
 from events.queue import ActionQueue
@@ -86,6 +90,12 @@ class EventDispatcher:
         self._budget_hits: dict[str, deque[float]] = {}
         # Dedupe stage: source key -> monotonic first-seen time.
         self._dedupe_seen: dict[str, float] = {}
+        # Native FlowSpec runtime for rules with a saved canvas graph.
+        self._flow_gates = FlowGateState()
+        self._flow_runtime = FlowRuntime(
+            subflow_resolver=self._resolve_subflow_graph,
+            gate_store=self._flow_gates,
+        )
 
     async def dispatch(
         self,
@@ -179,6 +189,98 @@ class EventDispatcher:
             await self._record_shadow(plan, started)
 
         await self._record_telemetry(plan, started)
+        await self._dispatch_emissions(
+            plan,
+            origin=origin,
+            chain_depth=chain_depth,
+            actor=actor,
+        )
+
+    async def run_rule_manual(
+        self,
+        rule_id: str,
+        *,
+        event_data: dict[str, Any] | None = None,
+        actor: ActorRef | None = None,
+    ) -> dict[str, Any] | None:
+        """
+        Execute one rule's FlowSpec with a manual/schedule trigger.
+
+        Used by the `POST /api/events/rules/{id}/run` endpoint and by external
+        schedulers. It goes through the same gates, approvals, queue and
+        telemetry path as a normal event.
+        """
+        rule = await TriggerRuleRepo().get_rule(rule_id)
+        if rule is None:
+            return None
+        started = time.perf_counter()
+        event_id = generate_id()
+        if actor is not None:
+            actor = await self._resolve_actor(actor)
+        payload = event_data or {}
+        event_type = rule.event_type or "system.manual"
+        plan = await self._build_plan(
+            event_id=event_id,
+            event_type=event_type,
+            event_data=payload,
+            origin="manual",
+            chain_depth=0,
+            source_integration_id=None,
+            actor=actor,
+            occurred_at=None,
+            correlation_id=None,
+            causation_id=None,
+            dedupe_key=None,
+            severity="info",
+            tags=["manual"],
+            check_known=False,
+            include_unmatched=True,
+            rules_override=[rule],
+            manual=True,
+        )
+        if plan.skipped_reason not in {"event_disabled", "out_of_scope"}:
+            await self._save_and_notify(plan.envelope, plan.summary)
+            await self._save_approvals(plan)
+            if plan.items:
+                self._queue.enqueue(plan.items)
+            if get_v3_config().shadow_mode:
+                await self._record_shadow(plan, started)
+            await self._record_telemetry(plan, started)
+            await self._dispatch_emissions(
+                plan,
+                origin="manual",
+                chain_depth=0,
+                actor=actor,
+            )
+        return {
+            "event": redact_payload(plan.envelope.model_dump(mode="json")),
+            "matched": plan.skipped_reason is None,
+            "skipped_reason": plan.skipped_reason,
+            "rules": redact_triggered_rules(plan.summary),
+            "queue_items": [
+                {
+                    "id": item.id,
+                    "action_type": item.action_type.value,
+                    "payload": self._redacted_action_payload(
+                        item.action_type.value, item.payload
+                    ),
+                    "duration": item.duration,
+                    "cumulative": item.cumulative,
+                    "priority": item.priority,
+                    "display_name": item.display_name,
+                    "trigger_rule_id": item.trigger_rule_id,
+                    "trigger_action_id": item.trigger_action_id,
+                    "modifiers": item.applied_modifiers,
+                }
+                for item in plan.items
+            ],
+            "counts": {
+                "rules": len(plan.rules),
+                "actions": len(plan.items),
+                "approvals": len(plan.approvals),
+                "emissions": len(plan.emissions),
+            },
+        }
 
     async def dispatch_direct(
         self,
@@ -422,10 +524,19 @@ class EventDispatcher:
                 }
                 for draft in plan.approvals
             ],
+            "emissions": [
+                {
+                    "event_type": emission.get("event_type"),
+                    "payload": redact_payload(emission.get("payload") or {}),
+                    "rule_id": emission.get("rule_id"),
+                }
+                for emission in plan.emissions
+            ],
             "counts": {
                 "rules": len(plan.rules),
                 "actions": len(plan.items),
                 "approvals": len(plan.approvals),
+                "emissions": len(plan.emissions),
             },
             "warnings": warnings,
             "shadow": get_v3_config().shadow_mode,
@@ -452,6 +563,8 @@ class EventDispatcher:
         draft_rule: dict[str, Any] | None = None,
         include_unmatched: bool = False,
         apply_limits: bool = True,
+        rules_override: list[TriggerRule] | None = None,
+        manual: bool = False,
     ) -> EventPlan:
         received_at = datetime.now(UTC)
         envelope = build_envelope(
@@ -493,6 +606,8 @@ class EventDispatcher:
 
         if draft_rule is not None:
             rules = [self._draft_rule_from_payload(draft_rule, event_type)]
+        elif rules_override is not None:
+            rules = list(rules_override)
         else:
             rules = await self._registry.get_rules_for_event(event_type)
         if not rules:
@@ -500,6 +615,7 @@ class EventDispatcher:
 
         queue_items: list[QueueItem] = []
         approvals: list[ApprovalDraft] = []
+        emissions: list[dict[str, Any]] = []
         triggered_rules_summary: list[dict] = []
         rule_results: list[dict] = []
         for rule in rules:
@@ -508,9 +624,63 @@ class EventDispatcher:
                 getattr(rule, "condition_mode", "all") or "all",
                 context,
             )
+            items: list[QueueItem] = []
+            rule_emissions: list[dict[str, Any]] = []
+            flow_result: FlowRuntimeResult | None = None
+            flow_warning: str | None = None
+
+            if matched and getattr(rule, "graph", None) and getattr(rule, "graph_version", 0):
+                try:
+                    flow_result = await self._execute_rule_flow(
+                        rule,
+                        event_id=event_id,
+                        event_type=event_type,
+                        event_data=event_data,
+                        actor=actor,
+                        apply_limits=apply_limits,
+                        manual=manual,
+                    )
+                except Exception as exc:
+                    logger.exception(
+                        "[Dispatcher] Flow runtime failed; using legacy rule",
+                        rule_id=rule.id,
+                        flow_version=getattr(rule, "graph_version", 0),
+                    )
+                    flow_result = None
+                    flow_warning = f"flow runtime failed, legacy fallback: {exc}"
+                if flow_result is not None:
+                    items = self._flow_effects_to_queue_items(
+                        rule,
+                        flow_result,
+                        origin=origin,
+                        context=context,
+                        source_integration_id=source_integration_id,
+                        chain_depth=chain_depth,
+                    )
+                    for emission in flow_result.emissions:
+                        rule_emissions.append(
+                            {
+                                "event_type": emission.event_type,
+                                "payload": emission.payload,
+                                "rule_id": rule.id,
+                            }
+                        )
+                    if flow_result.warnings:
+                        flow_warning = "; ".join(flow_result.warnings)
+
+            if flow_result is None:
+                items = self._rule_to_queue_items(
+                    rule,
+                    origin,
+                    context=context,
+                    source_integration_id=source_integration_id,
+                    chain_depth=chain_depth,
+                    conditions_matched=matched,
+                )
+
             gate_reason: str | None = None
             gate_details: dict[str, Any] = {}
-            if matched:
+            if matched and (items or rule_emissions):
                 gate_reason, gate_details = self._rule_gate_reason(
                     rule, context, apply_limits=apply_limits
                 )
@@ -518,23 +688,20 @@ class EventDispatcher:
                 rule_summary = self._build_rule_summary(rule, [], matched=False)
                 rule_summary["skipped_reason"] = gate_reason
                 rule_summary["gate"] = gate_details
+                if flow_result is not None:
+                    rule_summary["flow"] = self._flow_summary(rule, flow_result)
                 rule_results.append(rule_summary)
                 if include_unmatched:
                     triggered_rules_summary.append(rule_summary)
                 continue
-            items = self._rule_to_queue_items(
-                rule,
-                origin,
-                context=context,
-                source_integration_id=source_integration_id,
-                chain_depth=chain_depth,
-                conditions_matched=matched,
-            )
+
             if items and getattr(rule, "requires_approval", False):
                 rule_summary = self._build_rule_summary(rule, items, matched=matched)
                 rule_summary["skipped_reason"] = "pending_approval"
                 if gate_details:
                     rule_summary["gate"] = gate_details
+                if flow_result is not None:
+                    rule_summary["flow"] = self._flow_summary(rule, flow_result)
                 approvals.append(
                     ApprovalDraft(
                         rule_id=rule.id,
@@ -549,13 +716,29 @@ class EventDispatcher:
                 rule_results.append(rule_summary)
                 triggered_rules_summary.append(rule_summary)
                 continue
+
             queue_items.extend(items)
+            emissions.extend(rule_emissions)
             rule_summary = self._build_rule_summary(rule, items, matched=matched)
             if gate_details:
                 rule_summary["gate"] = gate_details
+            if flow_result is not None:
+                rule_summary["flow"] = self._flow_summary(rule, flow_result)
+                if not items and flow_result.skipped_reason:
+                    rule_summary["matched"] = False
+                    rule_summary["skipped_reason"] = flow_result.skipped_reason
+            elif flow_warning:
+                rule_summary["flow"] = {
+                    "status": "fallback",
+                    "warnings": [flow_warning],
+                }
             rule_results.append(rule_summary)
-            if matched or items or include_unmatched:
+            if rule_summary.get("matched", matched) or items or include_unmatched:
                 triggered_rules_summary.append(rule_summary)
+
+            if items or rule_emissions or (flow_result and flow_result.effects):
+                if self._flow_stops_processing(rule):
+                    break
 
         return EventPlan(
             envelope=envelope,
@@ -563,6 +746,7 @@ class EventDispatcher:
             items=queue_items,
             summary=triggered_rules_summary,
             approvals=approvals,
+            emissions=emissions,
             rule_results=rule_results,
         )
 
@@ -594,6 +778,211 @@ class EventDispatcher:
             or actor.get("display_name")
             or "anonymous"
         )
+
+    @staticmethod
+    def _flow_stops_processing(rule: TriggerRule) -> bool:
+        graph = getattr(rule, "graph", None)
+        if not isinstance(graph, dict):
+            return False
+        variables = graph.get("variables") or {}
+        if not isinstance(variables, dict):
+            return False
+        return bool(variables.get("stop_processing")) or str(
+            variables.get("match_mode") or "all"
+        ).lower() == "first"
+
+    async def _resolve_subflow_graph(self, rule_id: str) -> FlowSpec | None:
+        """Resolve a runtime sub-flow to its saved graph or legacy equivalent."""
+        version: int | None = None
+        if "@" in rule_id:
+            raw_id, raw_version = rule_id.rsplit("@", 1)
+            rule_id = raw_id
+            try:
+                version = int(raw_version)
+            except ValueError:
+                version = None
+        if version is not None:
+            row = await TriggerRuleGraphRepo().get_version(rule_id, version)
+            if row is None or not row.graph:
+                return None
+            try:
+                return FlowSpec.model_validate(row.graph)
+            except Exception:
+                logger.exception(
+                    "[Dispatcher] Invalid pinned sub-flow graph",
+                    rule_id=rule_id,
+                    version=version,
+                )
+                return None
+        rule = await TriggerRuleRepo().get_rule(rule_id)
+        if rule is None:
+            return None
+        if rule.graph and getattr(rule, "graph_version", 0):
+            try:
+                return FlowSpec.model_validate(rule.graph)
+            except Exception:
+                logger.exception(
+                    "[Dispatcher] Invalid saved sub-flow graph",
+                    rule_id=rule_id,
+                )
+        return graph_from_rule(rule, rule_event_types(rule))
+
+    async def _execute_rule_flow(
+        self,
+        rule: TriggerRule,
+        *,
+        event_id: str,
+        event_type: str,
+        event_data: dict[str, Any],
+        actor: ActorRef | None,
+        apply_limits: bool,
+        manual: bool = False,
+    ) -> FlowRuntimeResult | None:
+        if not rule.graph or not getattr(rule, "graph_version", 0):
+            return None
+        try:
+            spec = FlowSpec.model_validate(rule.graph)
+        except Exception:
+            logger.exception(
+                "[Dispatcher] Invalid rule graph",
+                rule_id=rule.id,
+                graph_version=getattr(rule, "graph_version", 0),
+            )
+            return None
+        return await self._flow_runtime.execute(
+            spec,
+            event_type=event_type,
+            event_data=event_data,
+            actor=actor,
+            session=store.get_active_session(),
+            state={
+                "session": store.get_active_session() or {},
+                "units": store.get_all_units_settings(),
+                "sensors": store.get_all_sensors_settings(),
+            },
+            run_id=event_id,
+            apply_limits=apply_limits,
+            manual=manual,
+        )
+
+    @staticmethod
+    def _flow_summary(
+        rule: TriggerRule, result: FlowRuntimeResult
+    ) -> dict[str, Any]:
+        return {
+            "status": result.status,
+            "version": int(getattr(rule, "graph_version", 0) or 0),
+            "trigger_node_id": result.trigger_node_id,
+            "skipped_reason": result.skipped_reason,
+            "warnings": list(result.warnings),
+            "node_trace": [
+                {
+                    "node_id": trace.node_id,
+                    "node_type": trace.node_type,
+                    "status": trace.status,
+                    "value": trace.value,
+                    "reason": trace.reason,
+                    "duration_ms": trace.duration_ms,
+                }
+                for trace in result.traces
+            ],
+        }
+
+    def _flow_effects_to_queue_items(
+        self,
+        rule: TriggerRule,
+        result: FlowRuntimeResult,
+        *,
+        origin: str,
+        context: dict[str, Any],
+        source_integration_id: str | None,
+        chain_depth: int,
+    ) -> list[QueueItem]:
+        """Turn native FlowSpec effects into executable queue items."""
+        items: list[QueueItem] = []
+        for effect in result.effects:
+            try:
+                action_type = ActionType(str(effect.action_type))
+            except ValueError:
+                result.warnings.append(
+                    f"unknown action_type from flow node {effect.node_id}: "
+                    f"{effect.action_type}"
+                )
+                continue
+            action_id = action_type.value
+            if not self._integrations.is_action_enabled(action_id):
+                logger.debug(
+                    "[Dispatcher] Flow action disabled, skipped",
+                    rule=rule.name,
+                    action=action_id,
+                    origin=origin,
+                )
+                continue
+            if self._is_local_echo_action(action_id, source_integration_id):
+                logger.debug(
+                    "[Dispatcher] Flow action skipped (local echo)",
+                    rule=rule.name,
+                    action=action_id,
+                    origin=origin,
+                )
+                continue
+            definition = self._integrations.get_action(action_id)
+            one_shot = bool(definition and definition.one_shot)
+            outcome = apply_modifiers(
+                effect.payload,
+                effect.duration,
+                effect.modifiers,
+                context,
+            )
+            if outcome.blocked_reason:
+                result.warnings.append(
+                    f"effect {effect.node_id} blocked by {outcome.blocked_reason}"
+                )
+                continue
+            repeat = 1 if one_shot else max(1, outcome.repeat * effect.repeat)
+            interval = (
+                outcome.repeat_interval_seconds
+                or effect.repeat_interval_seconds
+                or 0
+            )
+            for iteration in range(repeat):
+                delay = outcome.delay_seconds + effect.delay_seconds + iteration * interval
+                not_before = (
+                    datetime.now() + timedelta(seconds=delay) if delay > 0 else None
+                )
+                item_index = min(iteration, len(effect.iteration_items) - 1) if effect.iteration_items else iteration
+                iteration_context = {
+                    **context,
+                    "iteration": iteration,
+                    "item": (
+                        effect.iteration_items[item_index]
+                        if effect.iteration_items
+                        else None
+                    ),
+                }
+                item_payload = render_value(outcome.payload, iteration_context)
+                items.append(
+                    QueueItem(
+                        id=generate_id(),
+                        action_type=action_type,
+                        payload=copy.deepcopy(item_payload),
+                        duration=0 if one_shot else outcome.duration,
+                        cumulative=True if one_shot else effect.cumulative,
+                        priority=rule.priority,
+                        status=QueueItemStatus.WAITING,
+                        origin=origin,
+                        display_name=f"{rule.name}: {action_id}",
+                        trigger_action_id=effect.node_id,
+                        trigger_rule_id=rule.id,
+                        causation_depth=chain_depth + 1,
+                        applied_modifiers=list(outcome.applied),
+                        created_at=datetime.now(),
+                        not_before=not_before,
+                        iteration=iteration,
+                        repeat_count=repeat,
+                    )
+                )
+        return items
 
     def _rule_gate_reason(
         self,
@@ -775,6 +1164,32 @@ class EventDispatcher:
                 event_id=plan.envelope.id,
                 event_type=plan.envelope.type,
             )
+
+    async def _dispatch_emissions(
+        self,
+        plan: EventPlan,
+        *,
+        origin: str,
+        chain_depth: int,
+        actor: ActorRef | None,
+    ) -> None:
+        for emission in plan.emissions:
+            try:
+                await self.dispatch(
+                    emission["event_type"],
+                    emission.get("payload") or {},
+                    origin=f"{origin}:flow-emit",
+                    chain_depth=chain_depth + 1,
+                    correlation_id=plan.envelope.correlation_id,
+                    causation_id=plan.envelope.id,
+                    actor=actor,
+                )
+            except Exception:
+                logger.exception(
+                    "[Dispatcher] Flow emission failed",
+                    event_type=emission.get("event_type"),
+                    event_id=plan.envelope.id,
+                )
 
     def _session_allows_event(self, event_type: str) -> bool:
         """

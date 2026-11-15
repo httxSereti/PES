@@ -1,6 +1,6 @@
 # Events v3 — PES Flow et télémétrie
 
-> Statut : phases 0 à 4 implémentées côté moteur ; phase 5 (durcissement) entamée ; canvas éditable, sous-flows et diff de versions livrés.
+> Statut : phases 0 à 4 implémentées côté moteur ; phase 5 (durcissement) entamée ; canvas éditable, runtime FlowSpec natif (branches, sous-flows, données, gates) et diff de versions livrés.
 > Portée : moteur d'événements, éditeur de flows, télémétrie, schéma WS, base SQLite.
 > Documents liés : [events-v2.md](events-v2.md), [events-v2-code.md](events-v2-code.md), [events-trigger-rules-audit.md](events-trigger-rules-audit.md).
 > Intégrations : [events-v3-integrations.md](events-v3-integrations.md) — catalogue séparé, volontairement exclu de la roadmap moteur.
@@ -72,7 +72,7 @@ La direction retenue est **Rules + Drawer (F)** + **Composer (G)**, pas le canva
 - endpoint `POST /api/events/simulate` étendu avec `draft_rule` pour le dry-run du brouillon ;
 - compilateur `FlowSpec` linéaire (`events/flows/`) et plan compilé renvoyé par la simulation.
 
-Limites assumées : conditions plates (AND/OR). L'édition graphique est désormais livrée pour les flows linéaires, avec branches parallèles exclues.
+Limites assumées : conditions plates (AND/OR) côté formulaire simple. Les branches, switches et nœuds avancés se font désormais dans le canvas et s'exécutent via le runtime FlowSpec.
 
 Fichiers phase 1 : `events/conditions.py`, `events/modifiers.py`, `events/flows/`, `form/condition-builder.tsx`, `form/action-amplifier-fields.tsx`, `form/flow-map.tsx`, `form/rule-preview.tsx`, `console/rule-flow-drawer.tsx`, `hooks/useRuleSimulation.ts`.
 
@@ -130,6 +130,7 @@ Tables : `trigger_rules` (colonnes additives), `approval_requests`.
 EVENTS_V3_TELEMETRY=true
 EVENTS_V3_DEDUPE_TTL_SECONDS=300
 EVENTS_V3_RETENTION_DAYS=30
+EVENTS_V3_SCHEDULER=false
 WEBHOOK_ALLOW_PRIVATE=false
 ```
 
@@ -141,7 +142,7 @@ Le canvas `/app/events/flows/{id}/canvas` est maintenant éditable sans dépenda
 - inspecteur par nœud : événements du trigger, condition, action (type, payload JSON, durée, cumulatif, modificateurs), appel de sous-flow ;
 - bouton **Save & apply** : le graphe est validé, compilé puis réécrit dans la règle (`event_types`, `conditions`, `actions`) ; les cooldowns, budgets, approbations, labels et priorités sont conservés ;
 - **Rebuild from rule** régénère le canvas depuis la règle courante ;
-- **sous-flows** : un nœud `flow.call` référence une autre règle ; ses conditions et actions sont inlinées à l'application du graphe ;
+- **sous-flows** : un nœud `flow.call`/`logic.subflow` référence une autre règle ; le runtime l'exécute à l'appel (version courante ou version épinglée), avec détection de cycles et profondeur max 8 ;
 - **versions** : chaque sauvegarde crée une `trigger_rule_versions` immuable. Le panneau Versions permet de comparer deux versions (ou une version et la version courante), avec nœuds/arêtes ajoutés en vert, supprimés en rouge et modifiés en ambre, puis de restaurer une version.
 
 API :
@@ -152,8 +153,26 @@ API :
 - `GET /api/events/rules/{id}/versions/{version}`
 - `GET /api/events/rules/{id}/diff?from_version=&to_version=`
 - `POST /api/events/rules/{id}/versions/{version}/restore`
+- `POST /api/events/rules/{id}/run` (`{"event_data": {...}}`) pour un trigger manuel/schedule
 
-Le canvas reste **linéaire** : une seule arête sortante par nœud, pas de branches parallèles. Les branches, les sous-flows récursifs et l'édition multi-utilisateur temps réel restent hors périmètre. Les connecteurs nominatifs nécessitent toujours leurs credentials/ToS propres.
+Le canvas accepte désormais des graphes arbitraires (DAG, branches, ports `true`/`false`, `case:x`/`default`). Un graphe linéaire est aussi réécrit dans les champs legacy (`event_types`, `conditions`, `actions`) pour le fallback. Un graphe non linéaire est sauvegardé **runtime-only** : la règle garde ses anciennes actions comme filet de sécurité, mais le dispatcher exécute le FlowSpec natif. L'édition multi-utilisateur temps réel reste hors périmètre.
+
+### 1.9 Runtime FlowSpec natif
+
+Le dispatcher exécute maintenant les graphes sauvegardés avec `FlowRuntime` (`events/flows/runtime.py`) au lieu de toujours passer par `TriggerRule` :
+
+- **DAG + branches** : évaluation topologique, seules les branches atteintes s'exécutent (`true`/`false`, `case:x`/`default`) ;
+- **triggers** : `trigger.event` (exact + wildcard `sensor_*`), `trigger.webhook`, `trigger.manual`, `trigger.schedule` ; plusieurs triggers = OR. Les triggers manuels/schedule s'exécutent via `POST /api/events/rules/{id}/run`. Le scheduler interne lance les nœuds `trigger.schedule` avec `config.interval_seconds` (minimum 30 s) quand `EVENTS_V3_SCHEDULER=true` ; un cron externe peut aussi appeler la route `/run`.
+- **data** : `actor`, `state`, `variable`, `constant`, `json`, `template`, `math`, `compare`, `select`, `random`, `now`, `coalesce` ;
+- **logic** : `guard`, `switch`, `all`, `any`, `not`, `sequence`, `parallel`, `delay`, `repeat`, `foreach`, `cooldown`, `throttle`, `window`, `dedupe`, `subflow`, `stop` ;
+- **effects** : `effect.action` + presets (`level`, `mult`, `profile`, `chaster_time`, `lovense`, `puryfi`, `training`, `webhook`, `discord`) ; `emit_event` émet un nouvel événement dans le pipeline ; `notify` et les terminaux sont tracés ;
+- **expressions** : évaluateur AST restreint, sans `eval`, avec templates `{expr}` / `{{ expr }}` ;
+- **gates de nœud** : cooldown/throttle/window/dedupe persistants en mémoire, ignorés en dry-run ;
+- **fallback** : une erreur de runtime retombe sur les actions legacy et produit un warning dans le run ;
+- **sous-flows** : exécution récursive avec pile, détection de cycles, profondeur max 8 ; les triggers d'un sous-flow sont forcés (c'est un appel, pas un nouvel événement) ;
+- **télémétrie** : les `node_runs` viennent directement de la trace runtime (statut, valeur, raison, durée).
+
+Le runtime ne touche jamais au hardware : il produit des `FlowEffect`, convertis en `QueueItem` par le dispatcher, puis filtrés par les gates de règle, le planner de modificateurs et les approbations existantes.
 
 ---
 
@@ -1280,7 +1299,7 @@ Les `priority`, `enabled`, `labels` et `event_links` sont conservés. Les action
 | **4. SDK connecteurs** | manifest, transports, PES Link, pairing, santé, privacy modes, sandbox                                                                                                                                                                                                | 0           | un connecteur de test peut émettre un événement et recevoir une action               |
 | **5. Durcissement**    | tests de charge, revue sécurité, docs, migration legacy complète, observabilité                                                                                                                                                                                       | 1–4         | `EVENTS_V3_ENABLED=true` par défaut, rollback testé                                  |
 
-> Phase 1 livrée dans la direction **F + G** : conditions, amplificateurs, preview de brouillon et drawer de flow. Le compilateur `FlowSpec` alimente désormais un canvas éditable avec sous-flows et diff de versions.
+> Phase 1 livrée dans la direction **F + G** : conditions, amplificateurs, preview de brouillon et drawer de flow. Le compilateur `FlowSpec` alimente un canvas éditable, un runtime natif avec branches/sous-flows et un diff de versions.
 >
 > Phases 2 à 4 livrées : télémétrie/runs, fenêtres/cooldowns/budgets/approbations, modificateurs `clamp`/`repeat`/`delay`/`probability`, webhook générique entrant et sortant, manifestes de connecteurs.
 

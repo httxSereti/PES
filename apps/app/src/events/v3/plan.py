@@ -29,6 +29,8 @@ class EventPlan:
     summary: list[dict] = field(default_factory=list)
     # Matched rules whose actions wait for an approval decision.
     approvals: list[ApprovalDraft] = field(default_factory=list)
+    # Events emitted by `effect.emit_event` nodes, dispatched after the run.
+    emissions: list[dict] = field(default_factory=list)
     # Full per-rule result, including skipped rules, used by telemetry.
     rule_results: list[dict] = field(default_factory=list)
     skipped_reason: str | None = None

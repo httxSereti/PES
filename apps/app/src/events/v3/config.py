@@ -38,6 +38,7 @@ class V3Config:
     max_workers: int = 4
     dedupe_ttl_seconds: int = 300
     retention_days: int = 0
+    scheduler: bool = False
 
 
 def get_v3_config() -> V3Config:
@@ -50,4 +51,5 @@ def get_v3_config() -> V3Config:
         max_workers=max(1, _env_int("EVENTS_V3_MAX_WORKERS", 4)),
         dedupe_ttl_seconds=max(0, _env_int("EVENTS_V3_DEDUPE_TTL_SECONDS", 300)),
         retention_days=max(0, _env_int("EVENTS_V3_RETENTION_DAYS", 0)),
+        scheduler=_env_bool("EVENTS_V3_SCHEDULER", False),
     )

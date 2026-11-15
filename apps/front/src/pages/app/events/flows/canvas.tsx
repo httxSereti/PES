@@ -33,6 +33,51 @@ const NODE_H = 96;
 const COLUMN_WIDTH = 280;
 const DEFAULT_Y = 120;
 
+const ADVANCED_NODE_TYPES = [
+    "trigger.webhook",
+    "trigger.manual",
+    "trigger.schedule",
+    "data.actor",
+    "data.state",
+    "data.variable",
+    "data.constant",
+    "data.json",
+    "data.template",
+    "data.math",
+    "data.compare",
+    "data.select",
+    "data.random",
+    "data.now",
+    "data.coalesce",
+    "logic.switch",
+    "logic.all",
+    "logic.any",
+    "logic.not",
+    "logic.sequence",
+    "logic.parallel",
+    "logic.delay",
+    "logic.repeat",
+    "logic.foreach",
+    "logic.cooldown",
+    "logic.throttle",
+    "logic.dedupe",
+    "logic.window",
+    "logic.stop",
+    "effect.level",
+    "effect.mult",
+    "effect.profile",
+    "effect.chaster_time",
+    "effect.lovense",
+    "effect.puryfi",
+    "effect.training",
+    "effect.discord",
+    "effect.webhook",
+    "effect.emit_event",
+    "effect.notify",
+    "terminal.log",
+    "terminal.alert",
+] as const;
+
 const CONDITION_OPS = [
     "eq",
     "neq",
@@ -82,11 +127,20 @@ function ensurePositions(graph: FlowGraph): FlowGraph {
 
 function nodeTitle(node: GraphNode): string {
     if (node.type === "trigger.event") return "When event";
+    if (node.type === "trigger.manual") return "Manual trigger";
+    if (node.type === "trigger.schedule") return "Schedule trigger";
+    if (node.type === "trigger.webhook") return "Webhook trigger";
     if (node.type === "logic.guard") return "If condition";
-    if (node.type === "flow.call") {
+    if (node.type === "flow.call" || node.type === "logic.subflow") {
         return text(node.config.rule_name) || "Call sub-flow";
     }
-    return text(node.config.action_type) || "Then action";
+    if (node.type === "effect.action" || node.type.startsWith("effect.")) {
+        return text(node.config.action_type) || node.type.replace("effect.", "Effect · ");
+    }
+    return node.type
+        .split(".")
+        .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+        .join(" · ");
 }
 
 function nodeDetail(node: GraphNode): string {
@@ -98,21 +152,31 @@ function nodeDetail(node: GraphNode): string {
         const condition = asRecord(node.config.condition ?? node.config);
         return `${text(condition.field) || "field"} ${text(condition.op) || "eq"} ${String(condition.value ?? "")}`;
     }
-    if (node.type === "flow.call") {
+    if (node.type === "flow.call" || node.type === "logic.subflow") {
         return text(node.config.rule_id) || "choose a rule";
     }
-    const payload = asRecord(node.config.payload);
-    const entries = Object.entries(payload);
+    if (node.type.startsWith("effect.")) {
+        const payload = asRecord(node.config.payload);
+        const entries = Object.entries(payload);
+        return (
+            entries
+                .slice(0, 3)
+                .map(([key, value]) => `${key}=${String(value)}`)
+                .join(" · ") || "effect"
+        );
+    }
+    const config = asRecord(node.config);
+    const entries = Object.entries(config);
     return (
         entries
             .slice(0, 3)
             .map(([key, value]) => `${key}=${String(value)}`)
-            .join(" · ") || "action"
+            .join(" · ") || node.type
     );
 }
 
 function nodeTone(node: GraphNode) {
-    if (node.type === "trigger.event") {
+    if (node.type.startsWith("trigger.")) {
         return {
             border: "border-violet-500/35",
             bg: "bg-violet-500/[0.07]",
@@ -120,7 +184,7 @@ function nodeTone(node: GraphNode) {
             Icon: Zap,
         };
     }
-    if (node.type === "logic.guard") {
+    if (node.type.startsWith("logic.")) {
         return {
             border: "border-emerald-500/30",
             bg: "bg-emerald-500/[0.06]",
@@ -128,7 +192,23 @@ function nodeTone(node: GraphNode) {
             Icon: GitBranch,
         };
     }
-    if (node.type === "flow.call") {
+    if (node.type.startsWith("data.")) {
+        return {
+            border: "border-cyan-500/30",
+            bg: "bg-cyan-500/[0.06]",
+            text: "text-cyan-600 dark:text-cyan-300",
+            Icon: SlidersHorizontal,
+        };
+    }
+    if (node.type.startsWith("terminal.")) {
+        return {
+            border: "border-zinc-500/30",
+            bg: "bg-zinc-500/[0.06]",
+            text: "text-zinc-600 dark:text-zinc-300",
+            Icon: Workflow,
+        };
+    }
+    if (node.type === "flow.call" || node.type === "logic.subflow") {
         return {
             border: "border-sky-500/30",
             bg: "bg-sky-500/[0.06]",
@@ -146,7 +226,7 @@ function nodeTone(node: GraphNode) {
 
 function chainTail(graph: FlowGraph): GraphNode | null {
     const byId = new Map(graph.nodes.map((node) => [node.id, node]));
-    let current = graph.nodes.find((node) => node.type === "trigger.event") ?? null;
+    let current = graph.nodes.find((node) => node.type.startsWith("trigger.")) ?? null;
     const seen = new Set<string>();
     while (current) {
         if (seen.has(current.id)) break;
@@ -168,6 +248,14 @@ function newNode(type: GraphNode["type"], index: number): GraphNode {
             position: { x: 40, y: DEFAULT_Y },
         };
     }
+    if (type.startsWith("trigger.")) {
+        return {
+            id,
+            type,
+            config: type === "trigger.webhook" ? { event_type: "webhook.received" } : {},
+            position: { x: 40 + index * COLUMN_WIDTH, y: DEFAULT_Y },
+        };
+    }
     if (type === "logic.guard") {
         return {
             id,
@@ -178,11 +266,41 @@ function newNode(type: GraphNode["type"], index: number): GraphNode {
             position: { x: 40 + index * COLUMN_WIDTH, y: DEFAULT_Y },
         };
     }
-    if (type === "flow.call") {
+    if (type === "flow.call" || type === "logic.subflow") {
         return {
             id,
             type,
             config: { rule_id: "", rule_name: "" },
+            position: { x: 40 + index * COLUMN_WIDTH, y: DEFAULT_Y },
+        };
+    }
+    if (type.startsWith("data.")) {
+        return {
+            id,
+            type,
+            config: {},
+            position: { x: 40 + index * COLUMN_WIDTH, y: DEFAULT_Y },
+        };
+    }
+    if (type.startsWith("logic.") || type.startsWith("terminal.")) {
+        return {
+            id,
+            type,
+            config: {},
+            position: { x: 40 + index * COLUMN_WIDTH, y: DEFAULT_Y },
+        };
+    }
+    if (type.startsWith("effect.")) {
+        return {
+            id,
+            type,
+            config: {
+                action_type: type === "effect.action" ? "LEVEL" : undefined,
+                payload: { units: "1", channels: "A", value: "+5" },
+                duration: 30,
+                cumulative: false,
+                modifiers: [],
+            },
             position: { x: 40 + index * COLUMN_WIDTH, y: DEFAULT_Y },
         };
     }
@@ -218,6 +336,7 @@ function NodeInspector({
     currentRuleId,
     onPatch,
     onDelete,
+    onConnect,
 }: {
     node: GraphNode;
     graph: FlowGraph;
@@ -225,6 +344,7 @@ function NodeInspector({
     currentRuleId: string | undefined;
     onPatch: (patch: Partial<GraphNode>, config?: Record<string, unknown>) => void;
     onDelete: () => void;
+    onConnect: (sourcePort: string, target: string, targetPort: string) => void;
 }) {
     const { actions } = useActionCatalog();
     const integrations = useAppSelector(integrationsSelectors.selectAll);
@@ -241,14 +361,25 @@ function NodeInspector({
     const [modifiersText, setModifiersText] = useState(() =>
         JSON.stringify(Array.isArray(node.config.modifiers) ? node.config.modifiers : [], null, 2),
     );
+    const [configText, setConfigText] = useState(() => JSON.stringify(node.config, null, 2));
+    const [targetNode, setTargetNode] = useState("");
+    const [connectPort, setConnectPort] = useState(
+        node.type === "logic.guard" ? "true" : node.type === "logic.switch" ? "default" : "out",
+    );
+    const [connectTargetPort, setConnectTargetPort] = useState("in");
 
     useEffect(() => {
         setPayloadText(JSON.stringify(asRecord(node.config.payload), null, 2));
         setModifiersText(
             JSON.stringify(Array.isArray(node.config.modifiers) ? node.config.modifiers : [], null, 2),
         );
-    }, [node.id, node.config.payload, node.config.modifiers]);
+        setConfigText(JSON.stringify(node.config, null, 2));
+    }, [node.id, node.config]);
 
+    const isActionEffect =
+        node.type.startsWith("effect.") &&
+        node.type !== "effect.emit_event" &&
+        node.type !== "effect.notify";
     const eventTypes = Array.isArray(node.config.event_types)
         ? node.config.event_types.map(String)
         : [];
@@ -329,6 +460,58 @@ function NodeInspector({
                 </div>
             )}
 
+            {node.type === "trigger.webhook" && (
+                <div className="space-y-1.5">
+                    <p className="font-mono text-[8px] uppercase tracking-widest text-muted-foreground/40">
+                        webhook event pattern
+                    </p>
+                    <Input
+                        value={String(node.config.event_type ?? "webhook.received")}
+                        onChange={(event) =>
+                            onPatch({}, { ...node.config, event_type: event.target.value })
+                        }
+                        className="h-8 font-mono text-[10px]"
+                    />
+                    <p className="text-[9px] text-muted-foreground/45">
+                        Exact event id or wildcard pattern.
+                    </p>
+                </div>
+            )}
+
+            {(node.type === "trigger.manual" || node.type === "trigger.schedule") && (
+                <div className="space-y-2">
+                    {node.type === "trigger.schedule" && (
+                        <div className="space-y-1">
+                            <p className="font-mono text-[8px] uppercase tracking-widest text-muted-foreground/40">
+                                interval (seconds)
+                            </p>
+                            <Input
+                                type="number"
+                                min={30}
+                                value={Number(node.config.interval_seconds ?? 60)}
+                                onChange={(event) =>
+                                    onPatch(
+                                        {},
+                                        {
+                                            ...node.config,
+                                            interval_seconds: Number(event.target.value),
+                                        },
+                                    )
+                                }
+                                className="h-8 font-mono text-[10px]"
+                            />
+                        </div>
+                    )}
+                    <p className="text-[10px] text-muted-foreground/60">
+                        This trigger is not event-driven. Run it with the <span className="font-mono">Run now</span>{" "}
+                        button or <span className="font-mono">POST /api/events/rules/{graph.created_from}/run</span>
+                        {node.type === "trigger.schedule"
+                            ? " or let the internal scheduler tick when EVENTS_V3_SCHEDULER=true."
+                            : "."}
+                    </p>
+                </div>
+            )}
+
             {node.type === "logic.guard" && (
                 <div className="space-y-2">
                     <Input
@@ -385,27 +568,29 @@ function NodeInspector({
                 </div>
             )}
 
-            {node.type === "effect.action" && (
+            {isActionEffect && (
                 <div className="space-y-2">
-                    <Select
-                        value={text(node.config.action_type) || "LEVEL"}
-                        onValueChange={(value) =>
-                            onPatch({}, { ...node.config, action_type: value })
-                        }
-                    >
-                        <SelectTrigger className="h-8 text-[10px]">
-                            <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent className="max-h-72">
-                            {Object.values(actions)
-                                .sort((a, b) => a.label.localeCompare(b.label))
-                                .map((action) => (
-                                    <SelectItem key={action.id} value={action.id}>
-                                        {action.label}
-                                    </SelectItem>
-                                ))}
-                        </SelectContent>
-                    </Select>
+                    {node.type === "effect.action" && (
+                        <Select
+                            value={text(node.config.action_type) || "LEVEL"}
+                            onValueChange={(value) =>
+                                onPatch({}, { ...node.config, action_type: value })
+                            }
+                        >
+                            <SelectTrigger className="h-8 text-[10px]">
+                                <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent className="max-h-72">
+                                {Object.values(actions)
+                                    .sort((a, b) => a.label.localeCompare(b.label))
+                                    .map((action) => (
+                                        <SelectItem key={action.id} value={action.id}>
+                                            {action.label}
+                                        </SelectItem>
+                                    ))}
+                            </SelectContent>
+                        </Select>
+                    )}
                     <div className="grid grid-cols-2 gap-2">
                         <Input
                             type="number"
@@ -461,7 +646,7 @@ function NodeInspector({
                 </div>
             )}
 
-            {node.type === "flow.call" && (
+            {(node.type === "flow.call" || node.type === "logic.subflow") && (
                 <div className="space-y-2">
                     <p className="text-[10px] text-muted-foreground/60">
                         Inlines the selected rule’s conditions and actions when the graph is applied.
@@ -493,8 +678,117 @@ function NodeInspector({
                                 ))}
                         </SelectContent>
                     </Select>
+                    <Input
+                        value={String(node.config.version ?? "")}
+                        onChange={(event) =>
+                            onPatch(
+                                {},
+                                {
+                                    ...node.config,
+                                    version: event.target.value
+                                        ? Number(event.target.value)
+                                        : undefined,
+                                },
+                            )
+                        }
+                        type="number"
+                        min={1}
+                        placeholder="version (optional, current if empty)"
+                        className="h-8 font-mono text-[10px]"
+                    />
+                    <p className="text-[9px] text-muted-foreground/45">
+                        Empty version = current graph. A pinned version is loaded from the version snapshot.
+                    </p>
                 </div>
             )}
+
+            {!node.type.startsWith("trigger.") &&
+                node.type !== "logic.guard" &&
+                !isActionEffect &&
+                node.type !== "flow.call" &&
+                node.type !== "logic.subflow" && (
+                    <div>
+                        <p className="mb-1 font-mono text-[8px] uppercase tracking-widest text-muted-foreground/40">
+                            node config (JSON)
+                        </p>
+                        <Textarea
+                            value={configText}
+                            onChange={(event) => setConfigText(event.target.value)}
+                            onBlur={() => {
+                                try {
+                                    const parsed = JSON.parse(configText);
+                                    if (typeof parsed !== "object" || Array.isArray(parsed)) {
+                                        throw new Error("config must be a JSON object");
+                                    }
+                                    onPatch({}, parsed as Record<string, unknown>);
+                                } catch (error) {
+                                    toast.error(error instanceof Error ? error.message : "Invalid JSON");
+                                    setConfigText(JSON.stringify(node.config, null, 2));
+                                }
+                            }}
+                            className="min-h-32 font-mono text-[10px]"
+                        />
+                    </div>
+                )}
+
+            <div className="space-y-1.5 border-t border-border/60 pt-2">
+                <p className="font-mono text-[8px] uppercase tracking-widest text-muted-foreground/40">
+                    connect branch
+                </p>
+                <div className="grid grid-cols-[72px_72px_minmax(0,1fr)] gap-1.5">
+                    <Input
+                        value={connectPort}
+                        onChange={(event) => setConnectPort(event.target.value)}
+                        placeholder="out"
+                        className="h-8 font-mono text-[10px]"
+                    />
+                    <Input
+                        value={connectTargetPort}
+                        onChange={(event) => setConnectTargetPort(event.target.value)}
+                        placeholder="in"
+                        className="h-8 font-mono text-[10px]"
+                    />
+                    <Select value={targetNode} onValueChange={setTargetNode}>
+                        <SelectTrigger className="h-8 text-[10px]">
+                            <SelectValue placeholder="Target node" />
+                        </SelectTrigger>
+                        <SelectContent className="max-h-72">
+                            {graph.nodes
+                                .filter((candidate) => candidate.id !== node.id)
+                                .map((candidate) => (
+                                    <SelectItem key={candidate.id} value={candidate.id}>
+                                        {candidate.id} · {nodeTitle(candidate)}
+                                    </SelectItem>
+                                ))}
+                        </SelectContent>
+                    </Select>
+                </div>
+                <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    className="w-full"
+                    disabled={!targetNode}
+                    onClick={() => {
+                        if (targetNode) {
+                            onConnect(
+                                connectPort.trim() || "out",
+                                targetNode,
+                                connectTargetPort.trim() || "in",
+                            );
+                        }
+                        setTargetNode("");
+                    }}
+                >
+                    Connect port
+                </Button>
+                <p className="text-[8.5px] text-muted-foreground/40">
+                    Source / target ports: <span className="font-mono">true</span>,{" "}
+                    <span className="font-mono">false</span>, <span className="font-mono">case:value</span>,{" "}
+                    <span className="font-mono">default</span>, <span className="font-mono">amplifier</span>,{" "}
+                    <span className="font-mono">condition</span>.
+                </p>
+            </div>
 
             <p className="font-mono text-[8px] text-muted-foreground/35">
                 graph {graph.id} · {graph.nodes.length} nodes
@@ -519,6 +813,7 @@ export default function FlowCanvasPage() {
         save,
         diff,
         restore,
+        runManual,
     } = useFlowGraph(id);
     const [selectedId, setSelectedId] = useState<string | null>(null);
     const [connecting, setConnecting] = useState<string | null>(null);
@@ -526,10 +821,16 @@ export default function FlowCanvasPage() {
     const [diffData, setDiffData] = useState<GraphDiffResponse | null>(null);
     const [diffFrom, setDiffFrom] = useState<string>("");
     const [diffTo, setDiffTo] = useState<string>("current");
+    const [advancedType, setAdvancedType] = useState<string>(ADVANCED_NODE_TYPES[0]);
     const canvasRef = useRef<HTMLDivElement>(null);
 
     const selected = graph?.nodes.find((node) => node.id === selectedId) ?? null;
     const diffMode = Boolean(diffData);
+    const hasManualTrigger = Boolean(
+        graph?.nodes.some(
+            (node) => node.type === "trigger.manual" || node.type === "trigger.schedule",
+        ),
+    );
 
     useEffect(() => {
         if (!diffFrom && versions.length > 0) {
@@ -671,6 +972,31 @@ export default function FlowCanvasPage() {
         });
     }
 
+    function connectFrom(
+        sourceId: string,
+        sourcePort: string,
+        targetId: string,
+        targetPort: string,
+    ) {
+        if (!graph || diffMode || sourceId === targetId) return;
+        setGraph({
+            ...graph,
+            edges: [
+                ...graph.edges.filter(
+                    (edge) =>
+                        !(edge.source === sourceId && edge.source_port === sourcePort && edge.target === targetId) &&
+                        edge.target !== targetId,
+                ),
+                {
+                    source: sourceId,
+                    target: targetId,
+                    source_port: sourcePort || "out",
+                    target_port: targetPort || "in",
+                },
+            ],
+        });
+    }
+
     function completeConnection(target: string) {
         if (!graph || !connecting || diffMode) {
             setConnecting(null);
@@ -684,7 +1010,11 @@ export default function FlowCanvasPage() {
         if (!graph) return;
         const result = await save(graph, true);
         if (result) {
-            toast.success(`Flow saved as version ${result.version}`);
+            toast.success(
+                result.runtime_only
+                    ? `Runtime-only flow saved as version ${result.version}`
+                    : `Flow saved as version ${result.version}`,
+            );
             setDiffData(null);
             setSelectedId(null);
         }
@@ -765,6 +1095,25 @@ export default function FlowCanvasPage() {
                     )}
                 </div>
                 <div className="flex flex-wrap items-center gap-1.5">
+                    {hasManualTrigger && (
+                        <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            onClick={async () => {
+                                const result = await runManual({});
+                                if (result) {
+                                    toast.success(
+                                        `Manual run: ${result.counts.actions} action(s), ${result.counts.emissions} emission(s)`,
+                                    );
+                                }
+                            }}
+                            disabled={saving || diffMode}
+                        >
+                            <Zap className="mr-1.5 size-3.5" />
+                            Run now
+                        </Button>
+                    )}
                     <Button
                         type="button"
                         variant="outline"
@@ -834,6 +1183,34 @@ export default function FlowCanvasPage() {
                                     <Plus className="ml-auto size-3 opacity-50" />
                                 </Button>
                             ))}
+                        </div>
+                        <div className="mt-2 space-y-1.5 border-t border-border/60 pt-2">
+                            <p className="font-mono text-[8px] uppercase tracking-widest text-muted-foreground/40">
+                                All FlowSpec nodes
+                            </p>
+                            <Select value={advancedType} onValueChange={setAdvancedType}>
+                                <SelectTrigger className="h-8 text-[10px]">
+                                    <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent className="max-h-72">
+                                    {ADVANCED_NODE_TYPES.map((type) => (
+                                        <SelectItem key={type} value={type}>
+                                            {type}
+                                        </SelectItem>
+                                    ))}
+                                </SelectContent>
+                            </Select>
+                            <Button
+                                type="button"
+                                variant="outline"
+                                size="sm"
+                                className="w-full"
+                                onClick={() => addNode(advancedType)}
+                                disabled={diffMode}
+                            >
+                                <Plus className="mr-1.5 size-3.5" />
+                                Add {advancedType}
+                            </Button>
                         </div>
                         <p className="mt-2 text-[9px] text-muted-foreground/40">
                             Click or drag a block onto the canvas. New nodes are appended after the current chain.
@@ -1110,6 +1487,9 @@ export default function FlowCanvasPage() {
                             currentRuleId={id}
                             onPatch={(patch, config) => patchNode(selected.id, patch, config)}
                             onDelete={() => deleteNode(selected.id)}
+                            onConnect={(port, target, targetPort) =>
+                                connectFrom(selected.id, port, target, targetPort)
+                            }
                         />
                     ) : (
                         <div className="space-y-2 text-[10px] text-muted-foreground/60">

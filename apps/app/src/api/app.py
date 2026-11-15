@@ -3,6 +3,7 @@ FastAPI application assembly: lifespan, routers, middleware.
 """
 
 import asyncio
+import time
 from contextlib import asynccontextmanager
 
 import structlog
@@ -74,6 +75,56 @@ async def training_tick_loop():
         await asyncio.sleep(1)
 
 
+async def flow_scheduler_loop():
+    """Run `trigger.schedule` FlowSpec nodes at their configured interval."""
+    from database.repositories.trigger_rule_repo import TriggerRuleRepo
+    from events.dispatcher import EventDispatcher
+
+    try:
+        dispatcher = EventDispatcher.get_instance()
+    except RuntimeError:
+        logger.warning("[Events v3] Scheduler disabled: dispatcher not initialized")
+        return
+    last_run: dict[str, float] = {}
+    while True:
+        try:
+            rules = await TriggerRuleRepo().get_all_rules()
+            now = time.monotonic()
+            for rule in rules:
+                if not rule.enabled or not isinstance(rule.graph, dict):
+                    continue
+                for node in rule.graph.get("nodes") or []:
+                    if not isinstance(node, dict) or node.get("type") != "trigger.schedule":
+                        continue
+                    config = node.get("config") or {}
+                    try:
+                        interval = max(30, int(config.get("interval_seconds", 0) or 0))
+                    except (TypeError, ValueError):
+                        interval = 0
+                    if interval <= 0:
+                        break
+                    key = f"{rule.id}:{node.get('id')}"
+                    if now - last_run.get(key, 0.0) < interval:
+                        break
+                    last_run[key] = now
+                    logger.info(
+                        "[Events v3] Scheduled flow run",
+                        rule_id=rule.id,
+                        node_id=node.get("id"),
+                        interval_seconds=interval,
+                    )
+                    await dispatcher.run_rule_manual(
+                        rule.id,
+                        event_data={"schedule": True, "node_id": node.get("id")},
+                    )
+                    break
+        except asyncio.CancelledError:
+            raise
+        except Exception:
+            logger.exception("[Events v3] Scheduler tick failed")
+        await asyncio.sleep(10)
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # startup
@@ -84,6 +135,7 @@ async def lifespan(app: FastAPI):
         enabled=v3_config.enabled,
         shadow_mode=v3_config.shadow_mode,
         telemetry=v3_config.telemetry,
+        scheduler=v3_config.scheduler,
         dedupe_ttl_seconds=v3_config.dedupe_ttl_seconds,
         retention_days=v3_config.retention_days,
         max_workers=v3_config.max_workers,
@@ -178,6 +230,12 @@ async def lifespan(app: FastAPI):
         )
     )
 
+    scheduler_task = (
+        asyncio.create_task(flow_scheduler_loop())
+        if get_v3_config().scheduler
+        else None
+    )
+
     # Notify Discord that the app started successfully
     await send_discord_startup_message(profile_count=len(list_profiles()))
 
@@ -187,10 +245,17 @@ async def lifespan(app: FastAPI):
     queue_task.cancel()
     alarm_task.cancel()
     training_task.cancel()
+    if scheduler_task is not None:
+        scheduler_task.cancel()
     try:
         await training_task
     except asyncio.CancelledError:
         pass
+    if scheduler_task is not None:
+        try:
+            await scheduler_task
+        except asyncio.CancelledError:
+            pass
     # Same neutralize path as session end and the panic stop: no ramp or
     # queued action may outlive the process and leave a unit driven.
     await neutralize_all(reason="shutdown")

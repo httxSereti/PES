@@ -6,7 +6,7 @@ from typing import Any
 
 import structlog
 from fastapi import APIRouter, Depends, HTTPException, Query
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from api.helpers import require_permission, to_utc_iso
 from api.ws.loaders.trigger_rules_loader import _serialize_rule
@@ -17,6 +17,7 @@ from database.repositories.trigger_rule_repo import (
     TriggerRuleRepo,
     rule_event_types,
 )
+from events.dispatcher import EventDispatcher
 from events.flows import (
     FlowSpec,
     GraphValidationError,
@@ -24,7 +25,9 @@ from events.flows import (
     compile_graph,
     diff_graphs,
     ensure_positions,
+    graph_event_types,
     graph_from_rule,
+    validate_graph,
 )
 from typings import Permission
 
@@ -37,6 +40,10 @@ class GraphSaveRequest(BaseModel):
     graph: FlowSpec
     apply: bool = True
     message: str | None = None
+
+
+class ManualRunRequest(BaseModel):
+    event_data: dict[str, Any] = Field(default_factory=dict)
 
 
 def _current_graph(rule: Any, *, from_rule: bool) -> tuple[FlowSpec, bool, list[str]]:
@@ -63,6 +70,19 @@ async def _load_subflows(graph: FlowSpec) -> dict[str, Any]:
     return subflows
 
 
+def _notify_rule_update(rule_id: str, updated: Any) -> None:
+    serialized = _serialize_rule(updated)
+    ws_notifier.notify(
+        "trigger_rules:update",
+        {
+            "id": rule_id,
+            "changes": {
+                key: value for key, value in serialized.items() if key != "id"
+            },
+        },
+    )
+
+
 async def _apply_graph(
     rule_id: str,
     graph: FlowSpec,
@@ -73,11 +93,51 @@ async def _apply_graph(
     if rule is None:
         raise HTTPException(status_code=404, detail="Rule not found")
 
+    warnings = validate_graph(graph)
+    event_types = graph_event_types(graph)
+    if not event_types:
+        if any(
+            node.type in {"trigger.manual", "trigger.schedule"}
+            for node in graph.nodes
+        ):
+            event_types = ["system.manual"]
+        else:
+            raise HTTPException(
+                status_code=400,
+                detail="the graph trigger needs at least one event type",
+            )
+
     subflows = await _load_subflows(graph)
     try:
         plan = compile_graph(graph, subflows=subflows, strict=True)
     except GraphValidationError as exc:
-        raise HTTPException(status_code=400, detail=str(exc))
+        # Branches, switches and non-linear DAGs cannot be represented as a
+        # legacy TriggerRule. Keep the legacy actions as a fallback and let
+        # the native FlowSpec runtime execute the saved graph.
+        warnings.append(f"graph saved as runtime-only: {exc}")
+        updated = await TriggerRuleRepo().update_rule(
+            rule_id, event_types=event_types
+        )
+        if updated is None:
+            raise HTTPException(status_code=404, detail="Rule not found")
+        _notify_rule_update(rule_id, updated)
+        graph.created_from = rule_id
+        saved = await TriggerRuleGraphRepo().save_graph(
+            rule_id,
+            graph.model_dump(mode="json"),
+            created_by=created_by,
+        )
+        if saved is None:
+            raise HTTPException(status_code=404, detail="Rule not found")
+        compiled = compile_flow_spec(graph)
+        return {
+            "graph": graph.model_dump(mode="json"),
+            "version": saved.version,
+            "applied": False,
+            "runtime_only": True,
+            "warnings": [*warnings, *compiled.warnings],
+            "compiled": compiled.model_dump(mode="json"),
+        }
 
     specs = [
         TriggerActionSpec(
@@ -113,16 +173,7 @@ async def _apply_graph(
     if updated is None:
         raise HTTPException(status_code=404, detail="Rule not found")
 
-    serialized = _serialize_rule(updated)
-    ws_notifier.notify(
-        "trigger_rules:update",
-        {
-            "id": rule_id,
-            "changes": {
-                key: value for key, value in serialized.items() if key != "id"
-            },
-        },
-    )
+    _notify_rule_update(rule_id, updated)
 
     graph.created_from = rule_id
     saved = await TriggerRuleGraphRepo().save_graph(
@@ -138,6 +189,7 @@ async def _apply_graph(
         "graph": graph.model_dump(mode="json"),
         "version": saved.version,
         "applied": True,
+        "runtime_only": False,
         "warnings": [*plan.warnings, *compiled.warnings],
         "compiled": compiled.model_dump(mode="json"),
     }
@@ -178,11 +230,18 @@ async def save_rule_graph(
     preserved. Sub-flow calls inline the referenced rule's conditions/actions.
     """
     if not body.apply:
-        subflows = await _load_subflows(body.graph)
+        warnings = validate_graph(body.graph)
+        runtime_only = False
         try:
-            plan = compile_graph(body.graph, subflows=subflows, strict=True)
+            plan = compile_graph(
+                body.graph,
+                subflows=await _load_subflows(body.graph),
+                strict=True,
+            )
+            warnings.extend(plan.warnings)
         except GraphValidationError as exc:
-            raise HTTPException(status_code=400, detail=str(exc))
+            runtime_only = True
+            warnings.append(f"graph saved as runtime-only: {exc}")
         saved = await TriggerRuleGraphRepo().save_graph(
             rule_id,
             body.graph.model_dump(mode="json"),
@@ -195,7 +254,8 @@ async def save_rule_graph(
             "graph": body.graph.model_dump(mode="json"),
             "version": saved.version,
             "applied": False,
-            "warnings": [*plan.warnings, *compiled.warnings],
+            "runtime_only": runtime_only,
+            "warnings": [*warnings, *compiled.warnings],
             "compiled": compiled.model_dump(mode="json"),
         }
     return await _apply_graph(
@@ -203,6 +263,26 @@ async def save_rule_graph(
         body.graph,
         created_by=str(current_user.get("id") or ""),
     )
+
+
+@router.post("/rules/{rule_id}/run")
+async def run_rule_manually(
+    rule_id: str,
+    body: ManualRunRequest,
+    current_user: dict = Depends(require_permission(Permission.ADMIN)),
+):
+    """Execute a rule's FlowSpec through a manual/schedule trigger."""
+    try:
+        dispatcher = EventDispatcher.get_instance()
+    except RuntimeError:
+        raise HTTPException(status_code=503, detail="Event dispatcher not initialized")
+    result = await dispatcher.run_rule_manual(
+        rule_id,
+        event_data=body.event_data,
+    )
+    if result is None:
+        raise HTTPException(status_code=404, detail="Rule not found")
+    return result
 
 
 @router.get("/rules/{rule_id}/versions")

@@ -121,6 +121,7 @@ async def events_v3_status(
         "enabled": config.enabled,
         "shadow_mode": config.shadow_mode,
         "telemetry": config.telemetry,
+        "scheduler": config.scheduler,
         "dedupe_ttl_seconds": config.dedupe_ttl_seconds,
         "retention_days": config.retention_days,
         "max_workers": config.max_workers,

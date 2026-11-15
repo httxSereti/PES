@@ -45,6 +45,7 @@ class TelemetryRecorder:
             rule_summary = dict(rule_summary)
             skip_reason = rule_summary.get("skipped_reason")
             matched = bool(rule_summary.get("matched", True))
+            flow = rule_summary.get("flow") or {}
             status = (
                 "deferred"
                 if skip_reason == "pending_approval"
@@ -69,9 +70,9 @@ class TelemetryRecorder:
                 id=run_id,
                 event_id=plan.envelope.id,
                 flow_id=f"rule:{rule.id}",
-                flow_version=1,
+                flow_version=int(flow.get("version", 1) or 1),
                 status=status,
-                trigger_node_id="trigger",
+                trigger_node_id=flow.get("trigger_node_id") or "trigger",
                 correlation_id=plan.envelope.correlation_id,
                 causation_id=plan.envelope.causation_id,
                 started_at=now,
@@ -93,6 +94,36 @@ class TelemetryRecorder:
         matched: bool,
         now: datetime,
     ) -> list[NodeRun]:
+        flow = rule_summary.get("flow") or {}
+        traces = flow.get("node_trace")
+        if isinstance(traces, list) and traces:
+            return [
+                NodeRun(
+                    id=generate_id(),
+                    run_id=run_id,
+                    node_id=str(trace.get("node_id") or "node"),
+                    node_type=str(trace.get("node_type") or "unknown"),
+                    status={
+                        "passed": "passed",
+                        "ok": "passed",
+                        "skipped": "skipped",
+                        "blocked": "blocked",
+                        "error": "error",
+                    }.get(str(trace.get("status")), "passed"),
+                    started_at=now,
+                    duration_ms=int(trace.get("duration_ms") or 0),
+                    input_preview=None,
+                    output_preview=(
+                        trace.get("value")
+                        if isinstance(trace.get("value"), dict)
+                        else {"value": trace.get("value")}
+                    ),
+                    reason=trace.get("reason"),
+                    error=trace.get("reason") if trace.get("status") == "error" else None,
+                )
+                for trace in traces
+            ]
+
         nodes: list[NodeRun] = [
             NodeRun(
                 id=generate_id(),

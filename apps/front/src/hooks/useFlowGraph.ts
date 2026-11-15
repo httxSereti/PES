@@ -3,7 +3,7 @@ import { useCallback, useEffect, useState } from "react";
 import { useAppSelector } from "@/store/hooks";
 import { eventsFetch } from "@/lib/api";
 
-export type GraphNodeType = "trigger.event" | "logic.guard" | "effect.action" | "flow.call";
+export type GraphNodeType = string;
 
 export interface GraphNode {
     id: string;
@@ -78,6 +78,7 @@ interface GraphPayload {
     graph: FlowGraph;
     version: number;
     saved: boolean;
+    runtime_only?: boolean;
     warnings: string[];
     compiled: CompiledGraph;
 }
@@ -236,6 +237,35 @@ export function useFlowGraph(ruleId: string | undefined) {
         [token, ruleId, loadVersions],
     );
 
+    const runManual = useCallback(
+        async (eventData: Record<string, unknown> = {}) => {
+            if (!token || !ruleId) return null;
+            setSaving(true);
+            setError(null);
+            try {
+                const response = await eventsFetch(`/events/rules/${ruleId}/run`, {
+                    method: "POST",
+                    headers: {
+                        "Content-Type": "application/json",
+                        ...authHeaders(token),
+                    },
+                    body: JSON.stringify({ event_data: eventData }),
+                });
+                if (!response.ok) throw new Error(await parseError(response, "Failed to run flow"));
+                return (await response.json()) as {
+                    matched: boolean;
+                    counts: { rules: number; actions: number; approvals: number; emissions: number };
+                };
+            } catch (err) {
+                setError(err instanceof Error ? err.message : "Failed to run flow");
+                return null;
+            } finally {
+                setSaving(false);
+            }
+        },
+        [token, ruleId],
+    );
+
     useEffect(() => {
         void load();
     }, [load]);
@@ -256,6 +286,7 @@ export function useFlowGraph(ruleId: string | undefined) {
         getVersion,
         diff,
         restore,
+        runManual,
         reloadVersions: loadVersions,
     };
 }

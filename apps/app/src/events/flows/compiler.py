@@ -10,6 +10,18 @@ from events.modifiers import validate_modifier
 
 from .spec import CompiledFlow, CompiledOp, FlowEdge, FlowNode, FlowSpec
 
+_EFFECT_PRESET_TYPES = {
+    "effect.level": "LEVEL",
+    "effect.mult": "MULT",
+    "effect.profile": "PROFILE",
+    "effect.chaster_time": "CHASTER_TIME_UPDATE",
+    "effect.lovense": "LOVENSE_SET",
+    "effect.puryfi": "PURYFI_SET_ENABLED",
+    "effect.training": "TRAINING_START",
+    "effect.webhook": "WEBHOOK_SEND",
+    "effect.discord": "WEBHOOK_SEND",
+}
+
 
 def _action_type(value: Any) -> str:
     return value.value if hasattr(value, "value") else str(value)
@@ -140,12 +152,40 @@ def compile_flow_spec(spec: FlowSpec) -> CompiledFlow:
     for node_id in ordered:
         node = by_id[node_id]
         if node.type == "trigger.event":
-            event_types = node.config.get("event_types") or []
+            raw_types = (
+                node.config.get("event_types")
+                or node.config.get("event_type")
+                or node.config.get("event")
+                or []
+            )
+            event_types = (
+                list(raw_types) if isinstance(raw_types, list) else [raw_types]
+            )
             ops.append(
                 CompiledOp(
                     op="match_event",
                     node_id=node.id,
-                    config={"event_types": list(event_types)},
+                    config={"event_types": event_types},
+                )
+            )
+        elif node.type.startswith("trigger."):
+            event_types = (
+                node.config.get("event_types")
+                or node.config.get("event_type")
+                or node.config.get("event")
+                or []
+            )
+            ops.append(
+                CompiledOp(
+                    op="match_event",
+                    node_id=node.id,
+                    config={
+                        "event_types": (
+                            list(event_types)
+                            if isinstance(event_types, list)
+                            else [event_types]
+                        )
+                    },
                 )
             )
         elif node.type == "logic.guard":
@@ -153,8 +193,21 @@ def compile_flow_spec(spec: FlowSpec) -> CompiledFlow:
             condition = config.get("condition")
             mode = config.get("mode", "all")
             if not condition:
-                warnings.append(f"guard {node.id} has no condition")
-                continue
+                expression = config.get("expr")
+                if expression:
+                    ops.append(
+                        CompiledOp(
+                            op="eval_condition",
+                            node_id=node.id,
+                            config={"expr": expression, "mode": mode},
+                        )
+                    )
+                    continue
+                conditions = config.get("conditions")
+                if not conditions:
+                    warnings.append(f"guard {node.id} has no condition")
+                    continue
+                condition = conditions[0]
             try:
                 condition = ConditionSpec.model_validate(condition).model_dump(mode="json")
             except Exception as exc:
@@ -167,18 +220,48 @@ def compile_flow_spec(spec: FlowSpec) -> CompiledFlow:
                     config={"condition": condition, "mode": mode},
                 )
             )
-        elif node.type == "effect.action":
+        elif node.type.startswith("data."):
+            ops.append(
+                CompiledOp(op="eval_data", node_id=node.id, config=dict(node.config or {}))
+            )
+        elif node.type in {"flow.call", "logic.subflow"}:
             config = node.config or {}
-            if not config.get("action_type"):
-                warnings.append(f"action {node.id} has no action_type")
-                continue
-            ops.append(CompiledOp(op="emit_action", node_id=node.id, config=config))
-        elif node.type == "flow.call":
-            config = node.config or {}
-            if not config.get("rule_id"):
+            if not config.get("rule_id") and not config.get("flow_id"):
                 warnings.append(f"subflow {node.id} has no rule_id")
                 continue
             ops.append(CompiledOp(op="call_flow", node_id=node.id, config=config))
+        elif node.type.startswith("logic."):
+            ops.append(
+                CompiledOp(op="eval_logic", node_id=node.id, config=dict(node.config or {}))
+            )
+        elif node.type in _EFFECT_PRESET_TYPES:
+            config = dict(node.config or {})
+            config.setdefault("action_type", _EFFECT_PRESET_TYPES[node.type])
+            ops.append(
+                CompiledOp(
+                    op="emit_action",
+                    node_id=node.id,
+                    config=config,
+                )
+            )
+        elif node.type == "effect.emit_event":
+            ops.append(
+                CompiledOp(op="emit_event", node_id=node.id, config=dict(node.config or {}))
+            )
+        elif node.type == "effect.notify":
+            ops.append(
+                CompiledOp(op="notify", node_id=node.id, config=dict(node.config or {}))
+            )
+        elif node.type == "effect.action":
+            config = node.config or {}
+            if not config.get("action_type") and not config.get("action_id"):
+                warnings.append(f"action {node.id} has no action_type")
+                continue
+            ops.append(CompiledOp(op="emit_action", node_id=node.id, config=config))
+        elif node.type.startswith("terminal."):
+            ops.append(
+                CompiledOp(op="terminal", node_id=node.id, config=dict(node.config or {}))
+            )
         else:
             warnings.append(f"unknown node type: {node.type}")
 
