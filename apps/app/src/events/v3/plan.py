@@ -31,6 +31,9 @@ class EventPlan:
     approvals: list[ApprovalDraft] = field(default_factory=list)
     # Events emitted by `effect.emit_event` nodes, dispatched after the run.
     emissions: list[dict] = field(default_factory=list)
+    # User-facing notifications requested by flow nodes (`effect.notify`,
+    # `terminal.alert`). Published after the plan is committed.
+    notifications: list[dict] = field(default_factory=list)
     # Full per-rule result, including skipped rules, used by telemetry.
     rule_results: list[dict] = field(default_factory=list)
     skipped_reason: str | None = None

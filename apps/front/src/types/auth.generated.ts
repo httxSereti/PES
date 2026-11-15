@@ -58,6 +58,8 @@ export const SERVER_MESSAGE_AUDIENCE: Record<WebSocketServerMessage['type'], Per
     'events:history': Permission.READ_EVENTS,
     'events:triggered': Permission.READ_EVENTS,
     'approvals:update': Permission.READ_EVENTS,
+    'notifications:new': Permission.READ_EVENTS,
+    'notifications:update': Permission.READ_EVENTS,
     'queue:update': Permission.ADMIN,
     'profiles:load': Permission.READ_PROFILES,
     'profiles:saved': Permission.READ_PROFILES,

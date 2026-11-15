@@ -112,6 +112,7 @@ async def handle_trigger_rule_create(
             budget_per_actor=msg.payload.budget_per_actor,
             requires_approval=msg.payload.requires_approval,
             approval_timeout_seconds=msg.payload.approval_timeout_seconds,
+            notify_on_fire=msg.payload.notify_on_fire,
         )
         # The repository returns the fully loaded rule for serialization.
         serialized = _serialize_rule(rule)

@@ -27,6 +27,7 @@ def _serialize_rule(rule) -> dict:
         "budget_per_actor": bool(rule.budget_per_actor),
         "requires_approval": bool(rule.requires_approval),
         "approval_timeout_seconds": rule.approval_timeout_seconds or 300,
+        "notify_on_fire": bool(rule.notify_on_fire),
         "actions": [_serialize_action(a) for a in rule.actions],
         "labels": [_serialize_label(a) for a in rule.labels],
         "created_at": to_utc_iso(rule.created_at),

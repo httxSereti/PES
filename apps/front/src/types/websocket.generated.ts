@@ -2,7 +2,7 @@
 // by apps/app/scripts/generate_ws_types.py — DO NOT EDIT.
 // Regenerate with: pnpm codegen:ws
 
-export const WS_SCHEMA_VERSION = 21;
+export const WS_SCHEMA_VERSION = 22;
 
 export enum ActionType {
     PROFILE = "PROFILE",
@@ -121,6 +121,7 @@ export interface TriggerRuleUpdatePayload {
     budget_per_actor?: boolean | null;
     requires_approval?: boolean | null;
     approval_timeout_seconds?: number | null;
+    notify_on_fire?: boolean | null;
 }
 
 export interface TriggerRuleDraft {
@@ -140,6 +141,7 @@ export interface TriggerRuleDraft {
     budget_per_actor: boolean;
     requires_approval: boolean;
     approval_timeout_seconds: number;
+    notify_on_fire: boolean;
     actions: TriggerActionDraft[];
     labels: string[];
 }
@@ -537,6 +539,7 @@ export interface TriggerRule {
     budget_per_actor: boolean;
     requires_approval: boolean;
     approval_timeout_seconds: number;
+    notify_on_fire: boolean;
     actions: TriggerAction[];
     labels: TriggerRuleLabel[];
     created_at?: string | null;
@@ -762,6 +765,31 @@ export interface TriggeredAction {
     cumulative: boolean;
     payload: Record<string, unknown>;
     modifiers: Record<string, unknown>[];
+}
+
+export interface InAppNotificationPayload {
+    id: string;
+    kind: 'rule_fired' | 'flow_notify' | 'approval' | 'warning' | 'error';
+    severity: 'info' | 'success' | 'warning' | 'error';
+    title: string;
+    message: string;
+    created_at: string;
+    updated_at?: string | null;
+    count: number;
+    rule_id?: string | null;
+    rule_name?: string | null;
+    event_id?: string | null;
+    event_type?: string | null;
+    origin?: string | null;
+    actions: string[];
+    link?: string | null;
+    data: Record<string, unknown>;
+}
+
+export interface InAppNotificationUpdatePayload {
+    id: string;
+    count: number;
+    updated_at?: string | null;
 }
 
 export interface QueueStatus {
@@ -1881,6 +1909,18 @@ export interface ApprovalsUpdateMessage {
     payload: Record<string, unknown>;
 }
 
+export interface NotificationsNewMessage {
+    id?: string | null;
+    type: 'notifications:new';
+    payload: InAppNotificationPayload;
+}
+
+export interface NotificationsUpdateMessage {
+    id?: string | null;
+    type: 'notifications:update';
+    payload: InAppNotificationUpdatePayload;
+}
+
 export interface QueueUpdateMessage {
     id?: string | null;
     type: 'queue:update';
@@ -2256,6 +2296,8 @@ export type WebSocketServerMessage =
     | EventsHistoryMessage
     | EventsTriggeredMessage
     | ApprovalsUpdateMessage
+    | NotificationsNewMessage
+    | NotificationsUpdateMessage
     | QueueUpdateMessage
     | ProfilesLoadMessage
     | ProfilesSavedMessage

@@ -117,6 +117,7 @@ async def handle_trigger_rule_edit(
             budget_per_actor=msg.payload.budget_per_actor,
             requires_approval=msg.payload.requires_approval,
             approval_timeout_seconds=msg.payload.approval_timeout_seconds,
+            notify_on_fire=msg.payload.notify_on_fire,
         )
         if rule is None:
             return CommandResult(status="error", message="Rule not found")

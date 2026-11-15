@@ -154,6 +154,8 @@ class TriggerRule(WireModel):
     budget_per_actor: bool = False
     requires_approval: bool = False
     approval_timeout_seconds: int = 300
+    # In-app notification when this rule fires (opt-in).
+    notify_on_fire: bool = False
     actions: list[TriggerAction]
     labels: list[TriggerRuleLabel]
     # nullable for legacy rows created before the columns existed

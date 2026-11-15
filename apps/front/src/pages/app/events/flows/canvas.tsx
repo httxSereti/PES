@@ -702,6 +702,66 @@ function NodeInspector({
                 </div>
             )}
 
+            {(node.type === "effect.notify" || node.type === "terminal.alert") && (
+                <div className="space-y-2">
+                    <div className="space-y-1">
+                        <p className="font-mono text-[8px] uppercase tracking-widest text-muted-foreground/40">
+                            notification title
+                        </p>
+                        <Input
+                            value={String(node.config.title ?? "")}
+                            onChange={(event) =>
+                                onPatch({}, { ...node.config, title: event.target.value })
+                            }
+                            placeholder="Rule name (optional)"
+                            className="h-8 text-[10px]"
+                        />
+                    </div>
+                    <div className="space-y-1">
+                        <p className="font-mono text-[8px] uppercase tracking-widest text-muted-foreground/40">
+                            message
+                        </p>
+                        <Textarea
+                            value={String(node.config.message ?? "")}
+                            onChange={(event) =>
+                                onPatch({}, { ...node.config, message: event.target.value })
+                            }
+                            placeholder="Message shown in the notification center"
+                            className="min-h-16 font-mono text-[10px]"
+                        />
+                        <p className="text-[9px] text-muted-foreground/45">
+                            Templates are supported, e.g.{" "}
+                            <span className="font-mono">{"{{ event.actor.display_name }}"}</span>.
+                        </p>
+                    </div>
+                    <div className="space-y-1">
+                        <p className="font-mono text-[8px] uppercase tracking-widest text-muted-foreground/40">
+                            severity
+                        </p>
+                        <Select
+                            value={String(
+                                node.config.severity ??
+                                    (node.type === "terminal.alert" ? "warning" : "info"),
+                            )}
+                            onValueChange={(value) =>
+                                onPatch({}, { ...node.config, severity: value })
+                            }
+                        >
+                            <SelectTrigger className="h-8 text-[10px]">
+                                <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                                {["info", "success", "warning", "error"].map((severity) => (
+                                    <SelectItem key={severity} value={severity}>
+                                        {severity}
+                                    </SelectItem>
+                                ))}
+                            </SelectContent>
+                        </Select>
+                    </div>
+                </div>
+            )}
+
             {!node.type.startsWith("trigger.") &&
                 node.type !== "logic.guard" &&
                 !isActionEffect &&

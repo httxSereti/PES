@@ -231,6 +231,7 @@ class TriggerRuleRepo:
         budget_per_actor: bool = False,
         requires_approval: bool = False,
         approval_timeout_seconds: int = 300,
+        notify_on_fire: bool = False,
     ) -> TriggerRule:
         """Create a new trigger rule bound to one or more event types."""
         types = unique_event_types(event_types)
@@ -254,6 +255,7 @@ class TriggerRuleRepo:
             budget_per_actor=budget_per_actor,
             requires_approval=requires_approval,
             approval_timeout_seconds=approval_timeout_seconds,
+            notify_on_fire=notify_on_fire,
             event_links=[
                 TriggerRuleEvent(event_type=event_type, sort_order=index)
                 for index, event_type in enumerate(types)
@@ -285,6 +287,7 @@ class TriggerRuleRepo:
         budget_per_actor: bool = False,
         requires_approval: bool = False,
         approval_timeout_seconds: int = 300,
+        notify_on_fire: bool = False,
     ) -> tuple[TriggerRule, List[TriggerRuleLabel]]:
         """
         Create a rule, its actions and its labels in one transaction.
@@ -315,6 +318,7 @@ class TriggerRuleRepo:
                 budget_per_actor=budget_per_actor,
                 requires_approval=requires_approval,
                 approval_timeout_seconds=approval_timeout_seconds,
+                notify_on_fire=notify_on_fire,
                 event_links=_build_event_links(types),
                 actions=_build_actions(rule_id, actions),
             )
@@ -347,6 +351,7 @@ class TriggerRuleRepo:
         budget_per_actor: Optional[bool] = None,
         requires_approval: Optional[bool] = None,
         approval_timeout_seconds: Optional[int] = None,
+        notify_on_fire: Optional[bool] = None,
         event_types: Optional[List[str]] = None,
     ) -> Optional[TriggerRule]:
         """Update a trigger rule. Only provided fields are updated."""
@@ -391,6 +396,8 @@ class TriggerRuleRepo:
                 rule.requires_approval = requires_approval
             if approval_timeout_seconds is not None:
                 rule.approval_timeout_seconds = approval_timeout_seconds
+            if notify_on_fire is not None:
+                rule.notify_on_fire = notify_on_fire
             if types is not None:
                 rule.event_type = types[0]
                 # Delete the old links before inserting the new ones: their
@@ -426,6 +433,7 @@ class TriggerRuleRepo:
         budget_per_actor: bool = False,
         requires_approval: bool = False,
         approval_timeout_seconds: int = 300,
+        notify_on_fire: bool = False,
     ) -> tuple[Optional[TriggerRule], List[TriggerRuleLabel]]:
         """
         Update a rule and fully replace its actions/labels in one transaction.
@@ -465,6 +473,7 @@ class TriggerRuleRepo:
             rule.budget_per_actor = budget_per_actor
             rule.requires_approval = requires_approval
             rule.approval_timeout_seconds = approval_timeout_seconds
+            rule.notify_on_fire = notify_on_fire
             rule.event_type = types[0]
 
             # Flush the deletes first so the inserts below cannot race the

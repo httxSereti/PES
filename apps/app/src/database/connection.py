@@ -256,6 +256,7 @@ class Database:
                     "budget_per_actor": "BOOLEAN DEFAULT 0",
                     "requires_approval": "BOOLEAN DEFAULT 0",
                     "approval_timeout_seconds": "INTEGER DEFAULT 300",
+                    "notify_on_fire": "BOOLEAN DEFAULT 0",
                     "graph": "JSON",
                     "graph_version": "INTEGER DEFAULT 0",
                 }

@@ -17,6 +17,7 @@ import sessionHistoryReducer from '@/store/slices/sessionHistorySlice';
 import profilesReducer from '@/store/slices/profilesSlice';
 import queueReducer from '@/store/slices/queueSlice';
 import lovenseReducer from '@/store/slices/lovenseSlice';
+import notificationsReducer, { saveToastsEnabled } from '@/store/slices/notificationsSlice';
 
 import { createWebSocketMiddleware } from '@/store/middleware/websocketMiddleware';
 
@@ -55,6 +56,7 @@ export const store = configureStore({
         profiles: profilesReducer,
         queue: queueReducer,
         lovense: lovenseReducer,
+        notifications: notificationsReducer,
     },
     middleware: (getDefaultMiddleware) =>
         getDefaultMiddleware({
@@ -76,4 +78,14 @@ store.subscribe(() => {
 
     lastUnitsUi = nextUnitsUi;
     saveUnitsUiState(nextUnitsUi);
+});
+
+// Persist the toast preference (the notification list itself is per-session).
+let lastToastsEnabled = store.getState().notifications.toastsEnabled;
+store.subscribe(() => {
+    const nextToastsEnabled = store.getState().notifications.toastsEnabled;
+    if (nextToastsEnabled === lastToastsEnabled) return;
+
+    lastToastsEnabled = nextToastsEnabled;
+    saveToastsEnabled(nextToastsEnabled);
 });

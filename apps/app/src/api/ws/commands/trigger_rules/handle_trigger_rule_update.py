@@ -108,6 +108,8 @@ async def handle_trigger_rule_update(
                 rule.requires_approval = msg.payload.requires_approval
             if msg.payload.approval_timeout_seconds is not None:
                 rule.approval_timeout_seconds = msg.payload.approval_timeout_seconds
+            if msg.payload.notify_on_fire is not None:
+                rule.notify_on_fire = msg.payload.notify_on_fire
             if event_types is not None:
                 rule.event_type = event_types[0]
                 rule.event_links = [

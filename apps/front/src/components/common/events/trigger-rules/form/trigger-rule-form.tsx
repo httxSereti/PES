@@ -3,7 +3,7 @@ import { useNavigate } from "react-router";
 import { Controller, useFieldArray, useForm, type Resolver } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { toast } from "sonner";
-import { PlusSquare, Power, Save, ShieldCheck, Timer } from "lucide-react";
+import { Bell, PlusSquare, Power, Save, ShieldCheck, Timer } from "lucide-react";
 
 import { Button } from "@pes/ui/components/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@pes/ui/components/card";
@@ -71,6 +71,7 @@ export default function TriggerRuleForm({
                   budget_per_actor: false,
                   requires_approval: false,
                   approval_timeout_seconds: 300,
+                  notify_on_fire: false,
                   labels: [],
                   conditions: [],
                   condition_mode: "all",
@@ -153,6 +154,7 @@ export default function TriggerRuleForm({
                 budget_per_actor: values.budget_per_actor,
                 requires_approval: values.requires_approval,
                 approval_timeout_seconds: values.approval_timeout_seconds,
+                notify_on_fire: values.notify_on_fire,
                 labels: values.labels,
                 conditions: values.conditions.map(toConditionBody),
                 condition_mode: values.condition_mode,
@@ -531,6 +533,19 @@ export default function TriggerRuleForm({
                                                 icon={ShieldCheck}
                                                 label="Require approval"
                                                 description="Matched actions wait for an admin decision"
+                                                checked={field.value}
+                                                onCheckedChange={field.onChange}
+                                            />
+                                        )}
+                                    />
+                                    <Controller
+                                        name="notify_on_fire"
+                                        control={form.control}
+                                        render={({ field }) => (
+                                            <SwitchRow
+                                                icon={Bell}
+                                                label="Notify when this rule fires"
+                                                description="Show an in-app notification each time it runs"
                                                 checked={field.value}
                                                 onCheckedChange={field.onChange}
                                             />

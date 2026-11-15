@@ -19,6 +19,11 @@ import { sessionHistoryLoaded, sessionHistoryDetailLoaded, sessionHistoryDeleted
 import { profilesLoaded, profileSaved, profileDeleted, profileDetailLoaded, activeProfileUpdated, pendingProfilesLoaded } from '@/store/slices/profilesSlice';
 import { queueUpdated } from '@/store/slices/queueSlice';
 import {
+    notificationReceived,
+    notificationRepeated,
+} from '@/store/slices/notificationsSlice';
+import type { InAppNotificationPayload } from '@/types';
+import {
     lovenseInitialized,
     lovenseNodesUpdated,
     lovenseDevicesUpdated,
@@ -32,6 +37,33 @@ import {
     lovenseIntifaceUpdated,
     lovenseErrorReceived,
 } from '@/store/slices/lovenseSlice';
+
+/** Toast one in-app notification, colored by its severity. */
+function toastNotification(notification: InAppNotificationPayload) {
+    const options = {
+        description: notification.message,
+        position: 'bottom-right' as const,
+        duration: notification.severity === 'error' ? 8000 : 5000,
+    };
+    const label =
+        notification.count > 1
+            ? `${notification.title} ×${notification.count}`
+            : notification.title;
+
+    switch (notification.severity) {
+        case 'success':
+            toast.success(label, options);
+            break;
+        case 'warning':
+            toast.warning(label, options);
+            break;
+        case 'error':
+            toast.error(label, options);
+            break;
+        default:
+            toast.info(label, options);
+    }
+}
 
 export function createWebSocketMiddleware(config: WebSocketConfig): Middleware {
     const {
@@ -247,6 +279,20 @@ export function createWebSocketMiddleware(config: WebSocketConfig): Middleware {
 
                     case 'events:triggered':
                         dispatch(eventTriggered(message.payload));
+                        break;
+
+                    /**
+                     * @Notifications (trigger rules, flow notify nodes, approvals)
+                     */
+                    case 'notifications:new':
+                        dispatch(notificationReceived(message.payload));
+                        if (getState().notifications.toastsEnabled) {
+                            toastNotification(message.payload);
+                        }
+                        break;
+
+                    case 'notifications:update':
+                        dispatch(notificationRepeated(message.payload));
                         break;
 
                     /**

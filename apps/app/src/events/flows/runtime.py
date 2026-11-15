@@ -128,6 +128,16 @@ class FlowEmission:
 
 
 @dataclass
+class FlowNotification:
+    """A user-facing notification requested by a flow node."""
+
+    node_id: str
+    message: str
+    title: str | None = None
+    severity: str = "info"
+
+
+@dataclass
 class FlowTrace:
     node_id: str
     node_type: str
@@ -143,6 +153,7 @@ class FlowRuntimeResult:
     status: str = "skipped"
     effects: list[FlowEffect] = field(default_factory=list)
     emissions: list[FlowEmission] = field(default_factory=list)
+    notifications: list[FlowNotification] = field(default_factory=list)
     traces: list[FlowTrace] = field(default_factory=list)
     warnings: list[str] = field(default_factory=list)
     skipped_reason: str | None = None
@@ -510,11 +521,16 @@ class FlowRuntime:
                 result.effects.append(outcome.value)
             if isinstance(outcome.value, FlowEmission):
                 result.emissions.append(outcome.value)
+            if isinstance(outcome.value, FlowNotification):
+                result.notifications.append(outcome.value)
             if outcome.sub_result is not None:
                 for effect in outcome.sub_result.effects:
                     effect.node_id = f"{node.id}/{effect.node_id}"
                 result.effects.extend(outcome.sub_result.effects)
                 result.emissions.extend(outcome.sub_result.emissions)
+                for notification in outcome.sub_result.notifications:
+                    notification.node_id = f"{node.id}/{notification.node_id}"
+                result.notifications.extend(outcome.sub_result.notifications)
                 result.warnings.extend(outcome.sub_result.warnings)
                 result.traces.extend(
                     FlowTrace(
@@ -530,8 +546,12 @@ class FlowRuntime:
             if node.type == "logic.stop":
                 halted = True
 
-        result.status = "matched" if result.effects or result.emissions else "skipped"
-        if not result.effects and not result.emissions:
+        result.status = (
+            "matched"
+            if result.effects or result.emissions or result.notifications
+            else "skipped"
+        )
+        if not result.effects and not result.emissions and not result.notifications:
             result.skipped_reason = "no_effects"
         return result
 
@@ -770,9 +790,18 @@ class FlowRuntime:
                 config.get("message") or config.get("text") or config.get("value") or "",
                 context,
             )
+            # `terminal.alert` is user-facing: it also raises a notification.
+            notification_value: Any = str(message)
+            if node.type == "terminal.alert" and str(message).strip():
+                notification_value = FlowNotification(
+                    node_id=node.id,
+                    message=str(message),
+                    title=render_value(config.get("title") or "", context) or None,
+                    severity=str(config.get("severity") or "warning"),
+                )
             return _NodeResult(
                 active=True,
-                value=str(message),
+                value=notification_value,
                 output_ports={"out"},
                 delay_seconds=incoming_delay,
                 repeat=incoming_repeat,
@@ -780,10 +809,17 @@ class FlowRuntime:
             )
 
         if node.type == "effect.notify":
-            message = render_value(config.get("message") or config.get("text") or "", context)
+            message = render_value(
+                config.get("message") or config.get("text") or "", context
+            )
             return _NodeResult(
                 active=True,
-                value=str(message),
+                value=FlowNotification(
+                    node_id=node.id,
+                    message=str(message),
+                    title=render_value(config.get("title") or "", context) or None,
+                    severity=str(config.get("severity") or "info"),
+                ),
                 output_ports={"out"},
                 delay_seconds=incoming_delay,
                 repeat=incoming_repeat,

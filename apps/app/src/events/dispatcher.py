@@ -4,7 +4,7 @@ import copy
 import time
 from collections import deque
 from datetime import UTC, datetime, timedelta
-from typing import Any, TYPE_CHECKING
+from typing import Any, TYPE_CHECKING, cast
 
 import structlog
 from cuid2 import cuid_wrapper
@@ -36,6 +36,7 @@ from events.v3 import (
 )
 from integrations import integration_registry
 from integrations.base import IntegrationKind
+from services.notifications import NotificationCenter, NotificationSeverity
 from store import Store
 
 if TYPE_CHECKING:
@@ -44,6 +45,17 @@ if TYPE_CHECKING:
 
 logger = structlog.get_logger("pes")
 generate_id = cuid_wrapper()
+
+_NOTIFICATION_SEVERITIES = {"info", "success", "warning", "error"}
+
+
+def _notification_severity(value: Any) -> NotificationSeverity:
+    """Normalize a flow-provided severity to the wire contract."""
+    severity = str(value or "info").lower()
+    if severity in _NOTIFICATION_SEVERITIES:
+        return cast(NotificationSeverity, severity)
+    return "info"
+
 
 # Actions may cause events (integration polling/webhooks), which may trigger
 # more actions. Same-integration actions are filtered on tagged echoes; this
@@ -73,6 +85,7 @@ class EventDispatcher:
         actor_repo: ActorRepo | None = None,
         telemetry_recorder: TelemetryRecorder | None = None,
         approval_repo: ApprovalRepo | None = None,
+        notifications: NotificationCenter | None = None,
     ):
         EventDispatcher._instance = self
         self._registry = registry
@@ -84,6 +97,7 @@ class EventDispatcher:
         self._actors = actor_repo or ActorRepo()
         self._telemetry = telemetry_recorder or TelemetryRecorder()
         self._approvals = approval_repo or ApprovalRepo()
+        self._notifications = notifications or NotificationCenter(ws_notifier)
         # In-memory rate-limit state, keyed by rule id. Resets on restart.
         self._cooldowns: dict[str, float] = {}
         self._window_hits: dict[str, deque[float]] = {}
@@ -181,6 +195,7 @@ class EventDispatcher:
 
         await self._save_and_notify(plan.envelope, plan.summary)
         await self._save_approvals(plan)
+        self._publish_notifications(plan)
 
         if plan.items:
             self._queue.enqueue(plan.items)
@@ -241,6 +256,7 @@ class EventDispatcher:
         if plan.skipped_reason not in {"event_disabled", "out_of_scope"}:
             await self._save_and_notify(plan.envelope, plan.summary)
             await self._save_approvals(plan)
+            self._publish_notifications(plan)
             if plan.items:
                 self._queue.enqueue(plan.items)
             if get_v3_config().shadow_mode:
@@ -616,6 +632,7 @@ class EventDispatcher:
         queue_items: list[QueueItem] = []
         approvals: list[ApprovalDraft] = []
         emissions: list[dict[str, Any]] = []
+        notifications: list[dict[str, Any]] = []
         triggered_rules_summary: list[dict] = []
         rule_results: list[dict] = []
         for rule in rules:
@@ -626,6 +643,7 @@ class EventDispatcher:
             )
             items: list[QueueItem] = []
             rule_emissions: list[dict[str, Any]] = []
+            rule_notifications: list[dict[str, Any]] = []
             flow_result: FlowRuntimeResult | None = None
             flow_warning: str | None = None
 
@@ -665,6 +683,20 @@ class EventDispatcher:
                                 "rule_id": rule.id,
                             }
                         )
+                    for notification in flow_result.notifications:
+                        message = str(notification.message or "").strip()
+                        if not message:
+                            continue
+                        rule_notifications.append(
+                            {
+                                "node_id": notification.node_id,
+                                "message": message,
+                                "title": notification.title,
+                                "severity": notification.severity,
+                                "rule_id": rule.id,
+                                "rule_name": rule.name,
+                            }
+                        )
                     if flow_result.warnings:
                         flow_warning = "; ".join(flow_result.warnings)
 
@@ -680,7 +712,7 @@ class EventDispatcher:
 
             gate_reason: str | None = None
             gate_details: dict[str, Any] = {}
-            if matched and (items or rule_emissions):
+            if matched and (items or rule_emissions or rule_notifications):
                 gate_reason, gate_details = self._rule_gate_reason(
                     rule, context, apply_limits=apply_limits
                 )
@@ -719,12 +751,13 @@ class EventDispatcher:
 
             queue_items.extend(items)
             emissions.extend(rule_emissions)
+            notifications.extend(rule_notifications)
             rule_summary = self._build_rule_summary(rule, items, matched=matched)
             if gate_details:
                 rule_summary["gate"] = gate_details
             if flow_result is not None:
                 rule_summary["flow"] = self._flow_summary(rule, flow_result)
-                if not items and flow_result.skipped_reason:
+                if not items and not rule_notifications and flow_result.skipped_reason:
                     rule_summary["matched"] = False
                     rule_summary["skipped_reason"] = flow_result.skipped_reason
             elif flow_warning:
@@ -736,7 +769,9 @@ class EventDispatcher:
             if rule_summary.get("matched", matched) or items or include_unmatched:
                 triggered_rules_summary.append(rule_summary)
 
-            if items or rule_emissions or (flow_result and flow_result.effects):
+            if items or rule_emissions or rule_notifications or (
+                flow_result and flow_result.effects
+            ):
                 if self._flow_stops_processing(rule):
                     break
 
@@ -747,6 +782,7 @@ class EventDispatcher:
             summary=triggered_rules_summary,
             approvals=approvals,
             emissions=emissions,
+            notifications=notifications,
             rule_results=rule_results,
         )
 
@@ -1140,6 +1176,147 @@ class EventDispatcher:
                     )
                 except Exception:
                     pass
+            # Approval requests are safety-relevant and rare: always notify.
+            self._notifications.publish(
+                kind="approval",
+                severity="warning",
+                title=f"Approval required · {draft.rule_name}",
+                message=(
+                    f"{len(draft.items)} action"
+                    f"{'s' if len(draft.items) != 1 else ''} waiting for a host decision"
+                ),
+                rule_id=draft.rule_id,
+                rule_name=draft.rule_name,
+                event_id=plan.envelope.id,
+                event_type=plan.envelope.type,
+                origin=plan.envelope.origin,
+                actions=[item.action_type.value for item in draft.items],
+                link="/app/events/approvals",
+                data={
+                    "approval_id": request.id,
+                    "timeout_seconds": draft.timeout_seconds,
+                },
+            )
+
+    def _publish_notifications(self, plan: EventPlan) -> None:
+        """
+        Broadcast in-app notifications produced by this plan.
+
+        Rule notifications are opt-in (`TriggerRule.notify_on_fire`); flow
+        `effect.notify` / `terminal.alert` nodes and approvals always notify.
+        Repetitions are coalesced by the notification center, so a noisy
+        sensor rule updates one entry instead of spamming the client.
+        """
+        envelope = plan.envelope
+        rules = {rule.id: rule for rule in plan.rules}
+
+        for notification in plan.notifications:
+            self._notifications.publish(
+                kind="flow_notify",
+                severity=_notification_severity(notification.get("severity")),
+                title=notification.get("title") or notification.get("rule_name") or "Flow",
+                message=str(notification.get("message") or ""),
+                rule_id=notification.get("rule_id"),
+                rule_name=notification.get("rule_name"),
+                event_id=envelope.id,
+                event_type=envelope.type,
+                origin=envelope.origin,
+                data={"node_id": notification.get("node_id")},
+                link="/app/events/triggered",
+                coalesce_key=(
+                    f"flow-notify:{notification.get('rule_id')}:"
+                    f"{notification.get('node_id')}"
+                ),
+            )
+
+        for summary in plan.rule_results:
+            rule = rules.get(summary.get("rule_id") or "")
+            if rule is None or not bool(getattr(rule, "notify_on_fire", False)):
+                continue
+
+            reason = summary.get("skipped_reason")
+            # Approvals are published with their own notification above.
+            if reason == "pending_approval":
+                continue
+
+            if reason in {"cooldown", "budget_exhausted"}:
+                self._notifications.publish(
+                    kind="warning",
+                    severity="warning",
+                    title=f"{rule.name}: blocked",
+                    message=(
+                        "Cooldown is still active"
+                        if reason == "cooldown"
+                        else "Fire budget exhausted"
+                    ),
+                    rule_id=rule.id,
+                    rule_name=rule.name,
+                    event_id=envelope.id,
+                    event_type=envelope.type,
+                    origin=envelope.origin,
+                    link="/app/events/triggered",
+                    data={"reason": reason},
+                    coalesce_key=f"rule-gate:{rule.id}:{reason}",
+                )
+                continue
+
+            flow = summary.get("flow") or {}
+            if flow.get("status") == "fallback":
+                warnings = flow.get("warnings") or []
+                self._notifications.publish(
+                    kind="error",
+                    severity="error",
+                    title=f"{rule.name}: flow failed",
+                    message="; ".join(str(item) for item in warnings)
+                    or "The flow runtime failed and the legacy actions were used",
+                    rule_id=rule.id,
+                    rule_name=rule.name,
+                    event_id=envelope.id,
+                    event_type=envelope.type,
+                    origin=envelope.origin,
+                    link="/app/events/triggered",
+                    coalesce_key=f"rule-error:{rule.id}",
+                )
+                continue
+
+            actions = [
+                str(action.get("action_type"))
+                for action in summary.get("actions", [])
+                if action.get("action_type")
+            ]
+            if actions:
+                self._notifications.publish(
+                    kind="rule_fired",
+                    severity="success",
+                    title=rule.name,
+                    message=(
+                        f"{len(actions)} action{'s' if len(actions) != 1 else ''}"
+                        f" · {envelope.type}"
+                    ),
+                    rule_id=rule.id,
+                    rule_name=rule.name,
+                    event_id=envelope.id,
+                    event_type=envelope.type,
+                    origin=envelope.origin,
+                    actions=actions,
+                    link="/app/events/triggered",
+                    coalesce_key=f"rule:{rule.id}",
+                )
+            elif summary.get("matched") and reason not in {"window_pending"}:
+                self._notifications.publish(
+                    kind="warning",
+                    severity="warning",
+                    title=rule.name,
+                    message="Matched, but produced no enabled action",
+                    rule_id=rule.id,
+                    rule_name=rule.name,
+                    event_id=envelope.id,
+                    event_type=envelope.type,
+                    origin=envelope.origin,
+                    link="/app/events/triggered",
+                    data={"reason": "no_actions"},
+                    coalesce_key=f"rule-empty:{rule.id}",
+                )
 
     async def _record_shadow(self, plan: EventPlan, started: float) -> None:
         try:

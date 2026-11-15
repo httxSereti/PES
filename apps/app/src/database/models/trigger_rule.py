@@ -61,6 +61,9 @@ class TriggerRule(Base):
     # Approval gate: matched actions wait in `approval_requests`.
     requires_approval: Mapped[bool] = mapped_column(Boolean, default=False)
     approval_timeout_seconds: Mapped[int] = mapped_column(Integer, default=300)
+    # In-app notification when this rule fires (opt-in: noisy sensor rules
+    # stay silent by default).
+    notify_on_fire: Mapped[bool] = mapped_column(Boolean, default=False)
     # Last saved canvas graph and its version. `graph` is a serialized
     # FlowSpec; `graph_version` matches TriggerRuleVersion.version.
     graph: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)

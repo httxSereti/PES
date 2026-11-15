@@ -318,6 +318,7 @@ export const formSchema = z.object({
     budget_per_actor: z.boolean(),
     requires_approval: z.boolean(),
     approval_timeout_seconds: z.coerce.number().int().min(30).max(86400),
+    notify_on_fire: z.boolean(),
     labels: z.array(z.string().min(1)),
     conditions: z.array(conditionSchema),
     condition_mode: z.enum(["all", "any"]),
@@ -867,6 +868,7 @@ export function ruleToFormValues(rule: TriggerRule): FormValues {
         budget_per_actor: rule.budget_per_actor ?? false,
         requires_approval: rule.requires_approval ?? false,
         approval_timeout_seconds: rule.approval_timeout_seconds ?? 300,
+        notify_on_fire: rule.notify_on_fire ?? false,
         labels: rule.labels.map((l) => l.name),
         conditions: (rule.conditions ?? []).map((condition) =>
             conditionToForm(condition as Record<string, unknown>)

@@ -263,6 +263,7 @@ export default function TriggerRulesConsole() {
                     budget_per_actor: rule.budget_per_actor ?? false,
                     requires_approval: rule.requires_approval ?? false,
                     approval_timeout_seconds: rule.approval_timeout_seconds ?? 300,
+                    notify_on_fire: rule.notify_on_fire ?? false,
                     actions: [...rule.actions]
                         .sort((a, b) => a.sort_order - b.sort_order)
                         .map((action, index) => ({

@@ -9,7 +9,10 @@ the audience-filtered broadcast, and the generated TypeScript contract.
 
 from __future__ import annotations
 
+from datetime import datetime
 from typing import Any, Literal
+
+from pydantic import Field
 
 from typings import Permission
 
@@ -241,6 +244,64 @@ class ApprovalsUpdateMessage(ServerMessage):
 
     type: Literal["approvals:update"] = "approvals:update"
     payload: dict[str, Any]
+
+
+# ─────────────────────────────── Notifications ───────────────────────────────
+
+InAppNotificationKind = Literal[
+    "rule_fired",
+    "flow_notify",
+    "approval",
+    "warning",
+    "error",
+]
+InAppNotificationSeverity = Literal["info", "success", "warning", "error"]
+
+
+class InAppNotificationPayload(WireModel):
+    """One in-app notification (trigger rule, flow node, approval, error)."""
+
+    id: str
+    kind: InAppNotificationKind
+    severity: InAppNotificationSeverity = "info"
+    title: str
+    message: str
+    created_at: datetime
+    updated_at: datetime | None = None
+    # Repetitions coalesced into this notification (1 = seen once).
+    count: int = 1
+    rule_id: str | None = None
+    rule_name: str | None = None
+    event_id: str | None = None
+    event_type: str | None = None
+    origin: str | None = None
+    actions: list[str] = Field(default_factory=list)
+    link: str | None = None
+    data: dict[str, Any] = Field(default_factory=dict)
+
+
+@server_message(audience=Permission.READ_EVENTS)
+class NotificationsNewMessage(ServerMessage):
+    """A new in-app notification."""
+
+    type: Literal["notifications:new"] = "notifications:new"
+    payload: InAppNotificationPayload
+
+
+class InAppNotificationUpdatePayload(WireModel):
+    """A coalesced notification seen again (same id, incremented count)."""
+
+    id: str
+    count: int
+    updated_at: datetime | None = None
+
+
+@server_message(audience=Permission.READ_EVENTS)
+class NotificationsUpdateMessage(ServerMessage):
+    """An existing notification was triggered again (coalescing)."""
+
+    type: Literal["notifications:update"] = "notifications:update"
+    payload: InAppNotificationUpdatePayload
 
 
 # ─────────────────────────────── Queue ───────────────────────────────
@@ -680,6 +741,13 @@ __all__ = [
     "CoreStopMessage",
     "EventsHistoryMessage",
     "EventsTriggeredMessage",
+    "ApprovalsUpdateMessage",
+    "InAppNotificationKind",
+    "InAppNotificationSeverity",
+    "InAppNotificationPayload",
+    "NotificationsNewMessage",
+    "InAppNotificationUpdatePayload",
+    "NotificationsUpdateMessage",
     "QueueUpdateMessage",
     "ProfilesLoadMessage",
     "ProfileSavedPayload",

@@ -104,7 +104,7 @@ Current matrix:
 | `connected`, `ping`, `pong`, `command`, `auth:refresh` | public |
 | `units:init`, `units:update`, `core:stop` | `READ_UNITS` |
 | `sensors:init`, `sensors:update`, `hardware:init`, `hardware:update` | `READ_SENSORS` |
-| `events:history`, `events:triggered` | `READ_EVENTS` (members: USER and above) |
+| `events:history`, `events:triggered`, `approvals:update`, `notifications:new`, `notifications:update` | `READ_EVENTS` (members: USER and above) |
 | `queue:update`, `trigger_rules:*` | `ADMIN` |
 
 Delivery: at connect time the endpoint computes the user's **effective

@@ -195,6 +195,7 @@ class TriggerRuleUpdatePayload(WireModel):
     budget_per_actor: bool | None = None
     requires_approval: bool | None = None
     approval_timeout_seconds: int | None = None
+    notify_on_fire: bool | None = None
 
 
 class TriggerRulesUpdateCommand(ClientMessage):
@@ -229,6 +230,7 @@ class TriggerRuleDraft(WireModel):
     budget_per_actor: bool = False
     requires_approval: bool = False
     approval_timeout_seconds: int = 300
+    notify_on_fire: bool = False
     actions: list[TriggerActionDraft] = []
     labels: list[str] = []
 
